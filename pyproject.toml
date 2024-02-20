@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "ocadb"
+version = "0.0.1"
+description = "OCM (OCA) Observatory Database. Objects, fields, configurations, results, proposals..."
+authors = ["Mikolaj <mkalusz@camk.edu.pl>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+pydantic = "^2.6.1"
+fastapi = {version = "^0.109.2", optional = true}
+uvicorn = {version = "^0.27.1",  optional = true}
+beanie = "^1.25.0"
+rich = "^13.7.0"
+serverish = "^1.0.3"
+
+[tool.poetry.extras]
+server = ["fastapi", "uvicorn"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

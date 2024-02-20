@@ -1,0 +1,24 @@
+# Configuration files and directories
+**/.git
+**/.gitignore
+**/.dockerignore
+
+# Node dependencies (if you are using a Vue.js frontend)
+frontend/node_modules
+
+# Python cache and virtual environments
+**/__pycache__
+**/*.pyc
+**/.venv
+**/venv
+**/ENV
+
+# IDE specific files and directories
+**/.idea
+**/*.sublime-workspace
+
+# Other files and directories that should not be copied into the Docker image
+README.md
+Dockerfile
+docker-compose.yml
+*.log
