@@ -10,13 +10,22 @@ python = "^3.12"
 pydantic = "^2.6.1"
 fastapi = {version = "^0.109.2", optional = true}
 uvicorn = {version = "^0.27.1",  optional = true}
+python-multipart = {version = "^0.0.9", optional = true} # Logging shemas
+python-jose = {version = "^3.3.0", optional = true} # JWT
+passlib = {version = "^1.7.4", optional = true}  # for hashing password
+bcrypt = {version = "^4.1.2", optional = true}  # for hashing password, needed for passlib
 beanie = "^1.25.0"
 rich = "^13.7.0"
 serverish = "^1.0.3"
+pydantic-settings = {version = "^2.2.1", optional = true}
+motor = "^3.4.0"  # driver for mongodb used by api and conamdline
 
 [tool.poetry.extras]
-server = ["fastapi", "uvicorn"]
+server = ["fastapi", "uvicorn", "python-multipart", "python-jose", "passlib", "bcrypt", "pydantic-settings"]
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+start = "api.main:start"
