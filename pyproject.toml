@@ -1,9 +1,17 @@
 [tool.poetry]
 name = "ocadb"
-version = "0.0.1"
-description = "OCM (OCA) Observatory Database. Objects, fields, configurations, results, proposals..."
+version = "0.0.3"
+description = "git "
 authors = ["Mikolaj <mkalusz@camk.edu.pl>"]
 readme = "README.md"
+
+# packages of the project:
+#packages = [
+#    { include = "ocadb"},
+##    { include = "cli", from = "odbc" },
+##    { include = "ocadb.models", from = "odbc" },
+#    { include = "api", from = "." },
+#]
 
 [tool.poetry.dependencies]
 python = "^3.12"
@@ -13,9 +21,22 @@ uvicorn = {version = "^0.27.1",  optional = true}
 beanie = "^1.25.0"
 rich = "^13.7.0"
 serverish = "^1.0.3"
+typer = "^0.9.0"
+pyaraucaria = {git = "https://github.com/araucaria-project/pyaraucaria.git"}
 
 [tool.poetry.extras]
 server = ["fastapi", "uvicorn"]
+
+[tool.poetry.scripts]
+ocadb-server = 'api.main:start_development_server'
+ocadb = 'ocadb.cli.ocadb:app'
+
+[tool.poetry.dev-dependencies]
+fastapi = { version = "^0.109.2", extras = [] }   # [all]
+uvicorn = "^0.27.1"
+pytest = "^6.2"
+"pytest-asyncio" = "^0.18.3"
+#httpx = "^0.23.0"
 
 [build-system]
 requires = ["poetry-core"]

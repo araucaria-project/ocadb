@@ -1,4 +1,6 @@
 
+from .object import Object, Periodicity, Brightness
+from .geo import SkyCoord, SkyCoordPolygon
 
 from .geo import document_models as geo_document_models
 from .object import document_models as object_document_models
