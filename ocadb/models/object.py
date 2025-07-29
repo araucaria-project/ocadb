@@ -1,7 +1,7 @@
 from typing import Literal, Optional
 
 from beanie import Document
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 from pyaraucaria.lookup_objects import name_canonizator
 
@@ -33,8 +33,7 @@ class Object(Document):
     periodicity: list[Periodicity] = []
     parent_object_id: Optional[str] = None
 
-    class Config:
-        extra = 'allow'
+    model_config = {"extra": "allow"}
 
     @model_validator(mode='after')
     def canonized_name_validator(self):
@@ -69,9 +68,9 @@ class ObservationParameters(Document):
     requested_bands: list[BandRequest]
     priority: int
 
-class SceduledObservationParameters(Document):
+class ScheduledObservationParameters(Document):
     objects_ids: list[str]
-    squence: str
+    sequence: str
     priority: int
     enabled: bool
     start_time: float

@@ -1,5 +1,4 @@
 # Development, runs mongodb,  fastapi app from api folder and vuejs web-app app from frontend folder
-version: '3.8'
 services:
   mongodb:
     image: mongo:latest

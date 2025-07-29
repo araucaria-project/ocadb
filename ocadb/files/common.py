@@ -58,5 +58,4 @@ def model_object_from_dict(obj: dict) -> models.Object:
         aliases=aliases,
         brightness=brightness,
     )
-    print(o)
     return o
