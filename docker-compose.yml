@@ -27,11 +27,14 @@ services:
     build:
       context: .
       dockerfile: api/Dockerfile
-    command: uvicorn main:app --host 0.0.0.0 --reload
+    command: uvicorn api.main:app --host 0.0.0.0 --reload
     volumes:
-      - ./api:/app
+      - .:/app
     ports:
       - "8084:8000"
+    environment:
+      - MONGODB_URL=mongodb://mongodb:27017
+      - MONGODB_DATABASE=ocadb
     depends_on:
       - mongodb
       
