@@ -1,9 +1,12 @@
 [tool.poetry]
 name = "ocadb"
 version = "0.0.3"
-description = "git "
-authors = ["Mikolaj <mkalusz@camk.edu.pl>"]
+description = "Observatory Cerro Murphy Database - astronomical object catalog management system"
+authors = ["Mikolaj Kaluszynski <mkaluszynski@akond.com>"]
 readme = "README.md"
+license = "LGPL-3.0-or-later"
+homepage = "https://github.com/araucaria-project/ocadb"
+repository = "https://github.com/araucaria-project/ocadb"
 
 # packages of the project:
 #packages = [
