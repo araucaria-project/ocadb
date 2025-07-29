@@ -25,6 +25,10 @@ app.include_router(objects.router, prefix='/api/v1')
 async def read_root():
     return {"Hello": "OCA"}
 
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "service": "ocadb-api"}
+
 def start_development_server():
     import uvicorn
     uvicorn.run("api.main:app", host="0.0.0.0", reload=True)
