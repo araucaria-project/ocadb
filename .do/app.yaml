@@ -1,0 +1,60 @@
+# DigitalOcean App Platform configuration
+# https://docs.digitalocean.com/products/app-platform/references/app-specification-reference/
+
+name: ocadb
+services:
+- name: api
+  source_dir: /
+  github:
+    repo: araucaria-project/ocadb
+    branch: master
+    deploy_on_push: true
+  build_command: |
+    poetry config virtualenvs.create false
+    poetry install --extras server --no-dev
+  run_command: uvicorn api.main:app --host 0.0.0.0 --port $PORT
+  environment_slug: python
+  instance_count: 1
+  instance_size_slug: basic-xxs
+  http_port: 8000
+  routes:
+  - path: /api
+  envs:
+  - key: MONGODB_URL
+    scope: RUN_TIME
+    type: SECRET
+  - key: MONGODB_DATABASE
+    scope: RUN_TIME
+    value: ocadb
+  - key: PYTHONPATH
+    scope: RUN_TIME
+    value: /app
+  health_check:
+    http_path: /health
+
+- name: frontend
+  source_dir: /frontend
+  github:
+    repo: araucaria-project/ocadb
+    branch: master
+    deploy_on_push: true
+  build_command: npm ci && npm run build
+  environment_slug: node-js
+  instance_count: 1
+  instance_size_slug: basic-xxs
+  routes:
+  - path: /
+  envs:
+  - key: VUE_APP_API_URL
+    scope: BUILD_TIME
+    value: /api/v1
+
+static_sites:
+- name: frontend-static
+  source_dir: /frontend/dist
+  routes:
+  - path: /
+
+databases:
+- name: mongodb-atlas
+  engine: UNMANAGED
