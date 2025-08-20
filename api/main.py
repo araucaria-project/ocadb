@@ -1,34 +1,36 @@
 # api/main.py
-from functools import lru_cache
-
-import uvicorn
+import os
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from api.routers import api_auth, sample_api, objects
+from ocadb import database
 
-from api.config import Settings
-from api.routers import api_auth, sample_api
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    mongo_url = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
+    database_name = os.getenv("MONGODB_DATABASE", "ocadb")
+    await database.Connection().ensure_connection(mongo_url, database_name)
+    yield
+    # Shutdown (if needed)
 
-# add endpoints from other files
+
+app = FastAPI(lifespan=lifespan)
+
+app.include_router(objects.router, prefix='/api/v1')
 app.include_router(api_auth.router)
 app.include_router(sample_api.router)
 
 
-# load settings.py
-@lru_cache
-def get_settings():
-    return Settings()
+@app.get("/")
+async def read_root():
+    return {"Hello": "OCA"}
 
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "service": "ocadb-api"}
 
-@app.get("/metrics/statuses")
-def health():
-    return "OK"
-
-
-def start():
-    """Launched with `poetry run start` at root level"""
-    uvicorn.run("api.main:app",
-                host=get_settings().host,
-                port=get_settings().port,
-                reload=get_settings().reload,
-                workers=get_settings().workers)
+def start_development_server():
+    import uvicorn
+    uvicorn.run("api.main:app", host="0.0.0.0", reload=True)

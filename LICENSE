@@ -1,0 +1,101 @@
+                   GNU LESSER GENERAL PUBLIC LICENSE
+                       Version 3, 29 June 2007
+
+ Copyright (C) 2007 Free Software Foundation, Inc. <http://fsf.org/>
+ Everyone is permitted to copy and distribute verbatim copies
+ of this license document, but changing it is not allowed.
+
+
+  This version of the GNU Lesser General Public License incorporates
+the terms and conditions of version 3 of the GNU General Public
+License, supplemented by the additional permissions listed below.
+
+  0. Additional Definitions.
+
+  As used herein, "this License" refers to version 3 of the GNU Lesser
+General Public License, and the "GNU GPL" refers to version 3 of the GNU
+General Public License.
+
+  "The Library" refers to a covered work governed by this License,
+other than an Application or a Combined Work as defined below.
+
+  An "Application" is any work that makes use of an interface provided
+by the Library, but which is not otherwise based on the Library.
+Defining a subclass of a class defined by the Library is deemed a mode
+of using an interface provided by the Library.
+
+  A "Combined Work" is a work produced by combining or linking an
+Application with the Library.  The particular version of the Library
+with which the Combined Work was made is also called the "Linked
+Version".
+
+  The "Minimal Corresponding Source" for a Combined Work means the
+Corresponding Source for the Combined Work, excluding any source code
+for portions of the Combined Work that, considered in isolation, are
+based on the Application, and not on the Linked Version.
+
+  The "Corresponding Application Code" for a Combined Work means the
+object code and/or source code for the Application, including any data
+and utility programs needed for reproducing the Combined Work from the
+Application, but excluding the System Libraries of the Combined Work.
+
+  1. Exception to Section 3 of the GNU GPL.
+
+  You may convey a covered work under sections 3 and 4 of this License
+without being bound by section 3 of the GNU GPL.
+
+  2. Conveying this License.
+
+  You may convey a copy of this License along with every copy of the
+Library.  You may place a copy of this License in every Combined Work.
+
+  3. Conveying Works Based on the Library.
+
+  You may convey such Combined Works under terms of your choice, provided
+that the terms permit modification of the work for the customer's own use
+and reverse engineering for debugging such modifications.
+
+  You must give prominent notice with each copy of the Combined Work
+stating that the Library is used in it and that the Library and its use
+are covered by this License. You must supply a copy of this License. If
+the Combined Work during execution displays copyright notices, you must
+include the copyright notice for the Library among these notices, as well
+as a reference directing the user to the copy of this License. Also, you
+must do one of these things:
+
+    a) Accompany the Combined Work with a copy of the Library used to
+    create the Combined Work.
+
+    b) Accompany the Combined Work with a written offer, valid for at
+    least three years, to give the user a copy of the Library used to
+    create the Combined Work.
+
+    c) If the Combined Work is a work based on the Library, convey a
+    copy of the Library along with the Combined Work.
+
+  4. Combined Works.
+
+  You may not copy, modify, propagate, or distribute a Combined Work
+except as expressly provided under this License. Any attempt otherwise
+to copy, modify, propagate or distribute it is void, and will
+automatically terminate your rights under this License.
+
+  5. Additional permissions.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

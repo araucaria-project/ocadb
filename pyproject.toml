@@ -1,9 +1,20 @@
 [tool.poetry]
 name = "ocadb"
-version = "0.0.1"
-description = "OCM (OCA) Observatory Database. Objects, fields, configurations, results, proposals..."
-authors = ["Mikolaj <mkalusz@camk.edu.pl>"]
+version = "0.0.3"
+description = "Observatory Cerro Murphy Database - astronomical object catalog management system"
+authors = ["Mikolaj Kaluszynski <mkaluszynski@akond.com>"]
 readme = "README.md"
+license = "LGPL-3.0-or-later"
+homepage = "https://github.com/araucaria-project/ocadb"
+repository = "https://github.com/araucaria-project/ocadb"
+
+# packages of the project:
+#packages = [
+#    { include = "ocadb"},
+##    { include = "cli", from = "odbc" },
+##    { include = "ocadb.models", from = "odbc" },
+#    { include = "api", from = "." },
+#]
 
 [tool.poetry.dependencies]
 python = "^3.12"
@@ -19,9 +30,23 @@ rich = "^13.7.0"
 serverish = "^1.0.3"
 pydantic-settings = {version = "^2.2.1", optional = true}
 motor = "^3.4.0"  # driver for mongodb used by api and conamdline
+typer = "^0.9.0"
+pyaraucaria = {git = "https://github.com/araucaria-project/pyaraucaria.git"}
 
 [tool.poetry.extras]
 server = ["fastapi", "uvicorn", "python-multipart", "python-jose", "passlib", "bcrypt", "pydantic-settings"]
+
+[tool.poetry.scripts]
+ocadb-server = 'api.main:start_development_server'
+# start = "api.main:start"
+ocadb = 'ocadb.cli.ocadb:app'
+
+[tool.poetry.group.dev.dependencies]
+fastapi = { version = "^0.109.2", extras = [] }   # [all]
+uvicorn = "^0.27.1"
+pytest = "^7.0"
+pytest-asyncio = "^0.23.0"
+httpx = "^0.27.0"
 
 [build-system]
 requires = ["poetry-core"]
