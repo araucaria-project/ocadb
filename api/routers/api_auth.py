@@ -2,18 +2,29 @@ from datetime import timedelta
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestFormStrict
+from pydantic import BaseModel
 
-from api.src.auth_service import AuthService
-from api.src.models.token import Token
+from api.services.auth_service import AuthService
+from api.schemas import Token
+from ocadb.models import User, UserInDB
+from api.services.database_connection import DatabaseConnection
+from api.services.crypto_service import CryptoService
 
-router = APIRouter()
+router = APIRouter(prefix="/auth", tags=["authentication"])
+
+
+class UserCreate(BaseModel):
+    username: str
+    email: str
+    full_name: str
+    password: str
 
 
 @router.post("/token")
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestFormStrict, Depends()]
 ) -> Token:
-    user = AuthService.authenticate_user(form_data.username, form_data.password)
+    user = await AuthService.authenticate_user(form_data.username, form_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -25,3 +36,52 @@ async def login_for_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
     return Token(access_token=access_token, token_type="bearer")
+
+
+@router.post("/register", response_model=User)
+async def register_user(user_data: UserCreate):
+    """Register a new user"""
+    # Check if user already exists
+    existing_user = await DatabaseConnection.get_user(user_data.username)
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already registered"
+        )
+    
+    # Hash password and create user
+    hashed_password = CryptoService.get_password_hash(user_data.password)
+    user = await DatabaseConnection.create_user(
+        username=user_data.username,
+        email=user_data.email,
+        full_name=user_data.full_name,
+        hashed_password=hashed_password
+    )
+    
+    # Return user without password
+    return User(
+        username=user.username,
+        email=user.email,
+        full_name=user.full_name,
+        disabled=user.disabled
+    )
+
+
+@router.get("/me", response_model=User)
+async def read_users_me(token: Annotated[str, Depends(AuthService.validate_token)]):
+    """Get current user info"""
+    # Extract username from token
+    from jose import jwt
+    payload = jwt.decode(token, AuthService._SECRET_KEY, algorithms=[AuthService._ALGORITHM])
+    username = payload.get("sub")
+    
+    user = await DatabaseConnection.get_user(username)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return User(
+        username=user.username,
+        email=user.email,
+        full_name=user.full_name,
+        disabled=user.disabled
+    )

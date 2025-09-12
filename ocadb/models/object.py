@@ -14,9 +14,9 @@ PeriodicityType = Literal['eb', 'puls', 'rot', 'other', 'unknown']
 class Periodicity(BaseModel):
     kind: PeriodicityType
     priority: int
-    model: Optional[str] = None
-    period: Optional[float] = None
+    period: Optional[float] = None  # in days
     hjd0: Optional[float] = None
+    model: Optional[str] = None
 
 class Brightness(BaseModel):
     band: str

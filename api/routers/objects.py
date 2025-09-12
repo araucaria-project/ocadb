@@ -1,10 +1,11 @@
 
 
-from fastapi import APIRouter, HTTPException, status, Body
+from fastapi import APIRouter, HTTPException, status, Body, Depends
 from beanie import PydanticObjectId
 from typing import List, Annotated
 
 from ocadb.models import Object
+from api.services.auth_service import AuthService
 
 router = APIRouter(prefix="/objects",
                    tags=["objects"],
@@ -13,7 +14,10 @@ router = APIRouter(prefix="/objects",
                    )
 
 @router.post("/", response_description="Add new Object", response_model=Object, status_code=status.HTTP_201_CREATED)
-async def create_object(object_data: Annotated[Object, Body(...)]):
+async def create_object(
+    object_data: Annotated[Object, Body(...)],
+    token: Annotated[str, Depends(AuthService.validate_token)]
+):
     await object_data.insert()
     return object_data
 
@@ -30,7 +34,11 @@ async def list_objects():
     return objects
 
 @router.put("/{id}", response_description="Update an Object", response_model=Object)
-async def update_object(id: PydanticObjectId, object_update: Annotated[Object, Body(...)]):
+async def update_object(
+    id: PydanticObjectId, 
+    object_update: Annotated[Object, Body(...)],
+    token: Annotated[str, Depends(AuthService.validate_token)]
+):
     object = await Object.get(id)
     if object is None:
         raise HTTPException(status_code=404, detail=f"Object with ID {id} not found")
@@ -40,7 +48,10 @@ async def update_object(id: PydanticObjectId, object_update: Annotated[Object, B
     return object
 
 @router.delete("/{id}", response_description="Delete an Object")
-async def delete_object(id: PydanticObjectId):
+async def delete_object(
+    id: PydanticObjectId,
+    token: Annotated[str, Depends(AuthService.validate_token)]
+):
     delete_result = await Object.find_one(Object.id == id).delete()
     if delete_result.deleted_count == 0:
         raise HTTPException(status_code=404, detail=f"Object with ID {id} not found")

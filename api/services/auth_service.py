@@ -1,3 +1,4 @@
+import os
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
@@ -5,19 +6,18 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError, ExpiredSignatureError
 from datetime import datetime, timedelta, timezone
 
-from api.src.crypto_service import CryptoService
-from api.src.database_connection import DatabaseConnection
-from api.src.models.token import TokenData
+from api.services.crypto_service import CryptoService
+from api.services.database_connection import DatabaseConnection
+from api.schemas import TokenData
 
 
 class AuthService:
 
-    oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+    oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/token")
 
-    #todo change it
-    _SECRET_KEY = "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
+    _SECRET_KEY = os.getenv("JWT_SECRET_KEY", "fallback-secret-key-for-development-only")
     _ALGORITHM = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES = 1
+    ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 
     @staticmethod
     def create_access_token(data: dict, expires_delta: timedelta | None = None):
@@ -31,8 +31,8 @@ class AuthService:
         return encoded_jwt
 
     @staticmethod
-    def authenticate_user(username: str, password: str):
-        user = DatabaseConnection.get_user(username)
+    async def authenticate_user(username: str, password: str):
+        user = await DatabaseConnection.get_user(username)
         if not user:
             return False
         if not CryptoService.verify_password(password, user.hashed_password):

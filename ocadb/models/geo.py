@@ -18,23 +18,35 @@ class SkyCoord(BaseModel):
 
     def __init__(self, **kwargs):
         radec = kwargs.pop('radec', None)
-        super().__init__(**kwargs)
         if radec is not None:
-            self.radec = radec
+            lonlat = self._radec_to_lonlat(radec)
+            kwargs['_lon_lat'] = Point2D(coordinates=lonlat)
+        super().__init__(**kwargs)
+
     @property
     def radec(self) -> Tuple[float, float]:
         if self._lon_lat:
-            longitude, latitude = self._lon_lat.coordinates
-            ra = (longitude + 360) % 360
-            dec = latitude
-            return ra, dec
-        return (0.0, 0.0)  # Domyślne wartości lub obsługa błędów
+            return self._lonlat_to_radec(self._lon_lat.coordinates)
+        return (0.0, 0.0)  # default value if _lon_lat is not set
 
     @radec.setter
     def radec(self, value: Tuple[float, float]):
-        ra, dec = value
+        lonlat = self._radec_to_lonlat(value)
+        self._lon_lat = Point2D(coordinates=lonlat)
+
+
+    @staticmethod
+    def _lonlat_to_radec(lonlat: Tuple[float, float]) -> Tuple[float, float]:
+        longitude, latitude = lonlat
+        ra = (longitude + 360.0) % 360
+        return ra, latitude
+
+    @staticmethod
+    def _radec_to_lonlat(radec: Tuple[float, float]) -> Tuple[float, float]:
+        ra, dec = radec
         longitude = (ra + 180.0) % 360 - 180
-        self._lon_lat = Point2D(coordinates=(longitude, dec))
+        return longitude, dec
+
 
 
     # class Settings:

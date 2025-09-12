@@ -14,8 +14,10 @@ Python package providing database models, utilities, and business logic. Contain
 ### 2. **REST API Server** (`api/`)
 FastAPI-based HTTP server providing RESTful endpoints:
 - **Endpoints**: CRUD operations for astronomical objects (`/api/v1/objects/`)
+- **Authentication**: JWT-based authentication with user registration/login
+- **Authorization**: Protected write operations, public read access
 - **Modern FastAPI**: Uses lifespan context managers, dependency injection
-- **Environment Config**: Configurable via `MONGODB_URL`, `MONGODB_DATABASE`
+- **Environment Config**: Configurable via `MONGODB_URL`, `MONGODB_DATABASE`, `JWT_SECRET_KEY`
 - **Auto Documentation**: Swagger/OpenAPI docs at `/docs`
 
 ### 3. **Web Application** (`frontend/`)
@@ -94,10 +96,71 @@ Docker Compose setup for full-stack development:
 - radec: property                       # RA/Dec access (0-360, -90/+90)
 ```
 
+**User Model** (`ocadb/models/user.py`) - User management:
+```python
+- username: str                         # Unique username
+- email: str                           # Email address
+- full_name: str                       # Display name
+- hashed_password: str                 # bcrypt hashed password
+- disabled: bool = False               # Account status
+```
+
 **Observation Models**:
 - `ObservationParameters` - Telescope scheduling requests
 - `ScheduledObservationParameters` - Timed observation sequences
 - `Project` - PI-led observation campaigns with object lists
+
+## Authentication & API Usage
+
+### User Registration and Login
+```bash
+# Register a new user
+curl -X POST "http://localhost:8084/api/v1/auth/register" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "username": "astronomer",
+       "email": "astronomer@observatory.org", 
+       "full_name": "Jane Astronomer",
+       "password": "secure_password_123"
+     }'
+
+# Login to get JWT token
+curl -X POST "http://localhost:8084/api/v1/auth/token" \
+     -H "Content-Type: application/x-www-form-urlencoded" \
+     -d "username=astronomer&password=secure_password_123&grant_type=password"
+
+# Response: {"access_token": "eyJ0eXAi...", "token_type": "bearer"}
+```
+
+### Using Protected Endpoints
+```bash
+# Create object (requires authentication)
+curl -X POST "http://localhost:8084/api/v1/objects/" \
+     -H "Authorization: Bearer eyJ0eXAi..." \
+     -H "Content-Type: application/json" \
+     -d '{
+       "name": "M31",
+       "coo": {"ra": 10.68458, "dec": 41.26917},
+       "aliases": ["Andromeda Galaxy", "NGC 224"]
+     }'
+
+# List objects (public access)
+curl "http://localhost:8084/api/v1/objects/"
+
+# Get current user info
+curl -H "Authorization: Bearer eyJ0eXAi..." \
+     "http://localhost:8084/api/v1/auth/me"
+```
+
+### API Endpoints
+- **Public**: `GET /api/v1/objects/` - List all objects
+- **Public**: `GET /api/v1/objects/{id}` - Get specific object  
+- **Protected**: `POST /api/v1/objects/` - Create new object
+- **Protected**: `PUT /api/v1/objects/{id}` - Update object
+- **Protected**: `DELETE /api/v1/objects/{id}` - Delete object
+- **Auth**: `POST /api/v1/auth/register` - Register new user
+- **Auth**: `POST /api/v1/auth/token` - Login/get token
+- **Auth**: `GET /api/v1/auth/me` - Get current user info
 
 ## Development Workflow
 
@@ -180,8 +243,10 @@ ocadb/
 
 ### Environment Variables
 ```bash
-MONGODB_URL=mongodb://localhost:27017    # Database connection
-MONGODB_DATABASE=ocadb                   # Database name
+MONGODB_URL=mongodb://localhost:27017      # Database connection
+MONGODB_DATABASE=ocadb                     # Database name
+JWT_SECRET_KEY=your-secret-key-here        # JWT signing secret (production)
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30         # Token expiration (optional)
 ```
 
 ### Poetry Scripts

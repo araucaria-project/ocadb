@@ -23,6 +23,9 @@ services:
   - key: MONGODB_URL
     scope: RUN_TIME
     type: SECRET
+  - key: JWT_SECRET_KEY
+    scope: RUN_TIME
+    type: SECRET
   - key: MONGODB_DATABASE
     scope: RUN_TIME
     value: ocadb

@@ -2,7 +2,7 @@
 import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from api.routers import api_auth, sample_api, objects
+from api.routers import api_auth, sample_api, objects, observations
 from ocadb import database
 
 
@@ -18,9 +18,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+# Include all routers with consistent /api/v1 prefix
 app.include_router(objects.router, prefix='/api/v1')
-app.include_router(api_auth.router)
-app.include_router(sample_api.router)
+app.include_router(observations.router, prefix='/api/v1')
+app.include_router(api_auth.router, prefix='/api/v1')
+app.include_router(sample_api.router, prefix='/api/v1')
 
 
 @app.get("/")
