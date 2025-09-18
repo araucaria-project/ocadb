@@ -65,7 +65,7 @@ Docker Compose setup for full-stack development:
 
 2. **Start development environment**
    ```bash
-   docker-compose up -d
+   docker compose up -d
    ```
 
 3. **Verify services**
@@ -182,13 +182,13 @@ poetry run ocadb import --help
 ### Docker Development
 ```bash
 # Start all services
-docker-compose up -d
+docker compose up -d
 
 # View logs
-docker-compose logs -f fastapi
+docker compose logs -f fastapi
 
 # Restart specific service
-docker-compose restart fastapi
+docker compose restart fastapi
 ```
 
 ## Project Structure
