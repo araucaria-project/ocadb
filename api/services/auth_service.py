@@ -1,4 +1,5 @@
 import os
+import logging
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
@@ -10,14 +11,18 @@ from api.services.crypto_service import CryptoService
 from api.services.database_connection import DatabaseConnection
 from api.schemas import TokenData
 
+from api import config
+
+log = logging.getLogger(__name__)
 
 class AuthService:
-
     oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/token")
+    env_settings = config.Settings()
 
-    _SECRET_KEY = os.getenv("JWT_SECRET_KEY", "fallback-secret-key-for-development-only")
-    _ALGORITHM = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+    # load settings from environment file
+    _SECRET_KEY = env_settings.JWT_SECRET_KEY
+    _ALGORITHM = env_settings.ALGORITHM
+    ACCESS_TOKEN_EXPIRE_MINUTES = int(env_settings.ACCESS_TOKEN_EXPIRE_MINUTES) # int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 
     @staticmethod
     def create_access_token(data: dict, expires_delta: timedelta | None = None):
@@ -28,6 +33,7 @@ class AuthService:
             expire = datetime.now(timezone.utc) + timedelta(minutes=15)
         to_encode.update({"exp": expire})
         encoded_jwt = jwt.encode(to_encode, AuthService._SECRET_KEY, algorithm=AuthService._ALGORITHM)
+
         return encoded_jwt
 
     @staticmethod

@@ -1,7 +1,16 @@
-from beanie import Document
-from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any
+import array
+
+import pymongo
+from attr.filters import exclude
+from beanie import Document, Indexed
+from pyaraucaria.fits import fits_header
+from pydantic import BaseModel, Field, model_validator, PrivateAttr
+from typing import Optional, Dict, Any, Annotated
 from datetime import datetime
+
+from pymongo import IndexModel
+
+from ocadb.models.geo import SkyCoord, Point2D
 
 
 class FitsHeader(BaseModel):
@@ -83,11 +92,28 @@ class Observation(Document):
         default_factory=dict, 
         description="Observation metadata (quality checks, processing info, etc.)"
     )
-    
+
+    # Coordinates
+    telescope_coordinates: SkyCoord = Field(SkyCoord, description="telescope direction coordinates", exclude=True) # exclude from json dump
+
+    # Access control
+    access_tags: Optional[list[str]] = Field(list[str], description="tags for document access control", exclude=True) # exclude from json dump
+
+
+    @model_validator(mode='after')
+    def store_skycoord(self):
+        self.telescope_coordinates = SkyCoord(radec=(self.fits_header.RA_TEL, self.fits_header.DEC_TEL))
+        return self
+
+    @model_validator(mode='after')
+    def store_tags(self):
+        self.access_tags = [self.fits_header.INSTRUME, self.fits_header.ORIGIN]
+        return self
+
     # Processing timestamps
     created_at: Optional[datetime] = Field(default_factory=datetime.utcnow, description="Record creation time")
     updated_at: Optional[datetime] = Field(None, description="Last update time")
-    
+
     class Settings:
         name = "observations"
         indexes = [
@@ -98,6 +124,7 @@ class Observation(Document):
             "fits_header.FILTER",
             "fits_header.TELESCOP",
             "fits_header.JD",
+            IndexModel([("telescope_coordinates.lon_lat", pymongo.GEOSPHERE)], name="skycoord_spatial_index"), # geospatial index
         ]
 
 

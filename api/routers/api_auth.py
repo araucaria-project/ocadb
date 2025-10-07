@@ -18,6 +18,7 @@ class UserCreate(BaseModel):
     email: str
     full_name: str
     password: str
+    access_tags: list[str]
 
 
 @router.post("/token")
@@ -55,7 +56,8 @@ async def register_user(user_data: UserCreate):
         username=user_data.username,
         email=user_data.email,
         full_name=user_data.full_name,
-        hashed_password=hashed_password
+        hashed_password=hashed_password,
+        access_tags=user_data.access_tags
     )
     
     # Return user without password
@@ -63,7 +65,8 @@ async def register_user(user_data: UserCreate):
         username=user.username,
         email=user.email,
         full_name=user.full_name,
-        disabled=user.disabled
+        disabled=user.disabled,
+        access_tags=user_data.access_tags
     )
 
 
@@ -83,5 +86,6 @@ async def read_users_me(token: Annotated[str, Depends(AuthService.validate_token
         username=user.username,
         email=user.email,
         full_name=user.full_name,
-        disabled=user.disabled
+        disabled=user.disabled,
+        access_tags=user.access_tags
     )

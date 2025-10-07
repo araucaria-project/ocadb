@@ -19,6 +19,7 @@ repository = "https://github.com/araucaria-project/ocadb"
 [tool.poetry.dependencies]
 python = "^3.12"
 pydantic = "^2.6.1"
+python-dotenv = "^1.1.1"
 fastapi = {version = "^0.109.2", optional = true}
 uvicorn = {version = "^0.27.1",  optional = true}
 python-multipart = {version = "^0.0.9", optional = true} # Logging shemas
@@ -32,6 +33,8 @@ pydantic-settings = {version = "^2.2.1", optional = true}
 motor = "^3.4.0"  # driver for mongodb used by api and conamdline
 typer = "^0.9.0"
 pyaraucaria = {git = "https://github.com/araucaria-project/pyaraucaria.git"}
+botocore = "^1.40.38"
+boto3 = "^1.40.38"
 
 [tool.poetry.extras]
 # API server dependencies (includes authentication)

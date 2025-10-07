@@ -1,16 +1,21 @@
 # api/main.py
 import os
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from api.routers import api_auth, sample_api, objects, observations
 from ocadb import database
+from api.config import Settings
 
+log = logging.getLogger(__name__.rsplit('.')[-1])
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    mongo_url = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
-    database_name = os.getenv("MONGODB_DATABASE", "ocadb")
+    env_settings = Settings()
+    mongo_url = env_settings.MONGODB_URL # os.getenv("MONGODB_URL", "mongodb://localhost:27017")
+    database_name = env_settings.MONGODB_DATABASE # os.getenv("MONGODB_DATABASE", "ocadb")
+
     await database.Connection().ensure_connection(mongo_url, database_name)
     yield
     # Shutdown (if needed)
