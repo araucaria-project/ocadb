@@ -31,7 +31,7 @@ rich = "^13.7.0"
 serverish = "^1.0.3"
 pydantic-settings = {version = "^2.2.1", optional = true}
 motor = "^3.4.0"  # driver for mongodb used by api and conamdline
-typer = "^0.9.0"
+typer = "^0.16.0"
 pyaraucaria = {git = "https://github.com/araucaria-project/pyaraucaria.git"}
 botocore = "^1.40.38"
 boto3 = "^1.40.38"

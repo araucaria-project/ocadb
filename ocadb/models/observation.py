@@ -94,10 +94,10 @@ class Observation(Document):
     )
 
     # Coordinates
-    telescope_coordinates: SkyCoord = Field(SkyCoord, description="telescope direction coordinates", exclude=True) # exclude from json dump
+    telescope_coordinates: SkyCoord = Field(SkyCoord, description="telescope direction coordinates", exclude=True) # exclude field from json dump
 
     # Access control
-    access_tags: Optional[list[str]] = Field(list[str], description="tags for document access control", exclude=True) # exclude from json dump
+    access_tags: Optional[list[str]] = Field(list[str], description="tags for document access control", exclude=True) # exclude field from json dump
 
 
     @model_validator(mode='after')

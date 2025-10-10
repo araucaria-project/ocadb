@@ -34,14 +34,14 @@ npm run lint     # ESLint
 **Docker Development Environment:**
 ```bash
 # Start all services (MongoDB, API, Web, Mongo Express)
-docker-compose up -d
+docker compose up -d
 
 # View logs
-docker-compose logs -f fastapi
-docker-compose logs -f vuejs
+docker compose logs -f fastapi
+docker compose logs -f vuejs
 
 # Restart specific service
-docker-compose restart fastapi
+docker compose restart fastapi
 
 # Services:
 # - MongoDB: localhost:27017

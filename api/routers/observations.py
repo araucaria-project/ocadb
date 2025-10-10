@@ -32,7 +32,6 @@ async def create_observation(
     await observation_data.insert()
     return observation_data
 
-
 @router.get("/{id}", response_description="Get a single Observation", response_model=Observation)
 async def get_observation(
         id: PydanticObjectId):
@@ -114,26 +113,10 @@ async def list_observations_by_geo(
     sky_area: Annotated[ArchDistance, Body(...)],
     token: Annotated[str, Depends(AuthService.validate_token)]
 ):
-    tags = []
-    #observations = await Observation.find(NearSphere(Observation.telescope_coordinates.lon_lat, sky_area.get_ref_lon(), sky_area.get_ref_lat(), max_distance=sky_area.geo_meters())).to_list()
-  #   observations = await Observation.aggregate([{ "$match": {"telescope_coordinates.lon_lat": {"$geoWithin": { "$centerSphere": [ [ -85, -12 ], 0.5 ] }}}},
-  # { "$redact": {"$cond": {"if": {"$gt": [{"$size": {"$setIntersection": ["$access_tags", ['DW936_BV']]}}, 0]},"then": "$$KEEP", "else": "$$PRUNE"}}}], projection_model=Observation).to_list()
-  #   # observations = await Observation.find(
-    #     NearSphere(Observation.telescope_coordinates.lon_lat, sky_area.get_ref_lon(), sky_area.get_ref_lat(),
-    #                max_distance=sky_area.geo_meters())).aggregate([{"$redact": {
-    #     "$cond": {"if": {"$gt": [{"$size": {"$setIntersection": ["$observation_access_tags", tags]}}, 0]},
-    #               "then": "$$KEEP", "else": "$$PRUNE"}}}], projection_model=Observation).to_list()
     user = await read_users_me(token)
     access_tags = user.access_tags
 
-    observations = await Observation.find(OcaWithin(Observation.telescope_coordinates.lon_lat, (sky_area.get_ref_lon(), sky_area.get_ref_lat()), 0.5)).aggregate([{"$redact": {"$cond": {"if": {"$gt": [{"$size": {"$setIntersection": ["$access_tags", access_tags]}}, 0]}, "then": "$$KEEP", "else": "$$PRUNE"}}}], projection_model=Observation).to_list()
-
-    # log.error(
-    #     f"sky distance: {sky_area.geo_meters()}")
-    # log.error(
-    #     f"sky distance: {sky_area.arc_degrees}")
-    # observations = await Observation.find(NearSphere(Observation.object_skycoord.lon_lat, 10, 10, max_distance=500)).to_list()
-
+    observations = await Observation.find(OcaWithin(Observation.telescope_coordinates.lon_lat, (sky_area.get_ref_lon(), sky_area.get_ref_lat()), sky_area.rad_distance())).aggregate([{"$redact": {"$cond": {"if": {"$gt": [{"$size": {"$setIntersection": ["$access_tags", access_tags]}}, 0]}, "then": "$$KEEP", "else": "$$PRUNE"}}}], projection_model=Observation).to_list()
 
     return observations
 

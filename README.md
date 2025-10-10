@@ -91,7 +91,7 @@ Docker Compose setup for full-stack development:
 
 **SkyCoord** (`ocadb/models/geo.py`) - Coordinate system:
 ```python
-- _lon_lat: Point2D                     # GeoJSON internal format
+- lon_lat: Point2D                     # GeoJSON internal format
 - epoch: float = 2000.0                 # Coordinate epoch
 - radec: property                       # RA/Dec access (0-360, -90/+90)
 ```
@@ -177,6 +177,7 @@ poetry run ocadb-server
 
 # Use CLI
 poetry run ocadb import --help
+poetry run ocadb hdr import --help
 ```
 
 ### Docker Development

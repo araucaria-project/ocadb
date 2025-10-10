@@ -89,11 +89,16 @@ class ArchDistance(BaseModel):
         self.arc_seconds = kwargs.pop('arc_seconds', 0.0)
 
         self._sky_coord = SkyCoord(radec=(self.ra, self.dec))
-        self.geo_meters()
+        self._degrees = self.arc_degrees + (self.arc_minutes / 60.0) + (self.arc_seconds / 36000.0)
+        # self.geo_meters()
+
+    def rad_distance(self):
+        deg_to_rad = math.pi / 180.0
+        return self._degrees * deg_to_rad
 
     def geo_meters(self) -> float:
         # compute the internal degree representation
-        self._degrees = self.arc_degrees + (self.arc_minutes / 60.0) + (self.arc_seconds / 36000.0)
+
 
         # compute the corresponding internal distance in meters at the surface
         rad_to_km = 6378.1
