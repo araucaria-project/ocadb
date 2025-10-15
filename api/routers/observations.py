@@ -1,7 +1,8 @@
 from beanie.odm.operators.find.geospatial import NearSphere, GeoWithin
 from fastapi import APIRouter, HTTPException, status, Body, Depends
-from beanie import PydanticObjectId
+from beanie import PydanticObjectId, exceptions
 from typing import List, Annotated, Dict, Any, Tuple
+from datetime import datetime
 
 from api.services.oca_geospatial_query import OcaWithin
 from ocadb.models import Observation, FitsHeader, SkyCoord
@@ -32,8 +33,23 @@ async def create_observation(
     await observation_data.insert()
     return observation_data
 
+@router.put("/", response_description="Update observation")
+async def update_observation(
+        observation_data: Annotated[Observation, Body(...)],
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    """Update observation"""
+    observation_data.updated_at = datetime.utcnow()
+    try:
+        await observation_data.replace()
+    except (ValueError, exceptions.DocumentNotFound):
+        raise HTTPException(status_code=404, detail=f"Observation with ID {observation_data._id} not found")
+
+    return observation_data
+
 @router.get("/{id}", response_description="Get a single Observation", response_model=Observation)
 async def get_observation(
+        token: Annotated[str, Depends(AuthService.validate_token)],
         id: PydanticObjectId):
 
     """Get observation by ID"""
@@ -43,7 +59,9 @@ async def get_observation(
     return observation
 
 @router.get("/{id}/url", response_description="Get a presigned URL for a single Observation", response_model=S3PresignedUrl)
-async def get_observation_url(id: PydanticObjectId, expires_in: int = 3600):
+async def get_observation_url(
+        token: Annotated[str, Depends(AuthService.validate_token)],
+        id: PydanticObjectId, expires_in: int = 3600):
     """Get observation by ID"""
     observation = await Observation.get(id)
     if observation is None:
@@ -120,23 +138,22 @@ async def list_observations_by_geo(
 
     return observations
 
+@router.put("/{id}/metadata", response_description="Update observation metadata")
+async def update_observation_metadata(
+    id: PydanticObjectId,
+    metadata: Annotated[Dict[str, Any], Body(...)],
+    token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    """Update observation metadata (quality checks, processing info, etc.)"""
+    observation = await Observation.get(id)
+    if observation is None:
+        raise HTTPException(status_code=404, detail=f"Observation with ID {id} not found")
 
-# @router.put("/{id}/metadata", response_description="Update observation metadata")
-# async def update_observation_metadata(
-#     id: PydanticObjectId,
-#     metadata: Annotated[Dict[str, Any], Body(...)],
-#     token: Annotated[str, Depends(AuthService.validate_token)]
-# ):
-#     """Update observation metadata (quality checks, processing info, etc.)"""
-#     observation = await Observation.get(id)
-#     if observation is None:
-#         raise HTTPException(status_code=404, detail=f"Observation with ID {id} not found")
-#
-#     # Update metadata while preserving existing data
-#     observation.metadata.update(metadata)
-#     await observation.save()
-#
-#     return {"message": "Metadata updated successfully", "observation_id": str(id)}
+    # Update metadata while preserving existing data
+    observation.metadata.update(metadata)
+    await observation.save()
+
+    return {"message": "Metadata updated successfully", "observation_id": str(id)}
 
 
 @router.delete("/{id}", response_description="Delete an Observation")
