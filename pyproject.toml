@@ -33,8 +33,9 @@ pydantic-settings = {version = "^2.2.1", optional = true}
 motor = "^3.4.0"  # driver for mongodb used by api and conamdline
 typer = "^0.16.0"
 pyaraucaria = {git = "https://github.com/araucaria-project/pyaraucaria.git"}
-botocore = "^1.40.38"
-boto3 = "^1.40.38"
+aioboto3 = "^15.2.0"
+
+
 
 [tool.poetry.extras]
 # API server dependencies (includes authentication)

@@ -5,11 +5,6 @@ from typing import List
 
 from beanie.odm.operators.find import BaseFindOperator
 
-
-
-# [{ "$match": {"telescope_coordinates.lon_lat": {"$geoWithin": { "$centerSphere": [ [ -85, -12 ], 0.5 ] }}}},
-#   { "$redact": {"$cond": {"if": {"$gt": [{"$size": {"$setIntersection": ["$access_tags", ['DW936_BV']]}}, 0]},"then": "$$KEEP", "else": "$$PRUNE"}}}]
-
 class BaseFindGeospatialOperator(BaseFindOperator, ABC): ...
 
 class OcaWithin(BaseFindGeospatialOperator):
@@ -23,12 +18,11 @@ class OcaWithin(BaseFindGeospatialOperator):
     @property
     def query(self):
         return {
-            self.field: {
-                "$geoWithin": {
-                    "$centerSphere": [
-                                [self.coordinates[0], self.coordinates[1]],
-                                self.radius
-                    ]
-                }
-            }
+            self.field: {"$geoWithin": {"$centerSphere": [[self.coordinates[0], self.coordinates[1]], self.radius]}}
         }
+
+    @staticmethod
+    def redact_with_access_tags(access_tags):
+        return {"$redact": {
+            "$cond": {"if": {"$gt": [{"$size": {"$setIntersection": ["$access_tags", access_tags]}}, 0]},
+                      "then": "$$KEEP", "else": "$$PRUNE"}}}

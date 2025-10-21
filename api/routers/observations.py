@@ -2,7 +2,7 @@ from beanie.odm.operators.find.geospatial import NearSphere, GeoWithin
 from fastapi import APIRouter, HTTPException, status, Body, Depends
 from beanie import PydanticObjectId, exceptions
 from typing import List, Annotated, Dict, Any, Tuple
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from api.services.oca_geospatial_query import OcaWithin
 from ocadb.models import Observation, FitsHeader, SkyCoord
@@ -11,6 +11,7 @@ from ocadb.models.s3_presigned_url import S3PresignedUrl
 from api.services.auth_service import AuthService
 from api.routers.api_auth import read_users_me
 from api.services.s3_api_service import S3Connection
+
 
 
 import logging
@@ -61,14 +62,16 @@ async def get_observation(
 @router.get("/{id}/url", response_description="Get a presigned URL for a single Observation", response_model=S3PresignedUrl)
 async def get_observation_url(
         token: Annotated[str, Depends(AuthService.validate_token)],
-        id: PydanticObjectId, expires_in: int = 3600):
+        id: PydanticObjectId,
+        expires_in: int = 3600):
     """Get observation by ID"""
     observation = await Observation.get(id)
     if observation is None:
         raise HTTPException(status_code=404, detail=f"Observation with ID {id} not found")
 
-    s3 = S3Connection()
-    s3_presigned_url_response = S3PresignedUrl(filename=observation.filename, url=s3.get_presigned_url(params={'Bucket': 'tests-private', 'Key': observation.filename}, expires_in=expires_in), expires_in=expires_in)
+    s3_con = S3Connection()
+    presigned_url = await s3_con.get_presigned_url(params={'Bucket': 'tests-private', 'Key': observation.filename}, expires_in=expires_in)
+    s3_presigned_url_response = S3PresignedUrl(description=observation.filename, url=presigned_url, valid_until=(datetime.utcnow()+timedelta(seconds=expires_in)).strftime('%Y%m%dT%H%M%SZ'))
     return s3_presigned_url_response
 
 
@@ -78,10 +81,10 @@ async def list_observations(
 
     """List all observations"""
     user = await read_users_me(token)
-    access_tags = user.access_tags
 
     observations = await Observation.find_all().to_list()
-    # observations = await Observation.find_all().aggregate([{ "$redact": {"$cond": {"if": {"$gt": [{"$size": {"$setIntersection": ["$access_tags", access_tags]}}, 0]},"then": "$$KEEP", "else": "$$PRUNE"}}}], projection_model=Observation).to_list()
+    # observations = await Observation.find_all().aggregate(
+    #         [OcaWithin.redact_with_access_tags(access_tags=user.access_tags)], projection_model=Observation).to_list()
     return observations
 
 
@@ -91,10 +94,9 @@ async def get_observation_by_filename(
         token: Annotated[str, Depends(AuthService.validate_token)]):
     """Get observation by FITS filename"""
     user = await read_users_me(token)
-    access_tags = user.access_tags
 
-    #observation = await Observation.find_one(Observation.filename == filename)
-    observations = await Observation.find(Observation.filename == filename).aggregate([{ "$redact": {"$cond": {"if": {"$gt": [{"$size": {"$setIntersection": ["$access_tags", access_tags]}}, 0]},"then": "$$KEEP", "else": "$$PRUNE"}}}], projection_model=Observation).to_list()
+    observations = await Observation.find(Observation.filename == filename).aggregate(
+        [OcaWithin.redact_with_access_tags(access_tags=user.access_tags)], projection_model=Observation).to_list()
 
     if not observations:
         raise HTTPException(status_code=404, detail=f"Observation with filename {filename} not found")
@@ -109,7 +111,8 @@ async def list_observations_by_object(
     user = await read_users_me(token)
     access_tags = user.access_tags
 
-    observations = await Observation.find(Observation.fits_header.OBJECT == object_name).aggregate([{ "$redact": {"$cond": {"if": {"$gt": [{"$size": {"$setIntersection": ["$access_tags", access_tags]}}, 0]},"then": "$$KEEP", "else": "$$PRUNE"}}}], projection_model=Observation).to_list()
+    observations = await Observation.find(Observation.fits_header.OBJECT == object_name).aggregate(
+        [OcaWithin.redact_with_access_tags(access_tags=user.access_tags)], projection_model=Observation).to_list()
     return observations
 
 
@@ -119,10 +122,10 @@ async def list_observations_by_filter(
         token: Annotated[str, Depends(AuthService.validate_token)]):
     """List observations using a specific filter"""
     user = await read_users_me(token)
-    access_tags = user.access_tags
 
-    # observations = await Observation.find(Observation.fits_header.FILTER == filter_name).to_list()
-    observations = await Observation.find(Observation.fits_header.FILTER == filter_name).aggregate([{ "$redact": {"$cond": {"if": {"$gt": [{"$size": {"$setIntersection": ["$access_tags", access_tags]}}, 0]},"then": "$$KEEP", "else": "$$PRUNE"}}}], projection_model=Observation).to_list()
+    observations = await Observation.find(Observation.fits_header.FILTER == filter_name).aggregate(
+        [OcaWithin.redact_with_access_tags(access_tags=user.access_tags)], projection_model=Observation).to_list()
+
 
     return observations
 
@@ -132,9 +135,11 @@ async def list_observations_by_geo(
     token: Annotated[str, Depends(AuthService.validate_token)]
 ):
     user = await read_users_me(token)
-    access_tags = user.access_tags
 
-    observations = await Observation.find(OcaWithin(Observation.telescope_coordinates.lon_lat, (sky_area.get_ref_lon(), sky_area.get_ref_lat()), sky_area.rad_distance())).aggregate([{"$redact": {"$cond": {"if": {"$gt": [{"$size": {"$setIntersection": ["$access_tags", access_tags]}}, 0]}, "then": "$$KEEP", "else": "$$PRUNE"}}}], projection_model=Observation).to_list()
+    observations = await Observation.find(
+        OcaWithin(Observation.telescope_coordinates.lon_lat, (sky_area.get_ref_lon(), sky_area.get_ref_lat()),
+                  sky_area.rad_distance())).aggregate(
+        [OcaWithin.redact_with_access_tags(access_tags=user.access_tags)], projection_model=Observation).to_list()
 
     return observations
 
