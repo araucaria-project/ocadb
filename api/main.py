@@ -21,7 +21,8 @@ async def lifespan(app: FastAPI):
     # Shutdown (if needed)
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(lifespan=lifespan,
+              docs_url='/swagger')
 
 # Include all routers with consistent /api/v1 prefix
 app.include_router(objects.router, prefix='/api/v1')
