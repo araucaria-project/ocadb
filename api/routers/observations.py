@@ -136,10 +136,12 @@ async def list_observations_by_geo(
 ):
     user = await read_users_me(token)
 
-    observations = await Observation.find(
+    observations_result = (Observation.find(
         OcaWithin(Observation.telescope_coordinates.lon_lat, (sky_area.get_ref_lon(), sky_area.get_ref_lat()),
                   sky_area.rad_distance())).aggregate(
-        [OcaWithin.redact_with_access_tags(access_tags=user.access_tags)], projection_model=Observation).to_list()
+        [OcaWithin.redact_with_access_tags(access_tags=user.access_tags)], projection_model=Observation))
+
+    observations = await observations_result.to_list()
 
     return observations
 

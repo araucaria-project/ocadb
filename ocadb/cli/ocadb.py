@@ -4,12 +4,12 @@ import typer
 from pymongo.errors import ConnectionFailure
 
 import ocadb.cli.importer as importer
-import ocadb.cli.fits_header as hdr_importer
+import ocadb.cli.register_user as register_user
 from ocadb.database import Connection
 
 app = typer.Typer(pretty_exceptions_enable=False)
 app.add_typer(importer.app, name="import")
-app.add_typer(hdr_importer.app, name="hdr")
+app.add_typer(register_user.app, name="user")
 
 @app.callback()
 def initialize():

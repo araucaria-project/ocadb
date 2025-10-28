@@ -13,8 +13,8 @@ log = logging.getLogger(__name__.rsplit('.')[-1])
 async def lifespan(app: FastAPI):
     # Startup
     env_settings = Settings()
-    mongo_url = env_settings.MONGODB_URL # os.getenv("MONGODB_URL", "mongodb://localhost:27017")
-    database_name = env_settings.MONGODB_DATABASE # os.getenv("MONGODB_DATABASE", "ocadb")
+    mongo_url = env_settings.MONGODB_URL
+    database_name = env_settings.MONGODB_DATABASE
 
     await database.Connection().ensure_connection(mongo_url, database_name)
     yield

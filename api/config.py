@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     # application settings
     MONGODB_URL: str = "mongodb://localhost:27017"
     MONGODB_DATABASE: str = "ocadb"
+    MONGODB_USER: str = "user"
+    MONGODB_PASS: str = "pass"
 
     # server settings
     host: str = "0.0.0.0"

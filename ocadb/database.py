@@ -3,6 +3,7 @@ from typing import Optional
 
 from beanie import init_beanie
 from motor.motor_asyncio import AsyncIOMotorClient
+# from pymongo import AsyncMongoClient
 from pymongo.errors import ConnectionFailure
 from serverish.base.singleton import Singleton
 

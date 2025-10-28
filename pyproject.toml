@@ -23,8 +23,8 @@ python-dotenv = "^1.1.1"
 fastapi = {version = "^0.109.2", optional = true}
 uvicorn = {version = "^0.27.1",  optional = true}
 python-multipart = {version = "^0.0.9", optional = true} # Logging shemas
-python-jose = {version = "^3.3.0", optional = true} # JWT
-passlib = {version = "^1.7.4", optional = true}  # for hashing password
+python-jose = "^3.3.0"# JWT
+passlib = "^1.7.4"  # for hashing password
 bcrypt = {version = "^4.1.2", optional = true}  # for hashing password, needed for passlib
 beanie = "^1.25.0"
 rich = "^13.7.0"
@@ -34,8 +34,6 @@ motor = "^3.4.0"  # driver for mongodb used by api and conamdline
 typer = "^0.16.0"
 pyaraucaria = {git = "https://github.com/araucaria-project/pyaraucaria.git"}
 aioboto3 = "^15.2.0"
-
-
 
 [tool.poetry.extras]
 # API server dependencies (includes authentication)

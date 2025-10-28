@@ -46,18 +46,6 @@ class SkyCoord(BaseModel):
         longitude = (ra + 180.0) % 360 - 180
         return longitude, dec
 
-
-
-    # class Settings:
-    #     name = "skycoord"
-    #     indexes = [
-    #         [
-    #             ("radec", pymongo.GEOSPHERE),
-    #         ],
-    #     ]
-
-
-
 class Polygon2D(BaseModel):
     type: Literal["Polygon"]
     coordinates: list[Tuple[float, float]]
@@ -69,8 +57,7 @@ class SkyCoordPolygon(BaseModel):
 class ArchDistance(BaseModel):
     ra: float = 0.0
     dec: float = 0.0
-    arc_degrees: float = 0.0
-    arc_minutes: float = 0.0
+    epoch: str = "2000.0"
     arc_seconds: float = 0.0
 
     # internal representations
@@ -84,34 +71,23 @@ class ArchDistance(BaseModel):
         # pop the corresponding args
         self.ra = kwargs.pop('ra', 0.0)
         self.dec = kwargs.pop('dec', 0.0)
-        self.arc_degrees = kwargs.pop('arc_degrees', 0.0)
-        self.arc_minutes = kwargs.pop('arc_minutes', 0.0)
+        self.epoch = kwargs.pop('epoch', "J2000")
         self.arc_seconds = kwargs.pop('arc_seconds', 0.0)
 
         self._sky_coord = SkyCoord(radec=(self.ra, self.dec))
-        self._degrees = self.arc_degrees + (self.arc_minutes / 60.0) + (self.arc_seconds / 36000.0)
+        self._degrees = self.arc_seconds / 36000.0
         # self.geo_meters()
 
     def rad_distance(self):
         deg_to_rad = math.pi / 180.0
         return self._degrees * deg_to_rad
 
-    def geo_meters(self) -> float:
-        # compute the internal degree representation
-
-
-        # compute the corresponding internal distance in meters at the surface
-        rad_to_km = 6378.1
-        deg_to_rad = math.pi/180.0
-        # equat_circ = 40075704.0  # earths circumference at equator
-        self._geo_meters = self._degrees * deg_to_rad * rad_to_km * 1000 # get meters out of degrees, ref https://www.mongodb.com/docs/manual/core/indexes/index-types/geospatial/2d/calculate-distances/
-        return self._geo_meters
-
     def get_ref_lon(self) -> float:
         return self._sky_coord.lon_lat.coordinates[0]
 
     def get_ref_lat(self) -> float:
         return self._sky_coord.lon_lat.coordinates[1]
+
 
 class GeoSearchLocationDistance(BaseModel):
     """SkyCoord Point with distance object"""
