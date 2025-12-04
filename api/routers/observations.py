@@ -95,12 +95,42 @@ async def get_observation_by_filename(
     """Get observation by FITS filename"""
     user = await read_users_me(token)
 
-    observations = await Observation.find(Observation.filename == filename).aggregate(
-        [OcaWithin.redact_with_access_tags(access_tags=user.access_tags)], projection_model=Observation).to_list()
+    observations = await Observation.find(Observation.filename == filename).to_list() # .aggregate(
+        #[OcaWithin.redact_with_access_tags(access_tags=user.access_tags)], projection_model=Observation).to_list()
 
     if not observations:
         raise HTTPException(status_code=404, detail=f"Observation with filename {filename} not found")
     return observations
+
+@router.get("/by-filename/{filename}/url", response_description="Get Presigned URL by filename", response_model=List[S3PresignedUrl])
+async def get_observation_by_filename(
+        filename: str,
+        token: Annotated[str, Depends(AuthService.validate_token)],
+        expires_in: int = 3600):
+    """Get observation by FITS filename"""
+    user = await read_users_me(token)
+
+    observations = await Observation.find(Observation.filename == filename).to_list() #.aggregate(
+        # [OcaWithin.redact_with_access_tags(access_tags=user.access_tags)], projection_model=Observation).to_list()
+
+    if not observations:
+        raise HTTPException(status_code=404, detail=f"Observation with filename {filename} not found")
+
+    async def get_aiter(sync_list):
+        for i in sync_list:
+            yield i
+
+    s3_con = S3Connection()
+    url_responses = []
+    async for observation in get_aiter(observations):
+        presigned_url = await s3_con.get_presigned_url(params={'Bucket': 'tests-private', 'Key': observation.filename},
+                                                   expires_in=expires_in)
+        s3_presigned_url_response = S3PresignedUrl(description=observation.filename, url=presigned_url,
+                                               valid_until=(datetime.utcnow() + timedelta(seconds=expires_in)).strftime(
+                                                   '%Y%m%dT%H%M%SZ'))
+        url_responses.append(s3_presigned_url_response)
+
+    return url_responses
 
 
 @router.get("/by-object/{object_name}", response_description="List Observations by object name", response_model=List[Observation])
