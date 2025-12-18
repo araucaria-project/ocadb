@@ -70,7 +70,7 @@ async def get_observation_url(
         raise HTTPException(status_code=404, detail=f"Observation with ID {id} not found")
 
     s3_con = S3Connection()
-    presigned_url = await s3_con.get_presigned_url(params={'Bucket': 'tests-private', 'Key': observation.filename}, expires_in=expires_in)
+    presigned_url = await s3_con.get_presigned_url(params={'Bucket': s3_con.bucket_name, 'Key': observation.filename}, expires_in=expires_in)
     s3_presigned_url_response = S3PresignedUrl(description=observation.filename, url=presigned_url, valid_until=(datetime.utcnow()+timedelta(seconds=expires_in)).strftime('%Y%m%dT%H%M%SZ'))
     return s3_presigned_url_response
 
@@ -123,7 +123,7 @@ async def get_observation_by_filename(
     s3_con = S3Connection()
     url_responses = []
     async for observation in get_aiter(observations):
-        presigned_url = await s3_con.get_presigned_url(params={'Bucket': 'tests-private', 'Key': observation.filename},
+        presigned_url = await s3_con.get_presigned_url(params={'Bucket': s3_con.bucket_name, 'Key': observation.filename},
                                                    expires_in=expires_in)
         s3_presigned_url_response = S3PresignedUrl(description=observation.filename, url=presigned_url,
                                                valid_until=(datetime.utcnow() + timedelta(seconds=expires_in)).strftime(

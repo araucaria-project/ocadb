@@ -4,12 +4,17 @@ import asyncio
 # from botocore.config import Config
 from aiobotocore.config import AioConfig
 
+import api.config
 from api.config import Settings
 
 class S3Connection:
     def __init__(self, **kwargs):
         self.env_settings = Settings()
         self.session = aioboto3.Session()
+
+    @property
+    def bucket_name(self):
+        return self.env_settings.BUCKET_NAME
 
     async def get_presigned_url(self, params={'Bucket': '', 'Key': ''}, url_method='get_object', expires_in=60):
         async with self.session.client('s3',
