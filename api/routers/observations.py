@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from api.services.oca_geospatial_query import OcaWithin
 from ocadb.models import Observation, FitsHeader, SkyCoord
 from ocadb.models.geo import ArchDistance
-from ocadb.models.s3_presigned_url import S3PresignedUrl
+from ocadb.models.s3_presigned_url import S3PresignedUrl, S3PresignedUrlBatchList
 from api.services.auth_service import AuthService
 from api.routers.api_auth import read_users_me
 from api.services.s3_api_service import S3Connection
@@ -102,11 +102,42 @@ async def get_observation_by_filename(
         raise HTTPException(status_code=404, detail=f"Observation with filename {filename} not found")
     return observations
 
+@router.post("/by-batch-filename/url", response_description="Get Presigned URL by batch of filenames", response_model=List[S3PresignedUrl])
+async def get_batch_filename_urls(
+        filename_list: Annotated[List[str], Body(...)],
+        token: Annotated[str, Depends(AuthService.validate_token)],
+        expires_in: int = 24 * 3600):
+
+    async def get_aiter(sync_list):
+        for i in sync_list:
+            yield i
+
+    s3_con = S3Connection()
+    url_responses = []
+
+    for obs in filename_list:
+        observations = await Observation.find(Observation.filename == obs).to_list()
+
+        if not observations:
+            raise HTTPException(status_code=404, detail=f"Observation with filename {obs} not found")
+
+        async for observation in get_aiter(observations):
+            presigned_url = await s3_con.get_presigned_url(
+                params={'Bucket': s3_con.bucket_name, 'Key': observation.filename},
+                expires_in=expires_in)
+            s3_presigned_url_response = S3PresignedUrl(description=observation.filename, url=presigned_url,
+                                                       valid_until=(datetime.utcnow() + timedelta(
+                                                           seconds=expires_in)).strftime(
+                                                           '%Y%m%dT%H%M%SZ'))
+            url_responses.append(s3_presigned_url_response)
+
+    return url_responses
+
 @router.get("/by-filename/{filename}/url", response_description="Get Presigned URL by filename", response_model=List[S3PresignedUrl])
 async def get_observation_by_filename(
         filename: str,
         token: Annotated[str, Depends(AuthService.validate_token)],
-        expires_in: int = 3600):
+        expires_in: int = 24 * 3600):
     """Get observation by FITS filename"""
     user = await read_users_me(token)
 

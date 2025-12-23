@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, model_validator
-from typing import Tuple, Literal, Optional
+from typing import Tuple, Literal, Optional, List
 from datetime import datetime
 
 from ocadb.models.geo import document_models
@@ -11,4 +11,7 @@ class S3PresignedUrl(BaseModel):
     valid_until: str
     url: str
 
-document_models = [S3PresignedUrl]
+class S3PresignedUrlBatchList(BaseModel):
+    filenames: List[str]
+
+document_models = [S3PresignedUrl, S3PresignedUrlBatchList]
