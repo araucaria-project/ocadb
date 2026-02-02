@@ -4,6 +4,8 @@ from beanie import PydanticObjectId, exceptions
 from typing import List, Annotated, Dict, Any, Tuple
 from datetime import datetime, timedelta
 
+from pymongo.errors import DuplicateKeyError
+
 from api.services.oca_geospatial_query import OcaWithin
 from ocadb.models import Observation, FitsHeader, SkyCoord
 from ocadb.models.geo import ArchDistance
@@ -31,7 +33,10 @@ async def create_observation(
     token: Annotated[str, Depends(AuthService.validate_token)]
 ):
     """Create a new observation record"""
-    await observation_data.insert()
+    try:
+        await observation_data.insert()
+    except DuplicateKeyError as e:
+        raise HTTPException(status_code=403, detail=f"Observation with filename {observation_data.filename} already exists.")
     return observation_data
 
 @router.put("/", response_description="Update observation")
@@ -103,7 +108,7 @@ async def get_observation_by_filename(
     return observations
 
 @router.post("/by-batch-filename/url", response_description="Get Presigned URL by batch of filenames", response_model=List[S3PresignedUrl])
-async def get_batch_filename_urls(
+async def get_batch_filename_url(
         filename_list: Annotated[List[str], Body(...)],
         token: Annotated[str, Depends(AuthService.validate_token)],
         expires_in: int = 24 * 3600):
@@ -134,7 +139,7 @@ async def get_batch_filename_urls(
     return url_responses
 
 @router.get("/by-filename/{filename}/url", response_description="Get Presigned URL by filename", response_model=List[S3PresignedUrl])
-async def get_observation_by_filename(
+async def get_observation_by_filename_url(
         filename: str,
         token: Annotated[str, Depends(AuthService.validate_token)],
         expires_in: int = 24 * 3600):
@@ -187,6 +192,8 @@ async def list_observations_by_filter(
     observations = await Observation.find(Observation.fits_header.FILTER == filter_name).aggregate(
         [OcaWithin.redact_with_access_tags(access_tags=user.access_tags)], projection_model=Observation).to_list()
 
+    # if not observations:
+    #     raise HTTPException(status_code=404, detail=f"No observations found")
 
     return observations
 
@@ -197,6 +204,7 @@ async def list_observations_by_geo(
 ):
     user = await read_users_me(token)
 
+    # observations_result = Observation.find_all()
     observations_result = (Observation.find(
         OcaWithin(Observation.telescope_coordinates.lon_lat, (sky_area.get_ref_lon(), sky_area.get_ref_lat()),
                   sky_area.rad_distance())).aggregate(
@@ -205,6 +213,18 @@ async def list_observations_by_geo(
     observations = await observations_result.to_list()
 
     return observations
+
+@router.get('/search', response_description="Search Observations by multi parameter query", response_model=List[Observation])
+async def search_multi(
+        token: Annotated[str, Depends(AuthService.validate_token)],
+        filename: str,
+        filter_name: str,
+        object_name: str,
+        lat: float,
+        lon: float,
+        arc_distance: float
+):
+    pass
 
 @router.put("/{id}/metadata", response_description="Update observation metadata")
 async def update_observation_metadata(

@@ -9,6 +9,7 @@ class User(BaseModel):
     email: Optional[str] = None
     full_name: Optional[str] = None
     disabled: Optional[bool] = None
+    moderator: Optional[bool] = None
     access_tags: Optional[list[str]] = None
 
 
@@ -17,7 +18,7 @@ class UserInDB(Document, User):
     hashed_password: str
 
     def __str__(self):
-        return "> username: " + self.username + "\n" + "> full name: " + self.full_name + "\n" + "> email: " + self.email + "\n" + "> access tags: " + str(
+        return "> username: " + self.username + "\n> full name: " + self.full_name + "\n> email: " + self.email + "\n> access tags: " + str(
             self.access_tags)
 
     class Settings:

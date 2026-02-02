@@ -24,8 +24,7 @@ fastapi = "^0.109.2"
 uvicorn = "^0.27.1"
 python-multipart = "^0.0.9" # Logging shemas
 python-jose = "^3.3.0"# JWT
-passlib = "^1.7.4"  # for hashing password
-bcrypt = "^4.1.2"  # for hashing password, needed for passlib
+bcrypt = "^4.1.2"  # for hashing password
 beanie = "^1.25.0"
 rich = "^13.7.0"
 serverish = "^1.0.3"
@@ -39,9 +38,9 @@ aioboto3 = "^15.2.0"
 # API server dependencies (includes authentication)
 api = ["fastapi", "uvicorn", "python-multipart", "pydantic-settings"]
 # Authentication dependencies  
-auth = ["python-jose", "passlib", "bcrypt"]
+auth = ["python-jose", "bcrypt"]
 # Complete server stack (API + auth)
-server = ["fastapi", "uvicorn", "python-multipart", "python-jose", "passlib", "bcrypt", "pydantic-settings"]
+server = ["fastapi", "uvicorn", "python-multipart", "python-jose", "bcrypt", "pydantic-settings"]
 
 [tool.poetry.scripts]
 ocadb-server = 'api.main:start_development_server'
