@@ -3,6 +3,7 @@ import os
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from api.routers import api_auth, sample_api, objects, observations
 from ocadb import database
 from api.config import Settings
@@ -24,6 +25,14 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan,
               docs_url='/swagger',
               openapi_url='/api/v1/openapi.json')
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
 
 # Include all routers with consistent /api/v1 prefix
 app.include_router(objects.router, prefix='/api/v1')
