@@ -9,7 +9,7 @@ class CryptoService:
         return bcrypt.checkpw(password_byte_enc, hashed_pwd)
 
     @staticmethod
-    def get_password_hash(password):*
+    def get_password_hash(password):
         pwd_bytes = password.encode('utf-8')
         salt = bcrypt.gensalt()
         hashed_pwd = bcrypt.hashpw(pwd_bytes, salt)
