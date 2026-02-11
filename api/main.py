@@ -28,9 +28,10 @@ app = FastAPI(lifespan=lifespan,
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://([a-z0-9-]+\.)*ocadb\.space$|^https://.*\.app\.github\.dev$",
+    allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
 )
 
 # Include all routers with consistent /api/v1 prefix
