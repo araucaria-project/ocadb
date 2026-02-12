@@ -1,12 +1,34 @@
-import pymongo
-from attr.filters import exclude
-from beanie import Document, Indexed
-from pyaraucaria.fits import fits_header
-from pydantic import BaseModel, Field, model_validator, PrivateAttr
-from typing import Optional, Dict, Any, Annotated
-from datetime import datetime
+from beanie import Document, PydanticObjectId
+from pydantic import BaseModel, Field
+from typing import Optional, List
+from datetime import datetime, timezone
+from enum import Enum
 
 from pymongo import IndexModel
+
+
+# Enums for better type safety and readability
+class StorageStatusType(str, Enum):
+    """Status types for file storage operations."""
+    NOT_STORED = "not_stored"
+    DELETED = "deleted"
+    STORED = "stored"
+    CORRUPTED = "corrupted"
+    REQUESTED = "requested"
+    SCHEDULED = "scheduled"
+    QUEUED = "queued"
+    STORING = "storing"
+
+
+class FileClassification(str, Enum):
+    """FITS file classification types."""
+    RAW = "raw"
+    ZDF = "zdf"
+    MASTER = "master"
+    SOURCE = "source"
+    TMP = "tmp"
+    TEST = "test"
+
 
 class FitsHeader(BaseModel):
     """Direct mapping of FITS header keywords (exact field names)"""
@@ -69,21 +91,76 @@ class FitsHeader(BaseModel):
     CCD_VSSP: Optional[str] = Field(None, alias="CCD-VSSP")
     BZERO: Optional[int] = None
 
-    model_config = {"extra": "allow"} # model_config = ConfigDict(extra='allow')
+    # Allow additional FITS header fields not explicitly defined
+    model_config = {"extra": "allow"}
+
+
+class StorageLocationStatus(BaseModel):
+    """Storage status at a specific location (observatory, hub, or cloud)."""
+    ready: bool = Field(..., description="Whether the file exists at this location")
+    check_needed: bool = Field(..., description="Whether file existence needs verification")
+    status: StorageStatusType = Field(..., description="Current storage status")
+    expected_time: Optional[datetime] = Field(None, description="Expected completion time for pending operations")
+
+
+class StorageStatus(BaseModel):
+    """Aggregated storage status across all storage locations."""
+    observatory: StorageLocationStatus = Field(..., description="Observatory storage status")
+    hub: StorageLocationStatus = Field(..., description="Hub storage status")
+    cloud: StorageLocationStatus = Field(..., description="Cloud storage status")
+
 
 class FITSFile(Document):
-    filename: str = Field(..., description="FITS filename", unique=True)
-    file_class: str = Field(...)
-    file_status: str = Field(...)
-    # Raw FITS header (flat structure, exact field names)
+    """FITS file document with header metadata, storage status, and relations."""
+
+    # Core identification
+    filename: str = Field(..., description="FITS filename")
+    file_class: FileClassification = Field(..., description="File classification type")
+
+    # Relations
+    observation_id: PydanticObjectId = Field(..., description="Parent observation reference")
+    source_filenames: List[str] = Field(
+        default_factory=list,
+        description="Source file references (by filename)"
+    )
+
+    # FITS metadata
     fits_header: FitsHeader = Field(..., description="Complete FITS header")
 
+    # Storage tracking
+    file_status: StorageStatus = Field(..., description="Storage status across all locations")
+
+    # Timestamps
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Record creation time"
+    )
+    updated_at: Optional[datetime] = Field(None, description="Last update time")
+
     class Settings:
-        name = "fits_files",
+        name = "fits_files"
         indexes = [
-            IndexModel([("filename", pymongo.TEXT)], unique=False),
-            IndexModel(["filename"], unique=True)
+            IndexModel([("filename", 1)], unique=True),
+            IndexModel([("observation_id", 1)]),
+            IndexModel([("file_class", 1)]),
+            IndexModel([("file_status.cloud.check_needed", 1)]),
+            IndexModel([("file_status.cloud.ready", 1)]),
+            IndexModel([("file_status.cloud.status", 1)]),
+            IndexModel([("created_at", -1)]),
         ]
+
+    async def resolve_source_files(self) -> List["FITSFile"]:
+        """Resolve source file references to actual documents.
+
+        Returns:
+            List of FITSFile documents that exist in the database.
+            Empty list if no source files exist yet.
+        """
+        if not self.source_filenames:
+            return []
+        return await FITSFile.find({"filename": {"$in": self.source_filenames}}).to_list()
+
+
 
 # Document models for Beanie registration
 document_models = [FITSFile]
