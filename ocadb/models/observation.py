@@ -9,6 +9,7 @@ from datetime import datetime
 from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import core_schema
 from pymongo import IndexModel
+from dateutil import parser
 
 from ocadb.models.file import FitsHeader, FITSFile
 from ocadb.models.geo import SkyCoord, Point2D
@@ -39,6 +40,8 @@ class Observation(Document):
     # Access control
     access_tags: Optional[list[str]] = Field(list[str], description="tags for document access control", exclude=True) # exclude field from json dump
 
+    # observation date
+    date_obs: datetime = Field(datetime, description="internal ISO Date to datetime conversion", exclude=True) # exclude field from json dump
 
     @model_validator(mode='after')
     def store_skycoord(self):
@@ -46,8 +49,21 @@ class Observation(Document):
         return self
 
     @model_validator(mode='after')
+    def store_obs_date(self):
+        self.date_obs = parser.parse(self.fits_header.DATE_OBS)
+        return self
+
+    @model_validator(mode='after')
     def store_tags(self):
-        self.access_tags = [self.fits_header.INSTRUME, self.fits_header.ORIGIN]
+        self.access_tags = []
+
+        if hasattr(self.fits_header, 'INSTRUME'):
+            self.access_tags.append(self.fits_header.INSTRUME)
+        if hasattr(self.fits_header, 'ORIGIN'):
+            self.access_tags.append(self.fits_header.ORIGIN)
+        if hasattr(self.fits_header, 'PI'):
+            self.access_tags.append(self.fits_header.PI)
+
         return self
 
     # Processing timestamps

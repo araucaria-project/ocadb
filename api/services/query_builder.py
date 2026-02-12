@@ -1,10 +1,31 @@
-from typing import List, Tuple
+from datetime import datetime
+from typing import List, Tuple, Optional
 from abc import ABC
 from typing import List
 
 from beanie.odm.operators.find import BaseFindOperator
+from pydantic import BaseModel
+
+from ocadb.models.geo import ArchDistance
+
 
 class BaseFindGeospatialOperator(BaseFindOperator, ABC): ...
+
+class MultiSearchForm(BaseModel):
+    cone_search: Optional[ArchDistance] = None
+    telescop: Optional[str] = None
+    date_obs_from: Optional[str] = None
+    date_obs_to: Optional[str] = None
+    jd_from: Optional[int] = None
+    jd_to: Optional[int] = None
+    imagetyp: Optional[str] = None
+    obstype: Optional[str] = None
+    object: Optional[str] = None
+    sciprog: Optional[str] = None
+    filter: Optional[List[str]] = None
+    exptime_from: Optional[str] = None
+    exptime_to: Optional[str] = None
+    pi: Optional[str] = None
 
 class QueryBuilder(BaseFindOperator):
     def __init__(

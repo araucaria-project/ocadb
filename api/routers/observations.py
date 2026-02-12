@@ -1,12 +1,17 @@
+import math
+
+from beanie.odm.operators.find.comparison import In
 from beanie.odm.operators.find.geospatial import NearSphere, GeoWithin
 from fastapi import APIRouter, HTTPException, status, Body, Depends
 from beanie import PydanticObjectId, exceptions
 from typing import List, Annotated, Dict, Any, Tuple
 from datetime import datetime, timedelta
+from dateutil import parser
 
 from pymongo.errors import DuplicateKeyError
 
 from api.services.oca_geospatial_query import OcaWithin
+from api.services.query_builder import MultiSearchForm
 from ocadb.models import Observation, FitsHeader, SkyCoord
 from ocadb.models.geo import ArchDistance
 from ocadb.models.s3_presigned_url import S3PresignedUrl, S3PresignedUrlBatchList
@@ -53,7 +58,7 @@ async def update_observation(
 
     return observation_data
 
-@router.get("/{id}", response_description="Get a single Observation", response_model=Observation)
+@router.get("/{id}/", response_description="Get a single Observation", response_model=Observation)
 async def get_observation(
         token: Annotated[str, Depends(AuthService.validate_token)],
         id: PydanticObjectId):
@@ -64,7 +69,7 @@ async def get_observation(
         raise HTTPException(status_code=404, detail=f"Observation with ID {id} not found")
     return observation
 
-@router.get("/{id}/url", response_description="Get a presigned URL for a single Observation", response_model=S3PresignedUrl)
+@router.get("/{id}/url/", response_description="Get a presigned URL for a single Observation", response_model=S3PresignedUrl)
 async def get_observation_url(
         token: Annotated[str, Depends(AuthService.validate_token)],
         id: PydanticObjectId,
@@ -93,7 +98,7 @@ async def list_observations(
     return observations
 
 
-@router.get("/by-filename/{filename}", response_description="Get Observation by filename", response_model=List[Observation])
+@router.get("/by-filename/{filename}/", response_description="Get Observation by filename", response_model=List[Observation])
 async def get_observation_by_filename(
         filename: str,
         token: Annotated[str, Depends(AuthService.validate_token)]):
@@ -107,7 +112,7 @@ async def get_observation_by_filename(
         raise HTTPException(status_code=404, detail=f"Observation with filename {filename} not found")
     return observations
 
-@router.post("/by-batch-filename/url", response_description="Get Presigned URL by batch of filenames", response_model=List[S3PresignedUrl])
+@router.post("/by-batch-filename/url/", response_description="Get Presigned URL by batch of filenames", response_model=List[S3PresignedUrl])
 async def get_batch_filename_url(
         filename_list: Annotated[List[str], Body(...)],
         token: Annotated[str, Depends(AuthService.validate_token)],
@@ -138,7 +143,7 @@ async def get_batch_filename_url(
 
     return url_responses
 
-@router.get("/by-filename/{filename}/url", response_description="Get Presigned URL by filename", response_model=List[S3PresignedUrl])
+@router.get("/by-filename/{filename}/url/", response_description="Get Presigned URL by filename", response_model=List[S3PresignedUrl])
 async def get_observation_by_filename_url(
         filename: str,
         token: Annotated[str, Depends(AuthService.validate_token)],
@@ -169,7 +174,7 @@ async def get_observation_by_filename_url(
     return url_responses
 
 
-@router.get("/by-object/{object_name}", response_description="List Observations by object name", response_model=List[Observation])
+@router.get("/by-object/{object_name}/", response_description="List Observations by object name", response_model=List[Observation])
 async def list_observations_by_object(
         object_name: str,
         token: Annotated[str, Depends(AuthService.validate_token)]):
@@ -182,7 +187,7 @@ async def list_observations_by_object(
     return observations
 
 
-@router.get("/by-filter/{filter_name}", response_description="List Observations by filter", response_model=List[Observation])
+@router.get("/by-filter/{filter_name}/", response_description="List Observations by filter", response_model=List[Observation])
 async def list_observations_by_filter(
         filter_name: str,
         token: Annotated[str, Depends(AuthService.validate_token)]):
@@ -197,7 +202,7 @@ async def list_observations_by_filter(
 
     return observations
 
-@router.get("/coordinates/", response_description="List Observations by geospatial coordinates", response_model=List[Observation])
+@router.get("/coordinates", response_description="List Observations by geospatial coordinates", response_model=List[Observation])
 async def list_observations_by_geo(
     sky_area: Annotated[ArchDistance, Body(...)],
     token: Annotated[str, Depends(AuthService.validate_token)]
@@ -216,17 +221,41 @@ async def list_observations_by_geo(
 
 @router.get('/search', response_description="Search Observations by multi parameter query", response_model=List[Observation])
 async def search_multi(
-        token: Annotated[str, Depends(AuthService.validate_token)],
-        filename: str,
-        filter_name: str,
-        object_name: str,
-        lat: float,
-        lon: float,
-        arc_distance: float
+        search_form: Annotated[MultiSearchForm, Body(...)],
+        token: Annotated[str, Depends(AuthService.validate_token)]
 ):
-    pass
+    user = await read_users_me(token)
 
-@router.put("/{id}/metadata", response_description="Update observation metadata")
+    observations = Observation.find()
+    if search_form.telescop is not None:
+        observations = observations.find(Observation.fits_header.TELESCOP == search_form.telescop)
+    if search_form.imagetyp is not None:
+        observations = observations.find(Observation.fits_header.IMAGETYP == search_form.imagetyp)
+    if search_form.obstype is not None:
+        observations = observations.find(Observation.fits_header.OBSTYPE == search_form.obstype)
+    if search_form.object is not None:
+        observations = observations.find(Observation.fits_header.OBJECT == search_form.object)
+    if search_form.sciprog is not None:
+        observations = observations.find(Observation.fits_header.SCIPROG == search_form.sciprog)
+    if search_form.filter is not None:
+        observations = observations.find(In(Observation.fits_header.FILTER, search_form.filter))
+    if search_form.pi is not None:
+        observations = observations.find(Observation.fits_header.PI == search_form.pi)
+    if search_form.date_obs_from is not None:
+        observations = observations.find(Observation.date_obs >= parser.parse(search_form.date_obs_from))
+    if search_form.date_obs_to is not None:
+        observations = observations.find(Observation.date_obs <= parser.parse(search_form.date_obs_to))
+    if search_form.jd_from is not None:
+        observations = observations.find(math.floor(Observation.fits_header.JD) >= search_form.jd_from)
+    if search_form.jd_to is not None:
+        observations = observations.find(math.floor(Observation.fits_header.JD) >= search_form.jd_to)
+
+    observations = await observations.aggregate(
+        [OcaWithin.redact_with_access_tags(access_tags=user.access_tags)], projection_model=Observation).to_list()
+
+    return observations
+
+@router.put("/{id}/metadata/", response_description="Update observation metadata")
 async def update_observation_metadata(
     id: PydanticObjectId,
     metadata: Annotated[Dict[str, Any], Body(...)],
@@ -244,7 +273,7 @@ async def update_observation_metadata(
     return {"message": "Metadata updated successfully", "observation_id": str(id)}
 
 
-@router.delete("/{id}", response_description="Delete an Observation")
+@router.delete("/{id}/", response_description="Delete an Observation")
 async def delete_observation(
     id: PydanticObjectId,
     token: Annotated[str, Depends(AuthService.validate_token)]
@@ -254,3 +283,14 @@ async def delete_observation(
     if delete_result.deleted_count == 0:
         raise HTTPException(status_code=404, detail=f"Observation with ID {id} not found")
     return {"message": "Observation deleted successfully"}
+
+# values
+@router.get("/values/TELESCOP", response_description="Unique values for TELESCOP header field", response_model=List[str])
+async def get_values_telescop(
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    user = await read_users_me(token)
+
+    values = await Observation.distinct("fits_header.TELESCOP")
+
+    return values
