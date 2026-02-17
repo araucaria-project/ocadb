@@ -285,12 +285,51 @@ async def delete_observation(
     return {"message": "Observation deleted successfully"}
 
 # values
-@router.get("/values/TELESCOP", response_description="Unique values for TELESCOP header field", response_model=List[str])
+@router.get("/values/telescop", response_description="Unique values for TELESCOP header field", response_model=List[str])
 async def get_values_telescop(
         token: Annotated[str, Depends(AuthService.validate_token)]
 ):
     user = await read_users_me(token)
-
     values = await Observation.distinct("fits_header.TELESCOP")
+    return values
 
+@router.get("/values/imagetyp", response_description="Unique values for IMAGETYP header field", response_model=List[str])
+async def get_values_imagetyp(
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    values = await Observation.distinct("fits_header.IMAGETYP")
+    return values
+
+# /api/v1/observations/values/OBSTYPE
+@router.get("/values/obstype", response_description="Unique values for OBSTYPE header field", response_model=List[str])
+async def get_values_obstype(
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    values = await Observation.distinct("fits_header.OBSTYPE")
+    return values
+
+# /api/v1/observations/values/PI
+@router.get("/values/pi", response_description="Unique values for PI header field", response_model=List[str])
+async def get_values_pi(
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    values = await Observation.distinct("fits_header.PI")
+    return values
+
+# /api/v1/observations/values/OBJECT
+@router.get("/values/object", response_description="Unique values for OBJECT header field", response_model=List[str])
+async def get_values_object(
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    values = await Observation.distinct("fits_header.OBJECT")
+    return values
+
+# /api/v1/observations/values/FILTER  per TELESCOP
+@router.get("/values/{telescope}/filter", response_description="Unique values for FILTER of TELESCOP header field", response_model=List[str])
+async def get_values_telescope_filter(
+        telescope: str,
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    # values = Observation.find(Observation.fits_header.TELESCOP == telescope).distinct("fits_header.FILTER")
+    values = Observation.distinct("fits_header.FILTER")
     return values
