@@ -69,7 +69,7 @@ async def get_observation(
         raise HTTPException(status_code=404, detail=f"Observation with ID {id} not found")
     return observation
 
-@router.get("/{id}/url/", response_description="Get a presigned URL for a single Observation", response_model=S3PresignedUrl)
+@router.get("/{id}/url", response_description="Get a presigned URL for a single Observation", response_model=S3PresignedUrl)
 async def get_observation_url(
         token: Annotated[str, Depends(AuthService.validate_token)],
         id: PydanticObjectId,
@@ -112,7 +112,7 @@ async def get_observation_by_filename(
         raise HTTPException(status_code=404, detail=f"Observation with filename {filename} not found")
     return observations
 
-@router.post("/by-batch-filename/url/", response_description="Get Presigned URL by batch of filenames", response_model=List[S3PresignedUrl])
+@router.post("/by-batch-filename/url", response_description="Get Presigned URL by batch of filenames", response_model=List[S3PresignedUrl])
 async def get_batch_filename_url(
         filename_list: Annotated[List[str], Body(...)],
         token: Annotated[str, Depends(AuthService.validate_token)],
@@ -143,7 +143,7 @@ async def get_batch_filename_url(
 
     return url_responses
 
-@router.get("/by-filename/{filename}/url/", response_description="Get Presigned URL by filename", response_model=List[S3PresignedUrl])
+@router.get("/by-filename/{filename}/url", response_description="Get Presigned URL by filename", response_model=List[S3PresignedUrl])
 async def get_observation_by_filename_url(
         filename: str,
         token: Annotated[str, Depends(AuthService.validate_token)],
@@ -202,7 +202,7 @@ async def list_observations_by_filter(
 
     return observations
 
-@router.get("/coordinates/", response_description="List Observations by geospatial coordinates", response_model=List[Observation])
+@router.get("/coordinates", response_description="List Observations by geospatial coordinates", response_model=List[Observation])
 async def list_observations_by_geo(
     sky_area: Annotated[ArchDistance, Body(...)],
     token: Annotated[str, Depends(AuthService.validate_token)]
@@ -255,7 +255,7 @@ async def search_multi(
 
     return observations
 
-@router.put("/{id}/metadata/", response_description="Update observation metadata")
+@router.put("/{id}/metadata", response_description="Update observation metadata")
 async def update_observation_metadata(
     id: PydanticObjectId,
     metadata: Annotated[Dict[str, Any], Body(...)],
@@ -285,7 +285,7 @@ async def delete_observation(
     return {"message": "Observation deleted successfully"}
 
 # values
-@router.get("/values/TELESCOP/", response_description="Unique values for TELESCOP header field", response_model=List[str])
+@router.get("/values/TELESCOP", response_description="Unique values for TELESCOP header field", response_model=List[str])
 async def get_values_telescop(
         token: Annotated[str, Depends(AuthService.validate_token)]
 ):
