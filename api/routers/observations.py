@@ -4,7 +4,7 @@ from beanie.odm.operators.find.comparison import In
 from beanie.odm.operators.find.geospatial import NearSphere, GeoWithin
 from fastapi import APIRouter, HTTPException, status, Body, Depends
 from beanie import PydanticObjectId, exceptions
-from typing import List, Annotated, Dict, Any, Tuple
+from typing import List, Annotated, Dict, Any, Tuple, Optional
 from datetime import datetime, timedelta
 from dateutil import parser
 

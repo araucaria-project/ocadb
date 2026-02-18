@@ -24,6 +24,9 @@ class Observation(Document):
 
     # files support
     files: List[PydanticObjectId] = Field([])
+
+    def store_file(self, fits_file: PydanticObjectId):
+        self.files.append(fits_file)
     
     # Raw FITS header (flat structure, exact field names)
     fits_header: FitsHeader = Field(..., description="Complete FITS header")

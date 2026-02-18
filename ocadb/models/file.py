@@ -1,10 +1,12 @@
 from beanie import Document, PydanticObjectId
-from pydantic import BaseModel, Field
+from fastapi import HTTPException
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional, List
 from datetime import datetime, timezone
 from enum import Enum
 
 from pymongo import IndexModel
+
 
 
 # Enums for better type safety and readability
@@ -136,6 +138,14 @@ class FITSFile(Document):
         description="Record creation time"
     )
     updated_at: Optional[datetime] = Field(None, description="Last update time")
+
+    # @model_validator(mode='after')
+    # async def store_observation(self):
+    #     if self.observation_id is not None:
+    #         observation = await Observation.get(id)
+    #         if observation is None:
+    #             raise HTTPException(status_code=404, detail=f"Observation with ID {id} not found")
+    #         observation.store_file(self.observation_id)
 
     class Settings:
         name = "fits_files"
