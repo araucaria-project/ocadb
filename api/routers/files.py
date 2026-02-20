@@ -99,4 +99,6 @@ async def get_fitsfiles_for_observation(
     if observation is None:
         raise HTTPException(status_code=404, detail="Observation not found")
 
-    return await FITSFile.find({"_id": {"$in": observation.files}}).to_list()
+    # return await FITSFile.find({"_id": {"$in": observation.files}}).to_list()
+    await observation.fetch_all_links()
+    return observation.files
