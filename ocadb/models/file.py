@@ -2,11 +2,13 @@ from beanie import Document, PydanticObjectId
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, model_validator
 from typing import Optional, List
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from enum import Enum
 
 from pymongo import IndexModel
 
+from api.services.s3_api_service import S3Connection
+from ocadb.models.s3_presigned_url import S3PresignedUrl
 
 
 # Enums for better type safety and readability
@@ -170,7 +172,13 @@ class FITSFile(Document):
             return []
         return await FITSFile.find({"filename": {"$in": self.source_filenames}}).to_list()
 
-
+    async def get_presigned_url(self, expires_in):
+        s3_con = S3Connection()
+        presigned_url = await s3_con.get_presigned_url(
+            params={'Bucket': s3_con.bucket_name, 'Key': self.filename}, expires_in=expires_in)
+        s3_presigned_url_response = S3PresignedUrl(description=self.filename, observation_name=str(self.observation_id), url=presigned_url, valid_until=(
+                    datetime.utcnow() + timedelta(seconds=expires_in)).strftime('%Y%m%dT%H%M%SZ'))
+        return s3_presigned_url_response
 
 # Document models for Beanie registration
 document_models = [FITSFile]

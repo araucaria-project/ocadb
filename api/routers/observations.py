@@ -80,7 +80,22 @@ async def get_observation(
         raise HTTPException(status_code=404, detail=f"Observation with ID {id} not found")
     return observation
 
-@router.get("/{id}/url", response_description="Get a presigned URL for a single Observation", response_model=S3PresignedUrl)
+# @router.get("/{id}/url", response_description="Get a presigned URL for a single Observation", response_model=S3PresignedUrl)
+# async def get_observation_url(
+#         token: Annotated[str, Depends(AuthService.validate_token)],
+#         id: PydanticObjectId,
+#         expires_in: int = 3600):
+#     """Get observation by ID"""
+#     observation = await Observation.get(id)
+#     if observation is None:
+#         raise HTTPException(status_code=404, detail=f"Observation with ID {id} not found")
+#
+#     s3_con = S3Connection()
+#     presigned_url = await s3_con.get_presigned_url(params={'Bucket': s3_con.bucket_name, 'Key': observation.filename}, expires_in=expires_in)
+#     s3_presigned_url_response = S3PresignedUrl(description=observation.filename, url=presigned_url, valid_until=(datetime.utcnow()+timedelta(seconds=expires_in)).strftime('%Y%m%dT%H%M%SZ'))
+#     return s3_presigned_url_response
+
+@router.get("/{id}/url", response_description="Get a presigned URLs for files of a single Observation", response_model=List[S3PresignedUrl])
 async def get_observation_url(
         token: Annotated[str, Depends(AuthService.validate_token)],
         id: PydanticObjectId,
@@ -90,10 +105,8 @@ async def get_observation_url(
     if observation is None:
         raise HTTPException(status_code=404, detail=f"Observation with ID {id} not found")
 
-    s3_con = S3Connection()
-    presigned_url = await s3_con.get_presigned_url(params={'Bucket': s3_con.bucket_name, 'Key': observation.filename}, expires_in=expires_in)
-    s3_presigned_url_response = S3PresignedUrl(description=observation.filename, url=presigned_url, valid_until=(datetime.utcnow()+timedelta(seconds=expires_in)).strftime('%Y%m%dT%H%M%SZ'))
-    return s3_presigned_url_response
+    await observation.fetch_all_links()
+    return [await file.get_presigned_url(expires_in) for file in observation.files]
 
 
 @router.get("/", response_description="List Observations", response_model=List[Observation])

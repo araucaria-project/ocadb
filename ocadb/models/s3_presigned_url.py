@@ -7,6 +7,7 @@ from ocadb.models.geo import document_models
 
 class S3PresignedUrl(BaseModel):
     type: Literal["Presigned_URL"] = "Presigned URL"
+    observation_name: str
     description: str
     valid_until: str
     url: str

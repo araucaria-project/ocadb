@@ -62,6 +62,8 @@ async def update_fitsfile(
     except (ValueError, exceptions.DocumentNotFound):
         raise HTTPException(status_code=404, detail=f"File with ID {fitsfile_data._id} not found")
 
+    return fitsfile_data
+
 @router.delete("/{fitsfile_id}/", response_description="Delete a FITSFile")
 async def delete_fitsfile(
     fitsfile_id: PydanticObjectId,
