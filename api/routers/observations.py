@@ -243,7 +243,7 @@ async def list_observations_by_geo(
 
     return observations
 
-@router.get('/search', response_description="Search Observations by multi parameter query", response_model=List[Observation])
+@router.post('/search', response_description="Search Observations by multi parameter query", response_model=List[Observation])
 async def search_multi(
         search_form: Annotated[MultiSearchForm, Body(...)],
         token: Annotated[str, Depends(AuthService.validate_token)]
