@@ -1,11 +1,15 @@
 from beanie import Document, PydanticObjectId
-from pydantic import BaseModel, Field
+from fastapi import HTTPException
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional, List, Annotated
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from enum import Enum
 
 import pymongo
 from pymongo import IndexModel
+
+from api.services.s3_api_service import S3Connection
+from ocadb.models.s3_presigned_url import S3PresignedUrl
 
 
 # Enums for better type safety and readability
@@ -152,6 +156,14 @@ class FITSFile(Document):
     )
     updated_at: Optional[datetime] = Field(None, description="Last update time")
 
+    # @model_validator(mode='after')
+    # async def store_observation(self):
+    #     if self.observation_id is not None:
+    #         observation = await Observation.get(id)
+    #         if observation is None:
+    #             raise HTTPException(status_code=404, detail=f"Observation with ID {id} not found")
+    #         observation.store_file(self.observation_id)
+
     class Settings:
         name = "fits_files"
         indexes = [
@@ -175,7 +187,13 @@ class FITSFile(Document):
             return []
         return await FITSFile.find({"filename": {"$in": self.source_filenames}}).to_list()
 
-
+    async def get_presigned_url(self, expires_in):
+        s3_con = S3Connection()
+        presigned_url = await s3_con.get_presigned_url(
+            params={'Bucket': s3_con.bucket_name, 'Key': self.filename}, expires_in=expires_in)
+        s3_presigned_url_response = S3PresignedUrl(description=self.filename, observation_name=str(self.observation_id), url=presigned_url, valid_until=(
+                    datetime.utcnow() + timedelta(seconds=expires_in)).strftime('%Y%m%dT%H%M%SZ'))
+        return s3_presigned_url_response
 
 # Document models for Beanie registration
 document_models = [FITSFile]

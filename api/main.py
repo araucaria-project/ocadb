@@ -4,7 +4,7 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routers import api_auth, sample_api, objects, observations
+from api.routers import api_auth, sample_api, objects, observations, files
 from ocadb import database
 from api.config import Settings
 
@@ -39,6 +39,7 @@ app.include_router(objects.router, prefix='/api/v1')
 app.include_router(observations.router, prefix='/api/v1')
 app.include_router(api_auth.router, prefix='/api/v1')
 app.include_router(sample_api.router, prefix='/api/v1')
+app.include_router(files.router, prefix='/api/v1')
 
 
 @app.get("/")

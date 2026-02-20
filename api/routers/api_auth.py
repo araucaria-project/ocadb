@@ -21,7 +21,7 @@ class UserCreate(BaseModel):
     access_tags: list[str]
 
 
-@router.post("/token")
+@router.post("/token/")
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestFormStrict, Depends()]
 ) -> Token:
@@ -39,7 +39,7 @@ async def login_for_access_token(
     return Token(access_token=access_token, token_type="bearer")
 
 
-@router.post("/register", response_model=User)
+@router.post("/register/", response_model=User)
 async def register_user(user_data: UserCreate,
                         token: Annotated[str, Depends(AuthService.validate_token)]):
     # Extract username from token
@@ -80,7 +80,7 @@ async def register_user(user_data: UserCreate,
     else:
         raise HTTPException(status_code=403, detail="Insufficient permissions to register users")
 
-@router.get("/me", response_model=User)
+@router.get("/me/", response_model=User)
 async def read_users_me(token: Annotated[str, Depends(AuthService.validate_token)]):
     """Get current user info"""
     # Extract username from token
@@ -100,7 +100,7 @@ async def read_users_me(token: Annotated[str, Depends(AuthService.validate_token
         access_tags=user.access_tags
     )
 
-@router.get("/user/{username}", response_model=User)
+@router.get("/user/{username}/", response_model=User)
 async def read_users_username(token: Annotated[str, Depends(AuthService.validate_token)],
                               username: str):
     # Extract username from token
@@ -125,7 +125,7 @@ async def read_users_username(token: Annotated[str, Depends(AuthService.validate
     else:
         raise HTTPException(status_code=403, detail="Insufficient permissions to read user")
 
-@router.put("/user/{username}", response_model=User)
+@router.put("/user/{username}/", response_model=User)
 async def update_users_username(token: Annotated[str, Depends(AuthService.validate_token)],
                               upd_user: Annotated[Dict[str, Any], Body(...)],
                               username: str):
