@@ -159,7 +159,7 @@ async def get_batch_filename_url(
             presigned_url = await s3_con.get_presigned_url(
                 params={'Bucket': s3_con.bucket_name, 'Key': observation.file_name},
                 expires_in=expires_in)
-            s3_presigned_url_response = S3PresignedUrl(description=observation.file_name, url=presigned_url,
+            s3_presigned_url_response = S3PresignedUrl(description=observation.file_name, observation_name=observation.file_name, url=presigned_url,
                                                        valid_until=(datetime.utcnow() + timedelta(
                                                            seconds=expires_in)).strftime(
                                                            '%Y%m%dT%H%M%SZ'))
@@ -190,7 +190,7 @@ async def get_observation_by_filename_url(
     async for observation in get_aiter(observations):
         presigned_url = await s3_con.get_presigned_url(params={'Bucket': s3_con.bucket_name, 'Key': observation.file_name},
                                                    expires_in=expires_in)
-        s3_presigned_url_response = S3PresignedUrl(description=observation.file_name, url=presigned_url,
+        s3_presigned_url_response = S3PresignedUrl(description=observation.file_name, observation_name=observation.file_name, url=presigned_url,
                                                valid_until=(datetime.utcnow() + timedelta(seconds=expires_in)).strftime(
                                                    '%Y%m%dT%H%M%SZ'))
         url_responses.append(s3_presigned_url_response)
