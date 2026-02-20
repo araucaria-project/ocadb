@@ -41,7 +41,7 @@ async def create_observation(
     try:
         await observation_data.insert()
     except DuplicateKeyError as e:
-        raise HTTPException(status_code=403, detail=f"Observation with filename {observation_data.filename} already exists.")
+        raise HTTPException(status_code=403, detail=f"Observation with filename {observation_data.file_name} already exists.")
     return observation_data
 
 @router.put("/", response_description="Update observation")
@@ -80,23 +80,23 @@ async def get_observation(
         raise HTTPException(status_code=404, detail=f"Observation with ID {id} not found")
     return observation
 
-# @router.get("/{id}/url", response_description="Get a presigned URL for a single Observation", response_model=S3PresignedUrl)
-# async def get_observation_url(
-#         token: Annotated[str, Depends(AuthService.validate_token)],
-#         id: PydanticObjectId,
-#         expires_in: int = 3600):
-#     """Get observation by ID"""
-#     observation = await Observation.get(id)
-#     if observation is None:
-#         raise HTTPException(status_code=404, detail=f"Observation with ID {id} not found")
-#
-#     s3_con = S3Connection()
-#     presigned_url = await s3_con.get_presigned_url(params={'Bucket': s3_con.bucket_name, 'Key': observation.filename}, expires_in=expires_in)
-#     s3_presigned_url_response = S3PresignedUrl(description=observation.filename, url=presigned_url, valid_until=(datetime.utcnow()+timedelta(seconds=expires_in)).strftime('%Y%m%dT%H%M%SZ'))
-#     return s3_presigned_url_response
+@router.get("/observation-file/{id}/url", response_description="Get a presigned URL for a single Observation", response_model=S3PresignedUrl)
+async def get_observation_url(
+        token: Annotated[str, Depends(AuthService.validate_token)],
+        id: PydanticObjectId,
+        expires_in: int = 3600):
+    """Get observation by ID"""
+    observation = await Observation.get(id)
+    if observation is None:
+        raise HTTPException(status_code=404, detail=f"Observation with ID {id} not found")
+
+    s3_con = S3Connection()
+    presigned_url = await s3_con.get_presigned_url(params={'Bucket': s3_con.bucket_name, 'Key': observation.file_name}, expires_in=expires_in)
+    s3_presigned_url_response = S3PresignedUrl(description=observation.file_name, url=presigned_url, valid_until=(datetime.utcnow()+timedelta(seconds=expires_in)).strftime('%Y%m%dT%H%M%SZ'))
+    return s3_presigned_url_response
 
 @router.get("/{id}/url", response_description="Get a presigned URLs for files of a single Observation", response_model=List[S3PresignedUrl])
-async def get_observation_url(
+async def get_observation_files_url(
         token: Annotated[str, Depends(AuthService.validate_token)],
         id: PydanticObjectId,
         expires_in: int = 3600):
@@ -129,7 +129,7 @@ async def get_observation_by_filename(
     """Get observation by FITS filename"""
     user = await read_users_me(token)
 
-    observations = await Observation.find(Observation.filename == filename).to_list() # .aggregate(
+    observations = await Observation.find(Observation.file_name == filename).to_list() # .aggregate(
         #[OcaWithin.redact_with_access_tags(access_tags=user.access_tags)], projection_model=Observation).to_list()
 
     if not observations:
@@ -150,16 +150,16 @@ async def get_batch_filename_url(
     url_responses = []
 
     for obs in filename_list:
-        observations = await Observation.find(Observation.filename == obs).to_list()
+        observations = await Observation.find(Observation.file_name == obs).to_list()
 
         if not observations:
             raise HTTPException(status_code=404, detail=f"Observation with filename {obs} not found")
 
         async for observation in get_aiter(observations):
             presigned_url = await s3_con.get_presigned_url(
-                params={'Bucket': s3_con.bucket_name, 'Key': observation.filename},
+                params={'Bucket': s3_con.bucket_name, 'Key': observation.file_name},
                 expires_in=expires_in)
-            s3_presigned_url_response = S3PresignedUrl(description=observation.filename, url=presigned_url,
+            s3_presigned_url_response = S3PresignedUrl(description=observation.file_name, url=presigned_url,
                                                        valid_until=(datetime.utcnow() + timedelta(
                                                            seconds=expires_in)).strftime(
                                                            '%Y%m%dT%H%M%SZ'))
@@ -175,7 +175,7 @@ async def get_observation_by_filename_url(
     """Get observation by FITS filename"""
     user = await read_users_me(token)
 
-    observations = await Observation.find(Observation.filename == filename).to_list() #.aggregate(
+    observations = await Observation.find(Observation.file_name == filename).to_list() #.aggregate(
         # [OcaWithin.redact_with_access_tags(access_tags=user.access_tags)], projection_model=Observation).to_list()
 
     if not observations:
@@ -188,9 +188,9 @@ async def get_observation_by_filename_url(
     s3_con = S3Connection()
     url_responses = []
     async for observation in get_aiter(observations):
-        presigned_url = await s3_con.get_presigned_url(params={'Bucket': s3_con.bucket_name, 'Key': observation.filename},
+        presigned_url = await s3_con.get_presigned_url(params={'Bucket': s3_con.bucket_name, 'Key': observation.file_name},
                                                    expires_in=expires_in)
-        s3_presigned_url_response = S3PresignedUrl(description=observation.filename, url=presigned_url,
+        s3_presigned_url_response = S3PresignedUrl(description=observation.file_name, url=presigned_url,
                                                valid_until=(datetime.utcnow() + timedelta(seconds=expires_in)).strftime(
                                                    '%Y%m%dT%H%M%SZ'))
         url_responses.append(s3_presigned_url_response)
