@@ -1,10 +1,11 @@
 from beanie import Document, PydanticObjectId
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, model_validator
-from typing import Optional, List
+from typing import Optional, List, Annotated
 from datetime import datetime, timezone, timedelta
 from enum import Enum
 
+import pymongo
 from pymongo import IndexModel
 
 from api.services.s3_api_service import S3Connection
@@ -32,6 +33,15 @@ class FileClassification(str, Enum):
     SOURCE = "source"
     TMP = "tmp"
     TEST = "test"
+
+
+DigestStr = Annotated[
+    str,
+    Field(
+        pattern=r"^(sha-256|sha-512|md5)=[A-Za-z0-9+/]+={0,2}$",
+        description="Content digest per RFC 3230/8240 (e.g., 'sha-256=<base64>')",
+    ),
+]
 
 
 class FitsHeader(BaseModel):
@@ -121,6 +131,11 @@ class FITSFile(Document):
     filename: str = Field(..., description="FITS filename")
     file_class: FileClassification = Field(..., description="File classification type")
 
+    # File metadata
+    filesize: Optional[int] = Field(None, description="File size in bytes")
+    mtime: Optional[datetime] = Field(None, description="Source file modification time (UTC preferred)")
+    digest: Optional[DigestStr] = None
+
     # Relations
     observation_id: PydanticObjectId = Field(..., description="Parent observation reference")
     source_filenames: List[str] = Field(
@@ -129,7 +144,7 @@ class FITSFile(Document):
     )
 
     # FITS metadata
-    fits_header: FitsHeader = Field(..., description="Complete FITS header")
+    fits_header: Optional[FitsHeader] = Field(None, description="Complete FITS header")
 
     # Storage tracking
     file_status: StorageStatus = Field(..., description="Storage status across all locations")
@@ -152,13 +167,13 @@ class FITSFile(Document):
     class Settings:
         name = "fits_files"
         indexes = [
-            IndexModel([("filename", 1)], unique=True),
-            IndexModel([("observation_id", 1)]),
-            IndexModel([("file_class", 1)]),
-            IndexModel([("file_status.cloud.check_needed", 1)]),
-            IndexModel([("file_status.cloud.ready", 1)]),
-            IndexModel([("file_status.cloud.status", 1)]),
-            IndexModel([("created_at", -1)]),
+            IndexModel([("filename", pymongo.ASCENDING)], unique=True),
+            IndexModel([("observation_id", pymongo.ASCENDING)]),
+            IndexModel([("file_class", pymongo.ASCENDING)]),
+            IndexModel([("file_status.cloud.check_needed", pymongo.ASCENDING)]),
+            IndexModel([("file_status.cloud.ready", pymongo.ASCENDING)]),
+            IndexModel([("file_status.cloud.status", pymongo.ASCENDING)]),
+            IndexModel([("created_at", pymongo.DESCENDING)]),
         ]
 
     async def resolve_source_files(self) -> List["FITSFile"]:
