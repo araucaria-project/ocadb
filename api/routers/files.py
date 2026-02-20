@@ -50,3 +50,53 @@ async def create_observation(
     except DuplicateKeyError as e:
         raise HTTPException(status_code=403, detail=f"Observation with filename {file_data.filename} already exists.")
     return file_data
+
+@router.put("/", response_description="Update a FITSFile", response_model=FITSFile)
+async def update_fitsfile(
+        fitsfile_data: Annotated[FITSFile, Body(...)],
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    fitsfile_data.updated_at = datetime.utcnow()
+    try:
+        await fitsfile_data.replace()
+    except (ValueError, exceptions.DocumentNotFound):
+        raise HTTPException(status_code=404, detail=f"File with ID {fitsfile_data._id} not found")
+
+@router.delete("/{fitsfile_id}/", response_description="Delete a FITSFile")
+async def delete_fitsfile(
+    fitsfile_id: PydanticObjectId,
+    token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    """Delete a fits file record"""
+    fitsfile = await FITSFile.find_one(fitsfile_id)
+    observation = await get_observation(token, fitsfile.observation_id)
+
+    try:
+        await observation.files.remove(fitsfile.id)
+        await fitsfile.delete()
+        await observation.replace()
+    except (ValueError, exceptions.DocumentNotFound):
+        raise HTTPException(status_code=404, detail=f"FITS file with ID {fitsfile_id}, or linked observation not found")
+
+    return {"message": "FITS file deleted successfully"}
+
+@router.get("/by-file-id/{file_id}/", response_description="Get a FITSFile", response_model=FITSFile)
+async def get_fitsfile(
+        file_id: PydanticObjectId,
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    file = await FITSFile.find_one({"_id": file_id})
+    if file is None:
+        raise HTTPException(status_code=404, detail="File not found")
+    return file
+
+@router.get("/by-observation-id/{observation_id}/", response_description="Get files for observation id", response_model=List[FITSFile])
+async def get_fitsfiles_for_observation(
+        observation_id: PydanticObjectId,
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    observation = await get_observation(token, observation_id)
+    if observation is None:
+        raise HTTPException(status_code=404, detail="Observation not found")
+
+    return await FITSFile.find({"_id": {"$in": observation.files}}).to_list()
