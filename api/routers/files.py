@@ -68,11 +68,11 @@ async def delete_fitsfile(
     token: Annotated[str, Depends(AuthService.validate_token)]
 ):
     """Delete a fits file record"""
-    fitsfile = await FITSFile.find_one(fitsfile_id)
+    fitsfile = await FITSFile.find_one(FITSFile.id == fitsfile_id)
     observation = await get_observation(token, fitsfile.observation_id)
 
     try:
-        await observation.files.remove(fitsfile.id)
+        observation.files.remove(fitsfile_id)
         await fitsfile.delete()
         await observation.replace()
     except (ValueError, exceptions.DocumentNotFound):
