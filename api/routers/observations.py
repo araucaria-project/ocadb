@@ -92,7 +92,7 @@ async def get_observation_url(
 
     s3_con = S3Connection()
     presigned_url = await s3_con.get_presigned_url(params={'Bucket': s3_con.bucket_name, 'Key': observation.file_name}, expires_in=expires_in)
-    s3_presigned_url_response = S3PresignedUrl(description=observation.file_name, url=presigned_url, valid_until=(datetime.utcnow()+timedelta(seconds=expires_in)).strftime('%Y%m%dT%H%M%SZ'))
+    s3_presigned_url_response = S3PresignedUrl(description=observation.file_name, observation_name=observation.file_name, url=presigned_url, valid_until=(datetime.utcnow()+timedelta(seconds=expires_in)).strftime('%Y%m%dT%H%M%SZ'))
     return s3_presigned_url_response
 
 @router.get("/{id}/url", response_description="Get a presigned URLs for files of a single Observation", response_model=List[S3PresignedUrl])
