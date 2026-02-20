@@ -94,7 +94,7 @@ class FitsHeader(BaseModel):
     SUBRASTR: Optional[str] = None
     SCALE: Optional[float] = None
     SATURATE: Optional[str] = None
-    PIERSIDE: Optional[str] = None
+    PIERSIDE: Optional[int] = None
     FLAT_ERA: Optional[int] = None
     ZERO_ERA: Optional[int] = None
     DARK_ERA: Optional[int] = None
