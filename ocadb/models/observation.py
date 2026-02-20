@@ -64,11 +64,11 @@ class Observation(Document):
     def store_tags(self):
         self.access_tags = []
 
-        if hasattr(self.fits_header, 'INSTRUME'):
+        if hasattr(self.fits_header, 'INSTRUME') and self.fits_header.INSTRUME is not None:
             self.access_tags.append(self.fits_header.INSTRUME)
-        if hasattr(self.fits_header, 'ORIGIN'):
+        if hasattr(self.fits_header, 'ORIGIN') and self.fits_header.ORIGIN is not None:
             self.access_tags.append(self.fits_header.ORIGIN)
-        if hasattr(self.fits_header, 'PI'):
+        if hasattr(self.fits_header, 'PI') and self.fits_header.PI is not None:
             self.access_tags.append(self.fits_header.PI)
 
         return self
