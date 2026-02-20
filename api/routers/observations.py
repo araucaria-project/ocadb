@@ -58,13 +58,24 @@ async def update_observation(
 
     return observation_data
 
-@router.get("/{id}/", response_description="Get a single Observation", response_model=Observation)
+@router.get("/{id}/short", response_description="Get a single Observation", response_model=Observation)
 async def get_observation(
         token: Annotated[str, Depends(AuthService.validate_token)],
         id: PydanticObjectId):
 
     """Get observation by ID"""
     observation = await Observation.get(id)
+    if observation is None:
+        raise HTTPException(status_code=404, detail=f"Observation with ID {id} not found")
+    return observation
+
+@router.get("/{id}/", response_description="Get a single Observation", response_model=Observation)
+async def get_observation(
+        token: Annotated[str, Depends(AuthService.validate_token)],
+        id: PydanticObjectId):
+
+    """Get observation by ID"""
+    observation = await Observation.get(id, fetch_links=True)
     if observation is None:
         raise HTTPException(status_code=404, detail=f"Observation with ID {id} not found")
     return observation

@@ -45,7 +45,7 @@ async def create_observation(
             observation = await get_observation(token, file_data.observation_id)
             if observation is None:
                 raise HTTPException(status_code=404, detail=f"Observation with ID {id} not found")
-            observation.store_file(file_data.id)
+            observation.store_file(file_data)
             await observation.replace()
     except DuplicateKeyError as e:
         raise HTTPException(status_code=403, detail=f"Observation with filename {file_data.filename} already exists.")

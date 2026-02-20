@@ -1,8 +1,9 @@
 import array
 
 import pymongo
+from astropy.units.quantity_helper.function_helpers import unique
 from attr.filters import exclude
-from beanie import Document, Indexed, PydanticObjectId
+from beanie import Document, Indexed, PydanticObjectId, Link
 from pydantic import BaseModel, Field, model_validator, PrivateAttr
 from typing import Optional, Dict, Any, Annotated, List
 from datetime import datetime
@@ -19,13 +20,16 @@ class Observation(Document):
     """Astronomical observation with FITS header and metadata"""
     
     # Core identification
-    filename: str = Field(..., description="FITS filename", unique=True)
+    obs_name: str = Field(..., description="Observation name", unique=True)
+    # filename: str = Field(..., description="FITS filename", unique=True)
+    file_name: Optional[str] = Field(None, description="FITS filename", unique=True)
     object_id: Optional[str] = Field(None, description="Reference to observed Object document")
 
     # files support
-    files: List[PydanticObjectId] = Field([])
+    # files: List[PydanticObjectId] = Field([])
+    files: List[Link[FITSFile]] = []
 
-    def store_file(self, fits_file: PydanticObjectId):
+    def store_file(self, fits_file: FITSFile):
         self.files.append(fits_file)
     
     # Raw FITS header (flat structure, exact field names)
@@ -77,8 +81,8 @@ class Observation(Document):
         name = "observations"
         indexes = [
             # filename needs 2 indexes, read: https://www.mongodb.com/community/forums/t/e11000-duplicate-key-error-collection-with-period-in-the-text/293708/11
-            IndexModel([("filename", pymongo.TEXT)], unique=False),
-            IndexModel([("filename")], unique=True),
+            IndexModel([("obs_name", pymongo.TEXT)], unique=False),
+            IndexModel([("obs_name")], unique=True),
             "object_id", 
             "fits_header.DATE_OBS",
             "fits_header.OBJECT",
