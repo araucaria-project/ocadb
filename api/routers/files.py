@@ -10,7 +10,7 @@ from dateutil import parser
 
 from pymongo.errors import DuplicateKeyError
 
-from api.routers.observations import get_observation, create_observation
+from api.routers.observations import get_observation, create_observation, get_observation_by_obs_name
 from api.services.oca_geospatial_query import OcaWithin
 from api.services.query_builder import MultiSearchForm
 from ocadb.models import Observation, FitsHeader, SkyCoord
@@ -41,8 +41,8 @@ async def create_file(
     """Create a new observation record"""
     try:
         await file_data.insert()
-        if file_data.observation_id is not None:
-            observation = await get_observation(token, file_data.observation_id)
+        if file_data.obs_name is not None:
+            observation = await get_observation_by_obs_name(token, file_data.obs_name)[0]
             if observation is None:
                 # raise HTTPException(status_code=404, detail=f"Observation with ID {id} not found")
                 observation = await create_observation(observation_data=Observation(obs_name=file_data.obs_name, file_name=file_data.filename, fits_header=file_data.fits_header), token=token)
