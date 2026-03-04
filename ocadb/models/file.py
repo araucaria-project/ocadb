@@ -140,7 +140,7 @@ class FITSFile(Document):
     digest: Optional[DigestStr] = None
 
     # Relations
-    observation_id: PydanticObjectId = Field(..., description="Parent observation reference")
+    observation_id: Optional[PydanticObjectId] = Field(..., description="Parent observation reference")
     obs_name: str = Field(..., description="Parent observation name")
 
     source_filenames: List[str] = Field(
