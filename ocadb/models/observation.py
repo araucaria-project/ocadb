@@ -19,10 +19,11 @@ from ocadb.models.geo import SkyCoord, Point2D
 class Observation(Document):
     """Astronomical observation with FITS header and metadata"""
 
-    def __init__(self, **kwargs):
-        self.obs_name: str = kwargs.get("obs_name")
-        self.file_name: str = kwargs.get("file_name")
-        self.fits_header: FitsHeader = kwargs.get("fits_header")
+    def __init__(self, *args: Any, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.obs_name= kwargs.get("obs_name")
+        self.file_name= kwargs.get("file_name")
+        self.fits_header = kwargs.get("fits_header")
 
 
     # Core identification
