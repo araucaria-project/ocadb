@@ -140,7 +140,7 @@ class FITSFile(Document):
     digest: Optional[DigestStr] = None
 
     # Relations
-    observation_id: Optional[PydanticObjectId] = Field(..., description="Parent observation reference")
+    observation_id: Optional[PydanticObjectId] = Field(None, description="Parent observation reference")
     obs_name: str = Field(..., description="Parent observation name")
 
     source_filenames: List[str] = Field(
@@ -173,7 +173,7 @@ class FITSFile(Document):
         name = "fits_files"
         indexes = [
             IndexModel([("filename", pymongo.ASCENDING)], unique=True),
-            IndexModel([("observation_id", pymongo.ASCENDING)]),
+            # IndexModel([("observation_id", pymongo.ASCENDING)]),
             IndexModel([("file_class", pymongo.ASCENDING)]),
             IndexModel([("file_status.cloud.check_needed", pymongo.ASCENDING)]),
             IndexModel([("file_status.cloud.ready", pymongo.ASCENDING)]),
@@ -196,7 +196,7 @@ class FITSFile(Document):
         s3_con = S3Connection()
         presigned_url = await s3_con.get_presigned_url(
             params={'Bucket': s3_con.bucket_name, 'Key': self.filename}, expires_in=expires_in)
-        s3_presigned_url_response = S3PresignedUrl(description=self.filename, observation_name=str(self.observation_id), url=presigned_url, valid_until=(
+        s3_presigned_url_response = S3PresignedUrl(description=self.filename, observation_name=str(self.obs_name), url=presigned_url, valid_until=(
                     datetime.utcnow() + timedelta(seconds=expires_in)).strftime('%Y%m%dT%H%M%SZ'))
         return s3_presigned_url_response
 
