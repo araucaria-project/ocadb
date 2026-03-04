@@ -110,14 +110,6 @@ class FitsHeader(BaseModel):
     # Allow additional FITS header fields not explicitly defined
     model_config = {"extra": "allow"}
 
-    def from_dict(header_dict: dict):
-        fits_header = FitsHeader()
-
-        for key, value in header_dict.items():
-            setattr(fits_header, key, value)
-
-        return fits_header
-
 class StorageLocationStatus(BaseModel):
     """Storage status at a specific location (observatory, hub, or cloud)."""
     ready: bool = Field(..., description="Whether the file exists at this location")

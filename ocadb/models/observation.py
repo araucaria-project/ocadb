@@ -59,16 +59,26 @@ class Observation(Document):
 
     @model_validator(mode='after')
     def store_skycoord(self):
+        # workaround - pydantic bug?? similar to https://github.com/google/adk-python/issues/3633
+        if isinstance(self.fits_header, dict):
+            self.fits_header = FitsHeader.model_validate(self.fits_header)
         self.telescope_coordinates = SkyCoord(radec=(self.fits_header.RA_TEL, self.fits_header.DEC_TEL))
         return self
 
     @model_validator(mode='after')
     def store_obs_date(self):
+        # workaround - pydantic bug?? similar to https://github.com/google/adk-python/issues/3633
+        if isinstance(self.fits_header, dict):
+            self.fits_header = FitsHeader.model_validate(self.fits_header)
         self.date_obs = parser.parse(self.fits_header.DATE_OBS)
         return self
 
     @model_validator(mode='after')
     def store_tags(self):
+        # workaround - pydantic bug?? similar to https://github.com/google/adk-python/issues/3633
+        if isinstance(self.fits_header, dict):
+            self.fits_header = FitsHeader.model_validate(self.fits_header)
+
         self.access_tags = []
 
         if hasattr(self.fits_header, 'INSTRUME') and self.fits_header.INSTRUME is not None:
