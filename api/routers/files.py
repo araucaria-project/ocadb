@@ -46,7 +46,7 @@ async def create_file(
             try:
                 observations = await get_observation_by_obs_name(file_data.obs_name, token=token)
                 observation = observations[0] # change it laterrr
-            except (ValueError, exceptions.DocumentNotFound):
+            except HTTPException as exc:
                 observation = await create_observation(observation_data=Observation(obs_name=file_data.obs_name, file_name=file_data.filename, fits_header=file_data.fits_header), token=token)
 
             observation.store_file(file_data)
