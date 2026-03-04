@@ -42,7 +42,7 @@ async def create_file(
     try:
         await file_data.insert()
         if file_data.obs_name is not None:
-            observations = await get_observation_by_obs_name(token, file_data.obs_name)
+            observations = await get_observation_by_obs_name(file_data.obs_name, token=token)
             observation = observations[0] # change it laterrr
             if observation is None:
                 # raise HTTPException(status_code=404, detail=f"Observation with ID {id} not found")
