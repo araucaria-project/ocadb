@@ -3,7 +3,7 @@ from pathlib import PosixPath
 from beanie import Document, PydanticObjectId
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, model_validator
-from typing import Optional, List, Annotated
+from typing import Optional, List, Annotated, Any
 from datetime import datetime, timezone, timedelta
 from enum import Enum
 
@@ -110,9 +110,11 @@ class FitsHeader(BaseModel):
     # Allow additional FITS header fields not explicitly defined
     model_config = {"extra": "allow"}
 
-    def __init__(self, dictionary, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        for key, value in dictionary.items():
+
+        fits_header_dict = kwargs.get("fits_header")
+        for key, value in fits_header_dict.items():
             setattr(self, key, value)
 
 class StorageLocationStatus(BaseModel):
