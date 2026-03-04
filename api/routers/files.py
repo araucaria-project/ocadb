@@ -42,11 +42,13 @@ async def create_file(
     try:
         await file_data.insert()
         if file_data.obs_name is not None:
-            observations = await get_observation_by_obs_name(file_data.obs_name, token=token)
-            observation = observations[0] # change it laterrr
-            if observation is None:
-                # raise HTTPException(status_code=404, detail=f"Observation with ID {id} not found")
+            observation = None
+            try:
+                observations = await get_observation_by_obs_name(file_data.obs_name, token=token)
+                observation = observations[0] # change it laterrr
+            except (ValueError, exceptions.DocumentNotFound):
                 observation = await create_observation(observation_data=Observation(obs_name=file_data.obs_name, file_name=file_data.filename, fits_header=file_data.fits_header), token=token)
+
             observation.store_file(file_data)
             await observation.replace()
     except DuplicateKeyError as e:
