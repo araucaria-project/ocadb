@@ -23,7 +23,7 @@ class Observation(Document):
         super().__init__(*args, **kwargs)
         self.obs_name= kwargs.get("obs_name")
         self.file_name= kwargs.get("file_name")
-        self.fits_header = FitsHeader.from_dict(kwargs.get("fits_header"))
+        self.fits_header = kwargs.get("fits_header")
 
 
     # Core identification
