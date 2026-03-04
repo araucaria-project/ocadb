@@ -110,8 +110,8 @@ class FitsHeader(BaseModel):
     # Allow additional FITS header fields not explicitly defined
     model_config = {"extra": "allow"}
 
-    def __init__(self, dictionary):
-        super().__init__()
+    def __init__(self, dictionary, **kwargs):
+        super().__init__(**kwargs)
         for key, value in dictionary.items():
             setattr(self, key, value)
 
