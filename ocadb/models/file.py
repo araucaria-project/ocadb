@@ -1,3 +1,5 @@
+from pathlib import PosixPath
+
 from beanie import Document, PydanticObjectId
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, model_validator
@@ -130,6 +132,7 @@ class FITSFile(Document):
     # Core identification
     filename: str = Field(..., description="FITS filename")
     file_class: FileClassification = Field(..., description="File classification type")
+    path: Optional[PosixPath] = Field(None, description="PosixPath to the file")
 
     # File metadata
     filesize: Optional[int] = Field(None, description="File size in bytes")
@@ -138,6 +141,8 @@ class FITSFile(Document):
 
     # Relations
     observation_id: PydanticObjectId = Field(..., description="Parent observation reference")
+    obs_name: str = Field(..., description="Parent observation name")
+
     source_filenames: List[str] = Field(
         default_factory=list,
         description="Source file references (by filename)"

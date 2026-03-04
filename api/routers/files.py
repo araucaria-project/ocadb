@@ -10,11 +10,11 @@ from dateutil import parser
 
 from pymongo.errors import DuplicateKeyError
 
-from api.routers.observations import get_observation
+from api.routers.observations import get_observation, create_observation
 from api.services.oca_geospatial_query import OcaWithin
 from api.services.query_builder import MultiSearchForm
 from ocadb.models import Observation, FitsHeader, SkyCoord
-from ocadb.models.file import FITSFile
+from ocadb.models.file import FITSFile, StorageStatus
 from ocadb.models.geo import ArchDistance
 from ocadb.models.s3_presigned_url import S3PresignedUrl, S3PresignedUrlBatchList
 from api.services.auth_service import AuthService
@@ -34,7 +34,7 @@ router = APIRouter(prefix="/files",
                    )
 
 @router.post("/", response_description="Add new File", response_model=FITSFile, status_code=status.HTTP_201_CREATED)
-async def create_observation(
+async def create_file(
     file_data: Annotated[FITSFile, Body(...)],
     token: Annotated[str, Depends(AuthService.validate_token)]
 ):
@@ -44,7 +44,8 @@ async def create_observation(
         if file_data.observation_id is not None:
             observation = await get_observation(token, file_data.observation_id)
             if observation is None:
-                raise HTTPException(status_code=404, detail=f"Observation with ID {id} not found")
+                # raise HTTPException(status_code=404, detail=f"Observation with ID {id} not found")
+                observation = await create_observation(observation_data=Observation(obs_name=file_data.obs_name, file_name=file_data.filename, fits_header=file_data.fits_header), token=token)
             observation.store_file(file_data)
             await observation.replace()
     except DuplicateKeyError as e:
@@ -63,6 +64,21 @@ async def update_fitsfile(
         raise HTTPException(status_code=404, detail=f"File with ID {fitsfile_data._id} not found")
 
     return fitsfile_data
+
+@router.put("/file-status/{fitsfile_name}/", response_description="Update file status", response_model=FITSFile)
+async def update_file_status(
+        fitsfile_name: str,
+        filestatus: Annotated[StorageStatus, Body(...)],
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    try:
+        fitsfile = await FITSFile.find_one(FITSFile.file_name == fitsfile_name)
+        fitsfile.file_status = filestatus
+        fitsfile.replace()
+
+        return fitsfile
+    except (ValueError, exceptions.DocumentNotFound):
+        raise HTTPException(status_code=404, detail=f"FITS file with name {fitsfile_name} not found")
 
 @router.delete("/{fitsfile_id}/", response_description="Delete a FITSFile")
 async def delete_fitsfile(
@@ -91,6 +107,17 @@ async def get_fitsfile(
     if file is None:
         raise HTTPException(status_code=404, detail="File not found")
     return file
+
+@router.get("/by-file-name/{file_name}/", response_description="Get a FITSFile by name", response_model=FITSFile)
+async def get_fitsfile_by_name(
+        file_name: str,
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    try:
+        file = await FITSFile.find_one({"file_name": file_name})
+        return file
+    except (ValueError, exceptions.DocumentNotFound):
+        raise HTTPException(status_code=404, detail="File not found")
 
 @router.get("/by-observation-id/{observation_id}/", response_description="Get files for observation id", response_model=List[FITSFile])
 async def get_fitsfiles_for_observation(
