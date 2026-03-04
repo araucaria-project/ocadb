@@ -110,6 +110,10 @@ class FitsHeader(BaseModel):
     # Allow additional FITS header fields not explicitly defined
     model_config = {"extra": "allow"}
 
+    def __init__(self, dictionary):
+        super().__init__()
+        for key, value in dictionary.items():
+            setattr(self, key, value)
 
 class StorageLocationStatus(BaseModel):
     """Storage status at a specific location (observatory, hub, or cloud)."""
