@@ -1,4 +1,5 @@
 import math
+from pathlib import Path
 
 from beanie.odm.operators.find.comparison import In
 from beanie.odm.operators.find.geospatial import NearSphere, GeoWithin
@@ -108,6 +109,14 @@ async def get_observation_files_url(
     await observation.fetch_all_links()
     return [await file.get_presigned_url(expires_in) for file in observation.files]
 
+@router.get("/{obs_name}/calib", response_description="Get list of calibration files", response_model=List[str])
+async def get_calibration_files(
+        obs_name: str,
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    user = await read_users_me(token)
+
+    return []
 
 @router.get("/", response_description="List Observations", response_model=List[Observation])
 async def list_observations(
@@ -211,6 +220,26 @@ async def get_observation_by_filename_url(
         url_responses.append(s3_presigned_url_response)
 
     return url_responses
+
+@router.get("/by-filename/{filename}/plainurl", response_description="Get Presigned URL by filename", response_model=str)
+async def get_observation_by_filename_plainurl(
+        filename: str,
+        token: Annotated[str, Depends(AuthService.validate_token)],
+        expires_in: int = 24 * 3600):
+    """Get observation by FITS filename"""
+    user = await read_users_me(token)
+
+    observation = await Observation.find_one(Observation.file_name == filename) #.aggregate(
+        # [OcaWithin.redact_with_access_tags(access_tags=user.access_tags)], projection_model=Observation).to_list()
+
+    if not observation:
+        raise HTTPException(status_code=404, detail=f"Observation with filename {filename} not found")
+
+    s3_con = S3Connection()
+    presigned_url = await s3_con.get_presigned_url(params={'Bucket': s3_con.bucket_name, 'Key': observation.file_name},
+                                                   expires_in=expires_in)
+
+    return presigned_url
 
 
 @router.get("/by-object/{object_name}/", response_description="List Observations by object name", response_model=List[Observation])
