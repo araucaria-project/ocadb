@@ -143,6 +143,7 @@ async def read_users_username(token: Annotated[str, Depends(AuthService.validate
     else:
         raise HTTPException(status_code=403, detail="Insufficient permissions to read user")
 
+
 @router.put("/user/{username}/", response_model=User)
 async def update_users_username(token: Annotated[str, Depends(AuthService.validate_token)],
                               upd_user: Annotated[Dict[str, Any], Body(...)],
