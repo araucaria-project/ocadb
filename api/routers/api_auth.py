@@ -1,6 +1,7 @@
 from datetime import timedelta
 from typing import Annotated, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status, Body
+from fastapi.responses import PlainTextResponse
 from fastapi.security import OAuth2PasswordRequestFormStrict
 from pydantic import BaseModel
 
@@ -20,10 +21,10 @@ class UserCreate(BaseModel):
     password: str
     access_tags: list[str]
 
-@router.post("/plaintoken/", response_model=str)
+@router.post("/plaintoken/", response_class=PlainTextResponse)
 async def login_for_plain_access_token(
         form_data: Annotated[OAuth2PasswordRequestFormStrict, Depends()]
-) -> str:
+) -> PlainTextResponse:
     user = await AuthService.authenticate_user(form_data.username, form_data.password)
     if not user:
         raise HTTPException(
@@ -36,7 +37,7 @@ async def login_for_plain_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
 
-    return access_token
+    return PlainTextResponse(content=access_token)
 
 @router.post("/token/")
 async def login_for_access_token(
