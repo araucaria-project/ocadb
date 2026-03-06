@@ -20,6 +20,23 @@ class UserCreate(BaseModel):
     password: str
     access_tags: list[str]
 
+@router.post("/plaintoken/", response_model=str)
+async def login_for_plain_access_token(
+        form_data: Annotated[OAuth2PasswordRequestFormStrict, Depends()]
+) -> str:
+    user = await AuthService.authenticate_user(form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token_expires = timedelta(minutes=AuthService.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = AuthService.create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+
+    return access_token
 
 @router.post("/token/")
 async def login_for_access_token(
