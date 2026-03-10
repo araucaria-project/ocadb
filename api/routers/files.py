@@ -122,6 +122,18 @@ async def get_fitsfile_by_name(
     except (ValueError, exceptions.DocumentNotFound):
         raise HTTPException(status_code=404, detail="File not found")
 
+@router.get('/by-file-name/{file_name}/plainurl', response_description="Get plain presigned url for FITSFile by its name", response_model=FITSFile)
+async def get_fitsfile_by_name_plainurl(
+        token: Annotated[str, Depends(AuthService.validate_token)],
+        file_name: str,
+        expires_in: int = 3600
+):
+    try:
+        file = await FITSFile.find_one({"file_name": file_name})
+        return file.get_plain_presigned_url(expires_in)
+    except (ValueError, exceptions.DocumentNotFound):
+        raise HTTPException(status_code=404, detail="File not found")
+
 @router.get("/by-observation-id/{observation_id}/", response_description="Get files for observation id", response_model=List[FITSFile])
 async def get_fitsfiles_for_observation(
         observation_id: PydanticObjectId,

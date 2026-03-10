@@ -199,5 +199,12 @@ class FITSFile(Document):
                     datetime.utcnow() + timedelta(seconds=expires_in)).strftime('%Y%m%dT%H%M%SZ'))
         return s3_presigned_url_response
 
+    async def get_plain_presigned_url(self, expires_in):
+        s3_con = S3Connection()
+        presigned_url = await s3_con.get_presigned_url(
+            params={'Bucket': s3_con.bucket_name, 'Key': self.filename}, expires_in=expires_in)
+
+        return presigned_url
+
 # Document models for Beanie registration
 document_models = [FITSFile]
