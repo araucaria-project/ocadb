@@ -117,7 +117,7 @@ async def get_fitsfile_by_name(
         token: Annotated[str, Depends(AuthService.validate_token)]
 ):
     try:
-        file = await FITSFile.find_one({"file_name": file_name})
+        file = await FITSFile.find_one(FITSFile.filename == file_name)
         return file
     except (ValueError, exceptions.DocumentNotFound):
         raise HTTPException(status_code=404, detail="File not found")
@@ -129,7 +129,7 @@ async def get_fitsfile_by_name_plainurl(
         expires_in: int = 3600
 ):
     try:
-        file = await FITSFile.find_one({"file_name": file_name})
+        file = await FITSFile.find_one(FITSFile.filename == file_name)
         return file.get_plain_presigned_url(expires_in)
     except (ValueError, exceptions.DocumentNotFound):
         raise HTTPException(status_code=404, detail="File not found")
