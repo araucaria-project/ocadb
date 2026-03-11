@@ -116,23 +116,24 @@ async def get_fitsfile_by_name(
         file_name: str,
         token: Annotated[str, Depends(AuthService.validate_token)]
 ):
-    try:
-        file = await FITSFile.find_one(FITSFile.filename == file_name)
-        return file
-    except (ValueError, exceptions.DocumentNotFound):
+
+    file = await FITSFile.find_one(FITSFile.filename == file_name)
+    if file is None:
         raise HTTPException(status_code=404, detail="File not found")
 
-@router.get('/by-file-name/{file_name}/plainurl', response_description="Get plain presigned url for FITSFile by its name", response_model=FITSFile)
+    return file
+
+
+@router.get('/by-file-name/{file_name}/plainurl', response_description="Get plain presigned url for FITSFile by its name", response_model=str)
 async def get_fitsfile_by_name_plainurl(
         token: Annotated[str, Depends(AuthService.validate_token)],
         file_name: str,
         expires_in: int = 3600
 ):
-    try:
-        file = await FITSFile.find_one(FITSFile.filename == file_name)
-        return await file.get_plain_presigned_url(expires_in)
-    except (ValueError, exceptions.DocumentNotFound):
+    file = await FITSFile.find_one(FITSFile.filename == file_name)
+    if file is None:
         raise HTTPException(status_code=404, detail="File not found")
+    return await file.get_plain_presigned_url(expires_in)
 
 @router.get("/by-observation-id/{observation_id}/", response_description="Get files for observation id", response_model=List[FITSFile])
 async def get_fitsfiles_for_observation(
