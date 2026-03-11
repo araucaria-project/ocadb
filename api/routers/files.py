@@ -130,7 +130,7 @@ async def get_fitsfile_by_name_plainurl(
 ):
     try:
         file = await FITSFile.find_one(FITSFile.filename == file_name)
-        return file.get_plain_presigned_url(expires_in)
+        return await file.get_plain_presigned_url(expires_in)
     except (ValueError, exceptions.DocumentNotFound):
         raise HTTPException(status_code=404, detail="File not found")
 
