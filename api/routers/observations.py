@@ -5,7 +5,7 @@ from beanie.odm.operators.find.comparison import In
 from beanie.odm.operators.find.geospatial import NearSphere, GeoWithin
 from fastapi import APIRouter, HTTPException, status, Body, Depends
 from beanie import PydanticObjectId, exceptions
-from typing import List, Annotated, Dict, Any, Tuple, Optional
+from typing import List, Annotated, Dict, Any, Tuple, Optional, Union
 from datetime import datetime, timedelta
 from dateutil import parser
 
@@ -118,18 +118,31 @@ async def get_calibration_files(
 
     return []
 
-@router.get("/", response_description="List Observations", response_model=List[Observation])
+@router.get("/", response_description="List Observations", response_model=List[dict[str, Union[List[Observation], Any]]])
 async def list_observations(
-    token: Annotated[str, Depends(AuthService.validate_token)]):
+    token: Annotated[str, Depends(AuthService.validate_token)],
+    page: int = 1,
+    page_size: int = 50
+):
 
     """List all observations"""
     user = await read_users_me(token)
 
-    observations = await Observation.find_all().to_list()
+    observations = await Observation.find_all().aggregate([
+        {
+            "$match": {}
+        },
+        {
+            "$facet": {
+                "metadata": [{ "$count": 'total_count' }],
+                "data": [{ "$skip": (page - 1) * page_size }, { "$limit": page_size }],
+            },
+        },
+    ]).to_list()
     # observations = await Observation.find_all().aggregate(
     #         [OcaWithin.redact_with_access_tags(access_tags=user.access_tags)], projection_model=Observation).to_list()
+    # return {"metadata": {}, "data": observations}
     return observations
-
 
 @router.get("/by-filename/{filename}/", response_description="Get Observation by filename", response_model=List[Observation])
 async def get_observation_by_filename(
