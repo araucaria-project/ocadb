@@ -141,7 +141,7 @@ async def list_observations(
     ]).to_list()
     # observations = await Observation.find_all().aggregate(
     #         [OcaWithin.redact_with_access_tags(access_tags=user.access_tags)], projection_model=Observation).to_list()
-    # return {"metadata": {}, "data": observations}
+    # return {"metadata": {"total_count": total_count}, "data": List[Observation]}
     return observations
 
 @router.get("/by-filename/{filename}/", response_description="Get Observation by filename", response_model=List[Observation])

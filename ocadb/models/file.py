@@ -3,7 +3,7 @@ from pathlib import PosixPath
 from beanie import Document, PydanticObjectId
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, model_validator
-from typing import Optional, List, Annotated, Any
+from typing import Optional, List, Annotated, Any, Dict
 from datetime import datetime, timezone, timedelta
 from enum import Enum
 
@@ -160,6 +160,13 @@ class FITSFile(Document):
     )
     updated_at: Optional[datetime] = Field(None, description="Last update time")
 
+    # Flexible metadata container (quality checks, processing info, etc.)
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Observation metadata (quality checks, processing info, etc.)"
+    )
+
+
     # @model_validator(mode='after')
     # async def store_observation(self):
     #     if self.observation_id is not None:
@@ -179,6 +186,7 @@ class FITSFile(Document):
             IndexModel([("file_status.cloud.status", pymongo.ASCENDING)]),
             IndexModel([("created_at", pymongo.DESCENDING)]),
         ]
+        validate_assignment = True
 
     async def resolve_source_files(self) -> List["FITSFile"]:
         """Resolve source file references to actual documents.
