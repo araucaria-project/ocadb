@@ -4,165 +4,112 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Development Commands
 
-**Python Environment:**
 ```bash
 # Install dependencies (core + optional server components)
 poetry install --extras server
 
-# Run tests
+# Run tests (requires MongoDB on localhost:27017)
 poetry run pytest
-poetry run pytest --cov=ocadb  # with coverage
-poetry run pytest tests/test_model_object.py  # specific test file
+poetry run pytest --cov=ocadb
+poetry run pytest tests/test_model_object.py
 
-# Start API server (development)
-poetry run ocadb-server  # uses api/main.py:start_development_server
+# Start API server (dev mode with hot-reload on 0.0.0.0:8084)
+poetry run ocadb-server
 
-# CLI usage
+# CLI tool
 poetry run ocadb --help
 poetry run ocadb import --help
 ```
 
-**Frontend Development (Vue.js):**
+**Docker full-stack dev environment:**
 ```bash
-cd frontend/
-npm install
-npm run serve    # development server
-npm run build    # production build
-npm run lint     # ESLint
+docker compose up -d
+# MongoDB: :27017 | API: :8084 | Web: :8085 | Mongo Express: :8083 (admin:pass)
 ```
 
-**Docker Development Environment:**
+**Frontend (Angular 21):**
 ```bash
-# Start all services (MongoDB, API, Web, Mongo Express)
-docker compose up -d
-
-# View logs
-docker compose logs -f fastapi
-docker compose logs -f vuejs
-
-# Restart specific service
-docker compose restart fastapi
-
-# Services:
-# - MongoDB: localhost:27017
-# - API: localhost:8084
-# - Web: localhost:8085  
-# - Mongo Express: localhost:8083 (admin:pass)
+cd frontend/ && npm install
+npm run dev          # dev server on :8085, API proxied from localhost:8084
+npm run dev:local    # dev server on :8085, API direct to localhost:8084 (no proxy)
+npm run dev:remote   # dev server on :8085, API proxied from api.ocadb.space
+npm run build        # production build → frontend/dist/
 ```
 
 ## Architecture Overview
 
-**Monorepo Structure**: Three main components in single repository:
-- `ocadb/` - Core Python library with models, database, CLI
-- `api/` - FastAPI REST server 
-- `frontend/` - Vue.js 3 web application
+**Monorepo** with three components: `ocadb/` (core Python library), `api/` (FastAPI server), `frontend/` (Angular 21 app).
 
-**Database**: MongoDB with Beanie ODM for async operations. All models auto-registered via `document_models` list in `ocadb/models/__init__.py`.
+### Frontend
 
-**Connection Management**: Singleton pattern in `ocadb/database.py`. Environment variables:
-- `MONGODB_URL` (default: mongodb://localhost:27017)
-- `MONGODB_DATABASE` (default: ocadb)
+Angular 21 with standalone components, signals (no RxJS observables for state), Vite build, Tailwind CSS (CDN). Uses native `fetch()` API, not Angular HttpClient.
 
-## Authentication & Authorization
+- **Environment configs**: `src/environments/environment*.ts` — `dev` (proxy), `local` (direct :8084), `production` (relative `/api/v1`)
+- **Services**: `ocadb.service.ts` (auth + observation search), `api-log.service.ts` (request debug logging), `fits.service.ts` (FITS file parsing), `gemini.service.ts` (AI analysis, stubbed)
+- **Dev server**: port 8085, proxy config in `proxy.conf.json`
 
-**JWT-based Authentication**: Uses JSON Web Tokens for API authentication with the following components:
+**Database**: MongoDB with Beanie ODM. All document models are collected via per-module `document_models` lists, aggregated in `ocadb/models/__init__.py`, and auto-registered by the singleton `Connection` in `ocadb/database.py` during `init_beanie`.
 
-- **AuthService** (`api/services/auth_service.py`) - Core auth logic with token creation/validation
-- **User Management** (`ocadb/models/user.py`) - MongoDB-backed user storage via Beanie ODM  
-- **Password Security** (`api/services/crypto_service.py`) - bcrypt hashing for secure password storage
-- **Auth Endpoints** (`api/routers/api_auth.py`) - Login, registration, and user management
+### API Versioning
 
-**Environment Variables**:
-- `JWT_SECRET_KEY` - Secret key for JWT signing (required in production)
-- `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` - Token expiration time (default: 30 minutes)
+Routers are mounted with version prefixes in `api/main.py`:
+- `/api/v1/` — objects, observations, auth, files, test endpoints
+- `/api/v2/` — observations_v2, files_v2 (newer patterns)
 
-**API Protection**:
-- Write operations (POST, PUT, DELETE) on `/api/v1/objects` require authentication
-- Read operations (GET) are public
-- Auth endpoints: `/api/v1/auth/token` (login), `/api/v1/auth/register`, `/api/v1/auth/me`
-- Test endpoints: `/api/v1/test/free` (public), `/api/v1/test/protected` (requires auth)
+Swagger docs at `/swagger` (not the default `/docs`). OpenAPI spec at `/api/v1/openapi.json`.
 
-**Usage Examples**:
-```bash
-# Register new user
-curl -X POST "http://localhost:8084/api/v1/auth/register" \
-     -H "Content-Type: application/json" \
-     -d '{"username":"testuser","email":"test@example.com","full_name":"Test User","password":"testpass123"}'
+### Core Domain Models
 
-# Login to get token  
-curl -X POST "http://localhost:8084/api/v1/auth/token" \
-     -H "Content-Type: application/x-www-form-urlencoded" \
-     -d "username=testuser&password=testpass123&grant_type=password"
+- **`Object`** (`ocadb/models/object.py`) — Astronomical catalog objects. Names auto-canonized via `pyaraucaria.lookup_objects.name_canonizator` in model validators. Aliases stored in canonized form. Uses `extra = "allow"` for flexible fields.
+- **`Observation`** (`ocadb/models/observation.py`) — FITS observation records. Has multiple `@model_validator(mode='after')` that derive `telescope_coordinates`, `canonized_object_name`, `date_obs`, and `access_tags` from the embedded `FitsHeader`. Links to `FITSFile` documents via `List[Link[FITSFile]]`.
+- **`FITSFile`** (`ocadb/models/file.py`) — Individual FITS files with storage tracking across three locations (observatory/hub/cloud) via `StorageStatus`. Integrates with S3 (Backblaze B2) for presigned URL generation.
+- **`SkyCoord`** (`ocadb/models/geo.py`) — Coordinates stored as GeoJSON `Point2D` for MongoDB geospatial indexing. RA/Dec (0-360) converted to longitude (-180,180) internally. Construct with `SkyCoord(radec=(ra, dec))`.
 
-# Use token for protected endpoints
-curl -X POST "http://localhost:8084/api/v1/objects/" \
-     -H "Authorization: Bearer YOUR_JWT_TOKEN_HERE" \
-     -H "Content-Type: application/json" \
-     -d '{"name":"Test Object","coord":{"ra":123.45,"dec":67.89}}'
-```
+### Access Control Model
+
+Observations use document-level access control via `access_tags` (derived from FITS header fields: INSTRUME, ORIGIN, PI). The `AggregationQueryBuilder` (`api/services/aggregation_query_builder.py`) injects a `$redact` stage into MongoDB aggregation pipelines, filtering documents where user's `access_tags` intersect with document's tags. Paginated queries use `$facet` with `metadata` (count) and `data` (skip/limit).
+
+### Geospatial Queries
+
+`telescope_coordinates.lon_lat` has a `2dsphere` index. Cone searches use `$geoWithin` / `$centerSphere` via `QueryBuilder` and `OcaWithin` operator classes. The `ArchDistance` model converts arc-seconds to radians for MongoDB geo operators.
+
+### Multi-Parameter Search
+
+`MultiSearchForm` (`api/services/query_builder.py`) defines the search schema. The v2 observations router chains `.find()` calls conditionally for each non-null parameter, building queries incrementally.
 
 ## Key Patterns and Conventions
 
-**FastAPI Patterns:**
-- Uses modern `lifespan` context manager (not deprecated `@app.on_event`)
-- Type hints with `Annotated[Model, Body(...)]` for request bodies
-- Pydantic v2: use `.model_dump()` instead of deprecated `.dict()`
-- Database initialization in lifespan startup
+- **FastAPI**: `lifespan` context manager for startup/shutdown. `Annotated[Model, Body(...)]` for request bodies. `Annotated[str, Depends(AuthService.validate_token)]` for protected endpoints.
+- **Pydantic v2**: `.model_dump()` not `.dict()`. `model_config` dict not inner `Config` class.
+- **Async everywhere**: All DB operations are async. CLI uses event loop integration with Typer.
+- **Name canonization**: All object name lookups use `name_canonizator()` from pyaraucaria — strips non-alphanumeric, lowercases. Always canonize before querying.
+- **FITS header field naming**: `FitsHeader` uses aliases for hyphenated FITS keywords (e.g., `DATE_OBS` with `alias="DATE-OBS"`). Has `extra = "allow"` for non-standard headers.
 
-**Async/Await**: All database operations are async. CLI uses event loop integration with Typer.
+## Authentication
 
-**Models Structure:**
-- `Object` model in `ocadb/models/object.py` - Core astronomical objects
-- `SkyCoord` model in `ocadb/models/geo.py` - Coordinate system with GeoJSON Point2D
-- Models use Beanie ODM with MongoDB collections
+JWT-based. Auth logic in `api/services/auth_service.py`, password hashing in `api/services/crypto_service.py` (bcrypt), user model in `ocadb/models/user.py`.
 
-**Testing Setup:**
-- Uses `pytest` with `pytest-asyncio` for async tests
+- Write operations require auth token; read operations on `/objects` are public
+- Observations endpoints require auth for all operations (access-tag filtering)
+- Auth endpoints: `/api/v1/auth/token` (login), `/api/v1/auth/register`, `/api/v1/auth/me`
+
+## Environment Variables
+
+Managed via `pydantic-settings` in `api/config.py` with `.env` file support (prefix: `ocadb.`):
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `MONGODB_URL` | `mongodb://localhost:27017` | Database connection |
+| `MONGODB_DATABASE` | `ocadb` | Database name |
+| `JWT_SECRET_KEY` | dev fallback | JWT signing (set properly in production) |
+| `S3_KEY_ID`, `S3_SECRET`, `S3_REGION`, `ENDPOINT`, `BUCKET_NAME` | dev defaults | Backblaze B2 / S3 storage |
+
+## Testing
+
+- `pytest` + `pytest-asyncio` for async tests
 - Test database: `mongodb://localhost:27017/test` (see `tests/conftest.py`)
-- Beanie fixture provides initialized database connection
+- `beanie` fixture provides initialized DB connection via the singleton `Connection`
 
-**Import System:**
-- File parsers in `ocadb/files/` directory
-- CLI import commands in `ocadb/cli/importer.py`
-- Coordinate conversion via pyaraucaria dependency
-- Name canonization for searchable object names
+## Deployment
 
-## Project-Specific Notes
-
-**Poetry Scripts**: Two main entry points defined in `pyproject.toml`:
-- `ocadb-server` - FastAPI development server
-- `ocadb` - CLI tool
-
-**Dependencies**: Core uses Python 3.12+ with optional server extras. Key libraries:
-- Beanie (MongoDB ODM), FastAPI, Pydantic v2, Typer (CLI), Rich (formatting)
-- Frontend: Vue.js 3 with Node.js 20
-
-**Docker Composition**: Full development stack with hot-reload for both API and frontend. MongoDB data persisted in Docker volume.
-
-**Coordinate System**: Custom GeoJSON-based coordinate model with RA/Dec conversion utilities and epoch support (default 2000.0).
-
-## DigitalOcean Deployment
-
-**App Platform Configuration**: `.do/app.yaml` defines the deployment spec for DigitalOcean App Platform:
-
-- **API Service**: Python environment, builds with Poetry, runs on port 8000
-  - Build: `poetry install --extras server --no-dev`
-  - Run: `uvicorn api.main:app --host 0.0.0.0 --port $PORT`
-  - Health check: `/health` endpoint
-  - Environment variables: `MONGODB_URL` (secret), `MONGODB_DATABASE`, `PYTHONPATH`, `JWT_SECRET_KEY` (secret)
-
-- **Frontend Service**: Node.js environment, builds Vue.js app
-  - Build: `npm ci && npm run build`
-  - Static site served from `/frontend/dist`
-  - Build-time variable: `VUE_APP_API_URL=/api/v1`
-
-- **Database**: Configured for unmanaged MongoDB Atlas connection
-- **Routing**: API on `/api` path, frontend on `/` path
-- **Auto-deploy**: Triggered on pushes to main branch
-
-**Deployment Notes**:
-- Update GitHub repo reference in `.do/app.yaml` before deploying
-- Set required secrets in DigitalOcean dashboard:
-  - `MONGODB_URL` - MongoDB Atlas connection string
-  - `JWT_SECRET_KEY` - Strong secret key for JWT signing (generate with `openssl rand -hex 32`)
-- Uses basic-xxs instances for cost efficiency
+API deployed on Railway.com via `uvicorn api.main:app`. Frontend is a static SPA built from `frontend/dist`. CORS allows `localhost`, `*.ocadb.space`, and `*.app.github.dev`.
