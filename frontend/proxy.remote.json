@@ -1,0 +1,7 @@
+{
+  "/api": {
+    "target": "https://api.ocadb.space",
+    "secure": true,
+    "changeOrigin": true
+  }
+}

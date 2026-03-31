@@ -1,0 +1,213 @@
+[
+  {
+    "obs_name": "seed_ngc6604_zb08_g_001",
+    "file_name": "zb08c_0898_65386.fits",
+    "fits_header": {
+      "SIMPLE": true, "BITPIX": 16, "NAXIS": 2, "NAXIS1": 2048, "NAXIS2": 2048,
+      "OCASTD": "1.0.2", "OBSERVAT": "OCA", "OBS-LAT": -24.59806, "OBS-LONG": -70.19638, "OBS-ELEV": 2817,
+      "ORIGIN": "CAMK PAN", "TELESCOP": "zb08", "DATE-OBS": "2025-08-11T03:41:33.428",
+      "JD": 2460898.6539, "RA": 269.53, "DEC": -12.23, "EQUINOX": "2000",
+      "RA_TEL": 269.53, "DEC_TEL": -12.23, "ALT_TEL": 58.57, "AZ_TEL": 287.59,
+      "AIRMASS": 1.17, "FOCUS": 15399, "ROTATOR": 150.84,
+      "IMAGETYP": "science", "OBSTYPE": "science", "OBJECT": "NGC6604",
+      "FILTER": "g", "EXPTIME": 90.0, "INSTRUME": "DW936_BV",
+      "CCD-TEMP": -59.13, "XBINNING": 1, "YBINNING": 1,
+      "GAIN": 0.97, "RON": 10.4, "SCALE": 0.504,
+      "PI": "Pietrukowicz"
+    },
+    "metadata": {}
+  },
+  {
+    "obs_name": "seed_ngc6604_zb08_r_002",
+    "file_name": "zb08c_0899_65386.fits",
+    "fits_header": {
+      "SIMPLE": true, "BITPIX": 16, "NAXIS": 2, "NAXIS1": 2048, "NAXIS2": 2048,
+      "OCASTD": "1.0.2", "OBSERVAT": "OCA", "OBS-LAT": -24.59806, "OBS-LONG": -70.19638, "OBS-ELEV": 2817,
+      "ORIGIN": "CAMK PAN", "TELESCOP": "zb08", "DATE-OBS": "2025-08-11T03:45:12.100",
+      "JD": 2460898.6564, "RA": 269.53, "DEC": -12.23, "EQUINOX": "2000",
+      "RA_TEL": 269.53, "DEC_TEL": -12.23, "ALT_TEL": 58.21, "AZ_TEL": 288.01,
+      "AIRMASS": 1.18, "FOCUS": 15399, "ROTATOR": 150.90,
+      "IMAGETYP": "science", "OBSTYPE": "science", "OBJECT": "NGC6604",
+      "FILTER": "r", "EXPTIME": 60.0, "INSTRUME": "DW936_BV",
+      "CCD-TEMP": -59.10, "XBINNING": 1, "YBINNING": 1,
+      "GAIN": 0.97, "RON": 10.4, "SCALE": 0.504,
+      "PI": "Pietrukowicz"
+    },
+    "metadata": {}
+  },
+  {
+    "obs_name": "seed_m31_jk15_V_003",
+    "file_name": "jk15c_0112_65400.fits",
+    "fits_header": {
+      "SIMPLE": true, "BITPIX": 16, "NAXIS": 2, "NAXIS1": 4096, "NAXIS2": 4096,
+      "OCASTD": "1.0.2", "OBSERVAT": "OCA", "OBS-LAT": -24.59806, "OBS-LONG": -70.19638, "OBS-ELEV": 2817,
+      "ORIGIN": "CAMK PAN", "TELESCOP": "jk15", "DATE-OBS": "2025-08-25T01:15:44.000",
+      "JD": 2460912.5526, "RA": 10.68, "DEC": 41.27, "EQUINOX": "2000",
+      "RA_TEL": 10.68, "DEC_TEL": 41.27, "ALT_TEL": 42.10, "AZ_TEL": 315.22,
+      "AIRMASS": 1.49, "FOCUS": 22100, "ROTATOR": 0.0,
+      "IMAGETYP": "science", "OBSTYPE": "science", "OBJECT": "M31",
+      "FILTER": "V", "EXPTIME": 120.0, "INSTRUME": "ML16803",
+      "CCD-TEMP": -30.00, "XBINNING": 2, "YBINNING": 2,
+      "GAIN": 1.5, "RON": 12.0, "SCALE": 0.73,
+      "PI": "Skowron"
+    },
+    "metadata": {}
+  },
+  {
+    "obs_name": "seed_m31_jk15_B_004",
+    "file_name": "jk15c_0113_65400.fits",
+    "fits_header": {
+      "SIMPLE": true, "BITPIX": 16, "NAXIS": 2, "NAXIS1": 4096, "NAXIS2": 4096,
+      "OCASTD": "1.0.2", "OBSERVAT": "OCA", "OBS-LAT": -24.59806, "OBS-LONG": -70.19638, "OBS-ELEV": 2817,
+      "ORIGIN": "CAMK PAN", "TELESCOP": "jk15", "DATE-OBS": "2025-08-25T01:20:30.000",
+      "JD": 2460912.5559, "RA": 10.68, "DEC": 41.27, "EQUINOX": "2000",
+      "RA_TEL": 10.68, "DEC_TEL": 41.27, "ALT_TEL": 41.85, "AZ_TEL": 315.50,
+      "AIRMASS": 1.50, "FOCUS": 22100, "ROTATOR": 0.0,
+      "IMAGETYP": "science", "OBSTYPE": "science", "OBJECT": "M31",
+      "FILTER": "B", "EXPTIME": 180.0, "INSTRUME": "ML16803",
+      "CCD-TEMP": -30.00, "XBINNING": 2, "YBINNING": 2,
+      "GAIN": 1.5, "RON": 12.0, "SCALE": 0.73,
+      "PI": "Skowron"
+    },
+    "metadata": {}
+  },
+  {
+    "obs_name": "seed_vega_zb08_V_005",
+    "file_name": "zb08c_0220_65420.fits",
+    "fits_header": {
+      "SIMPLE": true, "BITPIX": 16, "NAXIS": 2, "NAXIS1": 2048, "NAXIS2": 2048,
+      "OCASTD": "1.0.2", "OBSERVAT": "OCA", "OBS-LAT": -24.59806, "OBS-LONG": -70.19638, "OBS-ELEV": 2817,
+      "ORIGIN": "CAMK PAN", "TELESCOP": "zb08", "DATE-OBS": "2025-09-14T00:05:10.000",
+      "JD": 2460932.5036, "RA": 279.23, "DEC": 38.78, "EQUINOX": "2000",
+      "RA_TEL": 279.23, "DEC_TEL": 38.78, "ALT_TEL": 65.30, "AZ_TEL": 350.10,
+      "AIRMASS": 1.10, "FOCUS": 15410, "ROTATOR": 90.00,
+      "IMAGETYP": "science", "OBSTYPE": "science", "OBJECT": "Vega",
+      "FILTER": "V", "EXPTIME": 5.0, "INSTRUME": "DW936_BV",
+      "CCD-TEMP": -60.00, "XBINNING": 1, "YBINNING": 1,
+      "GAIN": 0.97, "RON": 10.4, "SCALE": 0.504,
+      "PI": "Skowron"
+    },
+    "metadata": {}
+  },
+  {
+    "obs_name": "seed_flat_zb08_V_006",
+    "file_name": "zb08c_flat_V_65420.fits",
+    "fits_header": {
+      "SIMPLE": true, "BITPIX": 16, "NAXIS": 2, "NAXIS1": 2048, "NAXIS2": 2048,
+      "OCASTD": "1.0.2", "OBSERVAT": "OCA", "OBS-LAT": -24.59806, "OBS-LONG": -70.19638, "OBS-ELEV": 2817,
+      "ORIGIN": "CAMK PAN", "TELESCOP": "zb08", "DATE-OBS": "2025-09-13T23:30:00.000",
+      "JD": 2460932.4792, "RA": 0.0, "DEC": 0.0, "EQUINOX": "2000",
+      "RA_TEL": 0.0, "DEC_TEL": 0.0, "ALT_TEL": 80.0, "AZ_TEL": 180.0,
+      "AIRMASS": 1.0, "FOCUS": 15410,
+      "IMAGETYP": "flat", "OBSTYPE": "calib", "OBJECT": "SkyFlat",
+      "FILTER": "V", "EXPTIME": 8.0, "INSTRUME": "DW936_BV",
+      "CCD-TEMP": -60.00, "XBINNING": 1, "YBINNING": 1,
+      "GAIN": 0.97, "RON": 10.4, "SCALE": 0.504
+    },
+    "metadata": {}
+  },
+  {
+    "obs_name": "seed_dark_zb08_007",
+    "file_name": "zb08c_dark_90s_65420.fits",
+    "fits_header": {
+      "SIMPLE": true, "BITPIX": 16, "NAXIS": 2, "NAXIS1": 2048, "NAXIS2": 2048,
+      "OCASTD": "1.0.2", "OBSERVAT": "OCA", "OBS-LAT": -24.59806, "OBS-LONG": -70.19638, "OBS-ELEV": 2817,
+      "ORIGIN": "CAMK PAN", "TELESCOP": "zb08", "DATE-OBS": "2025-09-13T23:00:00.000",
+      "JD": 2460932.4583, "RA": 0.0, "DEC": 0.0, "EQUINOX": "2000",
+      "RA_TEL": 0.0, "DEC_TEL": 0.0,
+      "IMAGETYP": "dark", "OBSTYPE": "calib", "OBJECT": "Dark",
+      "FILTER": "DARK", "EXPTIME": 90.0, "INSTRUME": "DW936_BV",
+      "CCD-TEMP": -60.00, "XBINNING": 1, "YBINNING": 1,
+      "GAIN": 0.97, "RON": 10.4, "SCALE": 0.504
+    },
+    "metadata": {}
+  },
+  {
+    "obs_name": "seed_betacep_jk15_I_008",
+    "file_name": "jk15c_0450_65430.fits",
+    "fits_header": {
+      "SIMPLE": true, "BITPIX": 16, "NAXIS": 2, "NAXIS1": 4096, "NAXIS2": 4096,
+      "OCASTD": "1.0.2", "OBSERVAT": "OCA", "OBS-LAT": -24.59806, "OBS-LONG": -70.19638, "OBS-ELEV": 2817,
+      "ORIGIN": "CAMK PAN", "TELESCOP": "jk15", "DATE-OBS": "2025-09-24T02:10:00.000",
+      "JD": 2460942.5903, "RA": 322.17, "DEC": 63.10, "EQUINOX": "2000",
+      "RA_TEL": 322.17, "DEC_TEL": 63.10, "ALT_TEL": 30.50, "AZ_TEL": 5.20,
+      "AIRMASS": 1.97, "FOCUS": 22080, "ROTATOR": 45.00,
+      "IMAGETYP": "science", "OBSTYPE": "science", "OBJECT": "BetaCep",
+      "FILTER": "I", "EXPTIME": 30.0, "INSTRUME": "ML16803",
+      "CCD-TEMP": -30.00, "XBINNING": 2, "YBINNING": 2,
+      "GAIN": 1.5, "RON": 12.0, "SCALE": 0.73,
+      "PI": "Pietrukowicz"
+    },
+    "metadata": {}
+  },
+  {
+    "obs_name": "seed_rrlyr_zb08_V_009",
+    "file_name": "zb08c_0500_65440.fits",
+    "fits_header": {
+      "SIMPLE": true, "BITPIX": 16, "NAXIS": 2, "NAXIS1": 2048, "NAXIS2": 2048,
+      "OCASTD": "1.0.2", "OBSERVAT": "OCA", "OBS-LAT": -24.59806, "OBS-LONG": -70.19638, "OBS-ELEV": 2817,
+      "ORIGIN": "CAMK PAN", "TELESCOP": "zb08", "DATE-OBS": "2025-10-04T04:22:00.000",
+      "JD": 2460952.6819, "RA": 286.96, "DEC": 42.78, "EQUINOX": "2000",
+      "RA_TEL": 286.96, "DEC_TEL": 42.78, "ALT_TEL": 55.00, "AZ_TEL": 320.00,
+      "AIRMASS": 1.22, "FOCUS": 15405, "ROTATOR": 120.00,
+      "IMAGETYP": "science", "OBSTYPE": "science", "OBJECT": "RRLyr",
+      "FILTER": "V", "EXPTIME": 45.0, "INSTRUME": "DW936_BV",
+      "CCD-TEMP": -59.50, "XBINNING": 1, "YBINNING": 1,
+      "GAIN": 0.97, "RON": 10.4, "SCALE": 0.504,
+      "PI": "Skowron"
+    },
+    "metadata": {}
+  },
+  {
+    "obs_name": "seed_etacar_jk15_R_010",
+    "file_name": "jk15c_0780_65450.fits",
+    "fits_header": {
+      "SIMPLE": true, "BITPIX": 16, "NAXIS": 2, "NAXIS1": 4096, "NAXIS2": 4096,
+      "OCASTD": "1.0.2", "OBSERVAT": "OCA", "OBS-LAT": -24.59806, "OBS-LONG": -70.19638, "OBS-ELEV": 2817,
+      "ORIGIN": "CAMK PAN", "TELESCOP": "jk15", "DATE-OBS": "2025-10-14T05:55:00.000",
+      "JD": 2460962.7465, "RA": 161.26, "DEC": -59.68, "EQUINOX": "2000",
+      "RA_TEL": 161.26, "DEC_TEL": -59.68, "ALT_TEL": 70.20, "AZ_TEL": 160.00,
+      "AIRMASS": 1.06, "FOCUS": 22090, "ROTATOR": 0.0,
+      "IMAGETYP": "science", "OBSTYPE": "science", "OBJECT": "EtaCar",
+      "FILTER": "R", "EXPTIME": 15.0, "INSTRUME": "ML16803",
+      "CCD-TEMP": -30.00, "XBINNING": 2, "YBINNING": 2,
+      "GAIN": 1.5, "RON": 12.0, "SCALE": 0.73,
+      "PI": "Pietrukowicz"
+    },
+    "metadata": {}
+  },
+  {
+    "obs_name": "seed_zero_jk15_011",
+    "file_name": "jk15c_zero_65450.fits",
+    "fits_header": {
+      "SIMPLE": true, "BITPIX": 16, "NAXIS": 2, "NAXIS1": 4096, "NAXIS2": 4096,
+      "OCASTD": "1.0.2", "OBSERVAT": "OCA", "OBS-LAT": -24.59806, "OBS-LONG": -70.19638, "OBS-ELEV": 2817,
+      "ORIGIN": "CAMK PAN", "TELESCOP": "jk15", "DATE-OBS": "2025-10-14T23:10:00.000",
+      "JD": 2460963.4653, "RA": 0.0, "DEC": 0.0, "EQUINOX": "2000",
+      "RA_TEL": 0.0, "DEC_TEL": 0.0,
+      "IMAGETYP": "zero", "OBSTYPE": "calib", "OBJECT": "Bias",
+      "FILTER": "NONE", "EXPTIME": 0.0, "INSTRUME": "ML16803",
+      "CCD-TEMP": -30.00, "XBINNING": 2, "YBINNING": 2,
+      "GAIN": 1.5, "RON": 12.0, "SCALE": 0.73
+    },
+    "metadata": {}
+  },
+  {
+    "obs_name": "seed_ngc6604_zb08_I_012",
+    "file_name": "zb08c_0900_65386.fits",
+    "fits_header": {
+      "SIMPLE": true, "BITPIX": 16, "NAXIS": 2, "NAXIS1": 2048, "NAXIS2": 2048,
+      "OCASTD": "1.0.2", "OBSERVAT": "OCA", "OBS-LAT": -24.59806, "OBS-LONG": -70.19638, "OBS-ELEV": 2817,
+      "ORIGIN": "CAMK PAN", "TELESCOP": "zb08", "DATE-OBS": "2025-08-11T03:50:00.000",
+      "JD": 2460898.6597, "RA": 269.53, "DEC": -12.23, "EQUINOX": "2000",
+      "RA_TEL": 269.53, "DEC_TEL": -12.23, "ALT_TEL": 57.90, "AZ_TEL": 288.50,
+      "AIRMASS": 1.18, "FOCUS": 15399, "ROTATOR": 151.00,
+      "IMAGETYP": "science", "OBSTYPE": "science", "OBJECT": "NGC6604",
+      "FILTER": "I", "EXPTIME": 45.0, "INSTRUME": "DW936_BV",
+      "CCD-TEMP": -59.08, "XBINNING": 1, "YBINNING": 1,
+      "GAIN": 0.97, "RON": 10.4, "SCALE": 0.504,
+      "PI": "Pietrukowicz"
+    },
+    "metadata": {}
+  }
+]
