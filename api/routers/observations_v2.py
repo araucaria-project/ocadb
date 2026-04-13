@@ -145,8 +145,8 @@ async def get_observation_by_filename(
     """Get observation by conencted FITS filename - full output version"""
     user = await read_users_me(token)
 
-    observations = await Observation.find(Observation.files.filename == filename, fetch_links=True).to_list() # .aggregate(
-        #[OcaWithin.redact_with_access_tags(access_tags=user.access_tags)], projection_model=Observation).to_list()
+    observations = await Observation.find(Observation.files.filename == filename, fetch_links=True).aggregate(
+        [OcaWithin.redact_with_access_tags(access_tags=user.access_tags)], projection_model=Observation).to_list()
 
     if not observations:
         raise HTTPException(status_code=404, detail=f"Observation with filename {filename} not found")
@@ -160,8 +160,8 @@ async def get_observation_by_obs_name(
     """Get observation by Observation name"""
     user = await read_users_me(token)
 
-    observations = await Observation.find(Observation.obs_name == observation_name).to_list()  # .aggregate(
-    # [OcaWithin.redact_with_access_tags(access_tags=user.access_tags)], projection_model=Observation).to_list()
+    observations = await Observation.find(Observation.obs_name == observation_name).aggregate(
+     [OcaWithin.redact_with_access_tags(access_tags=user.access_tags)], projection_model=Observation).to_list()
 
     if not observations:
         raise HTTPException(status_code=404, detail=f"Observation with name {observation_name} not found")

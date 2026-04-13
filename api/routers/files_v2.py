@@ -1,17 +1,20 @@
 import beanie.exceptions
 import pymongo.errors
+from pymongo import ReturnDocument
 
 from fastapi import APIRouter, HTTPException, status, Body, Depends
 from beanie import PydanticObjectId, exceptions
 from typing import List, Annotated, Dict, Any, Tuple, Optional
 from datetime import datetime, timedelta
+from fastapi import Response
 
 from pymongo.errors import DuplicateKeyError
+from pymongo.results import UpdateResult
 
 from api.routers.observations_v2 import get_observation, create_observation, get_observation_by_obs_name, \
     get_observation_by_filename
 from ocadb.models import Observation, FitsHeader, SkyCoord
-from ocadb.models.file import FITSFile, StorageStatus
+from ocadb.models.file import FITSFile, StorageStatus, StorageLocationStatus
 from api.services.auth_service import AuthService
 
 
@@ -29,7 +32,8 @@ router = APIRouter(prefix="/files",
 @router.post("/", response_description="Add new File", response_model=FITSFile, status_code=status.HTTP_201_CREATED)
 async def create_file(
     file_data: Annotated[FITSFile, Body(...)],
-    token: Annotated[str, Depends(AuthService.validate_token)]
+    token: Annotated[str, Depends(AuthService.validate_token)],
+    force: bool = False
 ):
     """Create a new FITSfile record"""
     try:
@@ -57,7 +61,78 @@ async def create_file(
 
             await observation.replace()
     except DuplicateKeyError as e:
-        raise HTTPException(status_code=403, detail=f"FITSFile with filename {file_data.filename} already exists.")
+        if not force:
+            raise HTTPException(status_code=403, detail=f"FITSFile with filename {file_data.filename} already exists.")
+        else:
+            file_data.id = (await get_fitsfile_by_name(file_data.filename, token=token)).id
+            return await update_fitsfile(file_data=file_data, token=token)
+    return file_data
+
+@router.post("/upsert", response_description="Insert or update an existing FITSFile record", response_model=FITSFile)
+async def upsert_fitsfile(
+        file_data: Annotated[FITSFile, Body(...)],
+        response: Response,
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    result = await FITSFile.find_one(
+        FITSFile.filename == file_data.filename
+    ).update(
+        {
+            "$set": {
+                "obs_name": file_data.obs_name,
+                "file_class": file_data.file_class,
+                "filesize": file_data.filesize,
+                "mtime": file_data.mtime,
+                "digest": file_data.digest,
+                "observation_id": file_data.observation_id,
+                "source_filenames": file_data.source_filenames,
+                "fits_header": file_data.fits_header,
+                "file_status": file_data.file_status,
+                "metadata": file_data.metadata,
+                "updated_at": datetime.utcnow(),
+            },
+            "$setOnInsert": {
+                "filename": file_data.filename,
+                "created_at": datetime.utcnow(),
+            },
+        },
+        upsert=True,
+    )
+
+    response.status_code = 201 if result.upserted_id else 200
+
+    if result.upserted_id:
+        file_data.id = result.upserted_id
+
+        if file_data.obs_name is not None:
+            try:
+                observation = await get_observation_by_obs_name(file_data.obs_name, token=token)
+                observation.updated_at = datetime.utcnow()
+
+            except HTTPException as exc:
+                try:
+                    if exc.status_code == 404:
+                        observation = await create_observation(
+                            observation_data=Observation(obs_name=file_data.obs_name, file_name=file_data.filename,
+                                                         fits_header=file_data.fits_header), token=token)
+                    else:
+                        raise
+                except HTTPException as e:
+                    raise HTTPException(status_code=e.status_code, detail="Cannot create observation object.")
+
+            observation.store_file(file_data)
+
+            if file_data.metadata:
+                observation.store_metadata(file_data.metadata)
+
+            await observation.replace()
+    else: # update and we want the id
+        updated_doc = await FITSFile.find_one(
+            FITSFile.filename == file_data.filename
+        )
+
+        file_data = updated_doc
+
     return file_data
 
 @router.put("/", response_description="Update a FITSFile", response_model=FITSFile)
@@ -71,8 +146,8 @@ async def update_fitsfile(
 
     try:
         await file_data.replace()
-    except:
-        raise HTTPException(status_code=404, detail=f"Cannot update observation with id {file_data._id}")
+    except Exception as e:
+        raise HTTPException(status_code=403, detail=f"Cannot update file with id {file_data._id}, {e}")
 
     observation = await get_observation_by_obs_name(file_data.obs_name, token=token)
 
@@ -81,9 +156,6 @@ async def update_fitsfile(
 
     observation.store_metadata(file_data.metadata)
     await observation.replace()
-
-
-
 
     return file_data
 
@@ -168,6 +240,24 @@ async def get_file_status(
 
     return fitsfile.file_status
 
+@router.post("/file-status/list", response_description="Get a list of file statuses", response_model=dict[str, StorageStatus])
+async def list_files_status(
+        filenames_data: Annotated[List[str], Body(...)],
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    """List file statuses for filenames in input"""
+    async def get_aiter(sync_list):
+        for i in sync_list:
+            yield i
+
+    response = {}
+
+    async for filename in get_aiter(filenames_data):
+        file = await FITSFile.find_one(FITSFile.filename == filename)
+        if file:
+            response[file.filename] = file.file_status
+
+    return response
 
 @router.put("/file-status/{fitsfile_name}/", response_description="Update file status", response_model=FITSFile)
 async def update_file_status(
@@ -185,3 +275,24 @@ async def update_file_status(
     fitsfile.replace()
 
     return fitsfile
+
+@router.put("/file-status/{fitsfile_name}/{storage_stage_name}/", response_description="Update file status", response_model=FITSFile)
+async def update_file_status_by_stage(
+        fitsfile_name: str,
+        storage_stage_name: str,
+        token: Annotated[str, Depends(AuthService.validate_token)],
+        file_location_status: StorageLocationStatus = Annotated[StorageLocationStatus, Body(...)]
+):
+    """Update a FITSfile record status by its filename and storage stage name"""
+    if storage_stage_name not in ["observatory", "hub", "cloud"]:
+        raise HTTPException(status_code=403, detail="Unexpected storage stage name")
+
+    file = await FITSFile.find_one(FITSFile.filename == fitsfile_name)
+
+    if file is None:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    file.file_status[storage_stage_name] = file_location_status
+    file.replace()
+
+    return file
