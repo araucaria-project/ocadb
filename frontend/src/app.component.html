@@ -1,0 +1,582 @@
+<div class="h-screen w-screen bg-space-950 text-white font-sans overflow-hidden">
+
+  <!-- LOGIN SCREEN -->
+  @if (!ocadbService.isAuthenticated()) {
+    <div class="h-full w-full flex items-center justify-center bg-[url('https://picsum.photos/1920/1080?grayscale&blur=2')] bg-cover bg-center">
+      <div class="absolute inset-0 bg-space-950/80 backdrop-blur-sm"></div>
+
+      <div class="relative z-10 w-full max-w-md p-8 bg-space-900 border border-space-700 rounded-2xl shadow-2xl animate-fade-in flex flex-col">
+        <div class="text-center mb-8">
+          <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
+            OCADB Access
+          </h1>
+          <p class="text-slate-400 mt-2 text-sm">OCM Observatory Database</p>
+        </div>
+
+        <form (submit)="handleLogin($event)" class="space-y-4 flex-1">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Username</label>
+            <input
+              type="text"
+              name="username"
+              [(ngModel)]="loginData.username"
+              placeholder="Enter username"
+              required
+              class="w-full bg-space-950 border border-space-700 rounded-lg px-4 py-3 text-sm focus:border-accent-500 focus:outline-none transition-colors text-slate-200 placeholder-slate-600"
+            >
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Password</label>
+            <input
+              type="password"
+              name="password"
+              [(ngModel)]="loginData.password"
+              placeholder="••••••••"
+              required
+              class="w-full bg-space-950 border border-space-700 rounded-lg px-4 py-3 text-sm focus:border-accent-500 focus:outline-none transition-colors text-slate-200 placeholder-slate-600"
+            >
+          </div>
+
+          @if (ocadbService.error()) {
+            <div class="p-3 bg-red-900/20 border border-red-800 rounded-lg text-red-300 text-xs flex items-start justify-between gap-2">
+              <span>{{ ocadbService.error() }}</span>
+              <button (click)="ocadbService.clearError()" class="text-red-400 hover:text-white transition-colors shrink-0">
+                <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+              </button>
+            </div>
+          }
+
+          <button
+            type="submit"
+            [disabled]="ocadbService.loading()"
+            class="w-full py-3 bg-accent-600 hover:bg-accent-500 text-white font-bold rounded-lg shadow-lg shadow-accent-600/20 transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
+          >
+            @if (ocadbService.loading()) {
+              <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+              Signing in...
+            } @else {
+              Sign In
+            }
+          </button>
+        </form>
+
+        <div class="mt-6 pt-4 border-t border-space-800 text-center">
+            <a href="https://akond.space/" target="_blank" class="inline-flex items-center justify-center gap-1.5 opacity-70 hover:opacity-100 transition-opacity decoration-none group">
+                <span class="text-[10px] text-slate-500 mb-0.5">by</span>
+                <svg viewBox="0 0 67.194 12.425" xmlns="http://www.w3.org/2000/svg" class="h-4 w-auto">
+                    <g transform="translate(-52.256057,-144.10628)">
+                        <g transform="matrix(0.82296259,0,0,0.82296259,16.586371,28.163141)">
+                        <line x1="46.658077" y1="152.3084" x2="49.303909" y2="144.3709" stroke="#60a5fa" stroke-width="1.48609" stroke-linecap="round" />
+                        <line x1="50.626827" y1="152.3084" x2="53.272659" y2="144.3709" stroke="#60a5fa" stroke-width="1.48609" stroke-linecap="round" />
+                        <line x1="54.595577" y1="152.3084" x2="57.241409" y2="144.3709" stroke="#60a5fa" stroke-width="1.48609" stroke-linecap="round" />
+                        </g>
+                        <text x="64.649742" y="153.89587" font-family="Arial, sans-serif" font-size="9.525px" fill="#f8fafc" style="stroke-width:0.264583">AkondAstro</text>
+                        <polygon points="500,70 502,76 508,76 503,80 505,86 500,82 495,86 497,80 492,76 498,76 " fill="#60a5fa" transform="matrix(0.26458333,0,0,0.26458333,-16.841949,127.17296)" />
+                    </g>
+                </svg>
+            </a>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- MAIN APP -->
+  @else {
+    <div class="flex h-full w-full flex-col md:flex-row">
+      <!-- Sidebar: Search Filters -->
+      <aside class="w-full md:w-80 bg-space-900 border-r border-space-800 flex flex-col md:h-full z-10 shadow-2xl shrink-0">
+        <!-- Header -->
+        <div class="p-3 md:p-4 border-b border-space-800">
+          <div class="flex justify-between items-center">
+            <div class="flex items-center gap-2 cursor-pointer md:cursor-default" (click)="showFilters.set(!showFilters())">
+              <h1 class="text-lg md:text-xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
+                OCADB Access
+              </h1>
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-500 md:hidden transition-transform" [class.rotate-180]="showFilters()" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+            <button
+              (click)="handleLogout()"
+              class="text-slate-500 hover:text-red-400 transition-colors p-1 rounded hover:bg-space-800"
+              title="Logout"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Filters -->
+        <!-- Collapsible on mobile, always visible on desktop -->
+        <div class="flex-1 overflow-y-auto p-4 space-y-3" [class.hidden]="!showFilters()" [class.md:block]="true">
+          <!-- Object -->
+          <div>
+            <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Object</label>
+            <input
+              type="text"
+              [ngModel]="filters().object ?? ''"
+              (ngModelChange)="updateFilter('object', $event)"
+              (keyup.enter)="search()"
+              placeholder="e.g. V404 Cyg"
+              class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm focus:border-accent-500 focus:outline-none"
+            >
+          </div>
+
+          <!-- Telescope -->
+          <div>
+            <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Telescope</label>
+            <select
+              [ngModel]="filters().telescop ?? ''"
+              (ngModelChange)="onTelescopeChange($event)"
+              class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm focus:border-accent-500 focus:outline-none"
+            >
+              <option value="">All</option>
+              @for (t of telescopes(); track t) {
+                <option [value]="t">{{ t }}</option>
+              }
+            </select>
+          </div>
+
+          <!-- Observation Type -->
+          <div class="flex gap-2">
+            <div class="flex-1">
+              <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Image Type</label>
+              <select
+                [ngModel]="filters().imagetyp ?? ''"
+                (ngModelChange)="updateFilter('imagetyp', $event)"
+                class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm focus:border-accent-500 focus:outline-none"
+              >
+                <option value="">All</option>
+                @for (t of imageTypes(); track t) {
+                  <option [value]="t">{{ t }}</option>
+                }
+              </select>
+            </div>
+            <div class="flex-1">
+              <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Obs Type</label>
+              <select
+                [ngModel]="filters().obstype ?? ''"
+                (ngModelChange)="updateFilter('obstype', $event)"
+                class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm focus:border-accent-500 focus:outline-none"
+              >
+                <option value="">All</option>
+                @for (t of obsTypes(); track t) {
+                  <option [value]="t">{{ t }}</option>
+                }
+              </select>
+            </div>
+          </div>
+
+          <!-- Filter (optical) -->
+          @if (availableFilters().length > 0) {
+            <div>
+              <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Optical Filter</label>
+              <input
+                type="text"
+                [ngModel]="(filters().filter ?? []).join(', ')"
+                (ngModelChange)="updateFilterArray('filter', $event)"
+                placeholder="e.g. V, B, I"
+                class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm focus:border-accent-500 focus:outline-none"
+              >
+              <div class="flex flex-wrap gap-1 mt-1">
+                @for (f of availableFilters(); track f) {
+                  <button
+                    (click)="updateFilter('filter', [f])"
+                    class="text-[10px] px-1.5 py-0.5 rounded bg-space-800 text-slate-400 hover:text-accent-500 hover:bg-space-700 transition-colors"
+                  >{{ f }}</button>
+                }
+              </div>
+            </div>
+          }
+
+          <!-- Date Range -->
+          <div>
+            <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Date Range</label>
+            <div class="flex gap-2">
+              <input
+                type="date"
+                [ngModel]="filters().date_obs_from ?? ''"
+                (ngModelChange)="updateFilter('date_obs_from', $event)"
+                class="flex-1 bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs text-slate-300 focus:border-accent-500 focus:outline-none"
+              >
+              <input
+                type="date"
+                [ngModel]="filters().date_obs_to ?? ''"
+                (ngModelChange)="updateFilter('date_obs_to', $event)"
+                class="flex-1 bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs text-slate-300 focus:border-accent-500 focus:outline-none"
+              >
+            </div>
+          </div>
+
+          <!-- Exposure Time Range -->
+          <div>
+            <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Exp. Time (s)</label>
+            <div class="flex gap-2">
+              <input
+                type="text"
+                [ngModel]="filters().exptime_from ?? ''"
+                (ngModelChange)="updateFilter('exptime_from', $event)"
+                placeholder="from"
+                class="flex-1 bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs focus:border-accent-500 focus:outline-none"
+              >
+              <input
+                type="text"
+                [ngModel]="filters().exptime_to ?? ''"
+                (ngModelChange)="updateFilter('exptime_to', $event)"
+                placeholder="to"
+                class="flex-1 bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs focus:border-accent-500 focus:outline-none"
+              >
+            </div>
+          </div>
+
+          <!-- Program -->
+          <div>
+            <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Program</label>
+            <input
+              type="text"
+              [ngModel]="filters().sciprog ?? ''"
+              (ngModelChange)="updateFilter('sciprog', $event)"
+              (keyup.enter)="search()"
+              placeholder="e.g. CN2025B-123"
+              class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm focus:border-accent-500 focus:outline-none"
+            >
+          </div>
+
+          <!-- PI -->
+          <div>
+            <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">PI</label>
+            <input
+              type="text"
+              [ngModel]="filters().pi ?? ''"
+              (ngModelChange)="updateFilter('pi', $event)"
+              (keyup.enter)="search()"
+              placeholder="Principal Investigator"
+              class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm focus:border-accent-500 focus:outline-none"
+            >
+          </div>
+        </div>
+
+        <!-- Search Actions -->
+        <div class="p-4 border-t border-space-800 space-y-2" [class.hidden]="!showFilters()" [class.md:block]="true">
+          @if (ocadbService.error()) {
+            <div class="p-2 bg-red-900/20 border border-red-800 rounded text-red-300 text-[10px] break-words flex justify-between gap-2 items-start">
+              <span>{{ ocadbService.error() }}</span>
+              <button (click)="ocadbService.clearError()" class="text-red-400 hover:text-white shrink-0">
+                <svg class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+              </button>
+            </div>
+          }
+
+          <div class="flex gap-2">
+            <button
+              (click)="search()"
+              [disabled]="ocadbService.loading()"
+              class="flex-1 py-2 bg-accent-600 hover:bg-accent-500 text-white font-medium rounded text-sm transition-colors flex justify-center items-center gap-2"
+            >
+              @if (ocadbService.loading()) {
+                <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+              }
+              Search
+            </button>
+            <button
+              (click)="clearFilters()"
+              class="px-3 py-2 bg-space-800 hover:bg-space-700 text-slate-400 rounded text-sm transition-colors"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="p-2 border-t border-space-800 flex justify-center" [class.hidden]="!showFilters()" [class.md:block]="true">
+            <a href="https://akond.space/" target="_blank" class="group flex items-center gap-1.5 opacity-70 hover:opacity-100 transition-opacity">
+                <span class="text-[10px] text-slate-600 group-hover:text-slate-400 transition-colors mb-0.5">by</span>
+                <svg viewBox="0 0 67.194 12.425" xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-auto">
+                    <g transform="translate(-52.256057,-144.10628)">
+                        <g transform="matrix(0.82296259,0,0,0.82296259,16.586371,28.163141)">
+                        <line x1="46.658077" y1="152.3084" x2="49.303909" y2="144.3709" stroke="#60a5fa" stroke-width="1.48609" stroke-linecap="round" />
+                        <line x1="50.626827" y1="152.3084" x2="53.272659" y2="144.3709" stroke="#60a5fa" stroke-width="1.48609" stroke-linecap="round" />
+                        <line x1="54.595577" y1="152.3084" x2="57.241409" y2="144.3709" stroke="#60a5fa" stroke-width="1.48609" stroke-linecap="round" />
+                        </g>
+                        <text x="64.649742" y="153.89587" font-family="Arial, sans-serif" font-size="9.525px" fill="#f8fafc" style="stroke-width:0.264583">AkondAstro</text>
+                        <polygon points="500,70 502,76 508,76 503,80 505,86 500,82 495,86 497,80 492,76 498,76 " fill="#60a5fa" transform="matrix(0.26458333,0,0,0.26458333,-16.841949,127.17296)" />
+                    </g>
+                </svg>
+            </a>
+        </div>
+      </aside>
+
+      <!-- Main Content: Results Table + Debug Panel -->
+      <main class="flex-1 min-h-0 bg-space-950 relative overflow-hidden flex flex-col">
+        <!-- Results Count & Pagination Top -->
+        <div class="px-6 py-3 border-b border-space-800 flex justify-between items-center bg-space-900/50">
+          <span class="text-xs text-slate-400">
+            {{ observations().length }} observations
+            @if (observations().length > 0) {
+              <span class="text-slate-600">
+                — page {{ ocadbService.pagination().page }} of {{ totalPages }}
+              </span>
+            }
+          </span>
+
+          @if (totalPages > 1) {
+            <div class="flex items-center gap-1">
+              <button
+                (click)="goToPage(ocadbService.pagination().page - 1)"
+                [disabled]="ocadbService.pagination().page <= 1"
+                class="px-2 py-1 text-xs rounded bg-space-800 text-slate-400 hover:bg-space-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >Prev</button>
+
+              @for (p of [].constructor(totalPages); track $index) {
+                @if ($index + 1 === ocadbService.pagination().page || $index + 1 === 1 || $index + 1 === totalPages || ($index + 1 >= ocadbService.pagination().page - 1 && $index + 1 <= ocadbService.pagination().page + 1)) {
+                  <button
+                    (click)="goToPage($index + 1)"
+                    class="px-2 py-1 text-xs rounded transition-colors"
+                    [class.bg-accent-600]="$index + 1 === ocadbService.pagination().page"
+                    [class.text-white]="$index + 1 === ocadbService.pagination().page"
+                    [class.bg-space-800]="$index + 1 !== ocadbService.pagination().page"
+                    [class.text-slate-400]="$index + 1 !== ocadbService.pagination().page"
+                    [class.hover:bg-space-700]="$index + 1 !== ocadbService.pagination().page"
+                  >{{ $index + 1 }}</button>
+                }
+              }
+
+              <button
+                (click)="goToPage(ocadbService.pagination().page + 1)"
+                [disabled]="ocadbService.pagination().page >= totalPages"
+                class="px-2 py-1 text-xs rounded bg-space-800 text-slate-400 hover:bg-space-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >Next</button>
+            </div>
+          }
+        </div>
+
+        <!-- Table -->
+        <div class="flex-1 overflow-auto">
+          @if (displayedObservations().length === 0 && !ocadbService.loading()) {
+            <div class="h-full flex flex-col items-center justify-center text-slate-500">
+              @if (!hasSearched()) {
+                <p class="text-lg">Set filters and search</p>
+                <p class="text-sm text-slate-600">Use the panel on the left to narrow down observations.</p>
+              } @else {
+                <p class="text-lg">No observations found.</p>
+                <p class="text-sm">Adjust filters and try again.</p>
+              }
+            </div>
+          } @else {
+            <table class="w-full text-left text-xs text-slate-300">
+              <thead class="bg-space-900 text-[10px] uppercase font-medium text-slate-500 sticky top-0 z-10">
+                <tr>
+                  <th class="px-4 py-2 border-b border-space-800">Object</th>
+                  <th class="px-4 py-2 border-b border-space-800">Date-Obs</th>
+                  <th class="px-4 py-2 border-b border-space-800">Telescope</th>
+                  <th class="px-4 py-2 border-b border-space-800">Filter</th>
+                  <th class="px-4 py-2 border-b border-space-800 text-right">Exp (s)</th>
+                  <th class="px-4 py-2 border-b border-space-800">Type</th>
+                  <th class="px-4 py-2 border-b border-space-800 text-right">Airmass</th>
+                  <th class="px-4 py-2 border-b border-space-800">Files</th>
+                  <th class="px-4 py-2 border-b border-space-800">Obs Name</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-space-800/50">
+                @for (obs of displayedObservations(); track obs._id ?? $index) {
+                  <tr class="hover:bg-space-800/30 transition-colors">
+                    <td class="px-4 py-2 font-medium text-slate-200 whitespace-nowrap">
+                      {{ obs.fits_header['OBJECT'] ?? '—' }}
+                    </td>
+                    <td class="px-4 py-2 whitespace-nowrap font-mono text-slate-400">
+                      {{ obs.fits_header['DATE-OBS']?.substring(0, 19) ?? '—' }}
+                    </td>
+                    <td class="px-4 py-2 whitespace-nowrap">
+                      {{ obs.fits_header['TELESCOP'] ?? '—' }}
+                    </td>
+                    <td class="px-4 py-2 whitespace-nowrap">
+                      {{ obs.fits_header['FILTER'] ?? '—' }}
+                    </td>
+                    <td class="px-4 py-2 text-right font-mono whitespace-nowrap">
+                      {{ obs.fits_header['EXPTIME'] != null ? obs.fits_header['EXPTIME'].toFixed(1) : '—' }}
+                    </td>
+                    <td class="px-4 py-2 whitespace-nowrap">
+                      <span class="px-1.5 py-0.5 rounded text-[10px] font-medium"
+                        [class.bg-blue-900/30]="obs.fits_header['OBSTYPE'] === 'science'"
+                        [class.text-blue-300]="obs.fits_header['OBSTYPE'] === 'science'"
+                        [class.bg-amber-900/30]="obs.fits_header['OBSTYPE'] === 'calib'"
+                        [class.text-amber-300]="obs.fits_header['OBSTYPE'] === 'calib'"
+                        [class.bg-space-800]="obs.fits_header['OBSTYPE'] !== 'science' && obs.fits_header['OBSTYPE'] !== 'calib'"
+                        [class.text-slate-400]="obs.fits_header['OBSTYPE'] !== 'science' && obs.fits_header['OBSTYPE'] !== 'calib'"
+                      >
+                        {{ obs.fits_header['IMAGETYP'] ?? obs.fits_header['OBSTYPE'] ?? '—' }}
+                      </span>
+                    </td>
+                    <td class="px-4 py-2 text-right font-mono whitespace-nowrap">
+                      {{ obs.fits_header['AIRMASS'] != null ? obs.fits_header['AIRMASS'].toFixed(3) : '—' }}
+                    </td>
+                    <td class="px-4 py-2 whitespace-nowrap">
+                      <div class="flex flex-wrap gap-1">
+                        @for (file of obs.files; track $index) {
+                          <span class="px-1.5 py-0.5 rounded text-[10px] font-medium border"
+                            [class]="getFileBadgeClass(file)">
+                            {{ getFileLabel(file) }}
+                          </span>
+                        }
+                        @if (obs.files.length === 0) {
+                          <span class="text-slate-600 text-[10px]">—</span>
+                        }
+                      </div>
+                    </td>
+                    <td class="px-4 py-2 whitespace-nowrap font-mono text-slate-500 text-[10px]">
+                      {{ obs.obs_name }}
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        </div>
+
+        <!-- Pagination Bottom -->
+        @if (totalPages > 1) {
+          <div class="px-6 py-2 border-t border-space-800 flex justify-center items-center bg-space-900/50">
+            <div class="flex items-center gap-1">
+              <button
+                (click)="goToPage(ocadbService.pagination().page - 1)"
+                [disabled]="ocadbService.pagination().page <= 1"
+                class="px-2 py-1 text-xs rounded bg-space-800 text-slate-400 hover:bg-space-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >Prev</button>
+              <span class="text-xs text-slate-500 px-2">{{ ocadbService.pagination().page }} / {{ totalPages }}</span>
+              <button
+                (click)="goToPage(ocadbService.pagination().page + 1)"
+                [disabled]="ocadbService.pagination().page >= totalPages"
+                class="px-2 py-1 text-xs rounded bg-space-800 text-slate-400 hover:bg-space-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >Next</button>
+            </div>
+          </div>
+        }
+        <!-- Debug Panel -->
+        <div class="border-t border-space-700 bg-space-900 flex flex-col"
+          [class.h-8]="!showDebugPanel()"
+          [class.h-64]="showDebugPanel()">
+          <!-- Debug Header -->
+          <div class="flex items-center justify-between px-3 py-1 border-b border-space-800 shrink-0 cursor-pointer select-none"
+            (click)="showDebugPanel.set(!showDebugPanel())">
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] font-mono font-bold text-amber-500/80 uppercase tracking-widest">API Log</span>
+              <span class="text-[10px] text-slate-600">{{ apiLog.entries().length }} calls</span>
+            </div>
+            <div class="flex items-center gap-2">
+              @if (showDebugPanel()) {
+                <button (click)="apiLog.clear(); $event.stopPropagation()"
+                  class="text-[10px] text-slate-600 hover:text-slate-400 transition-colors px-1">Clear</button>
+              }
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-slate-600 transition-transform"
+                [class.rotate-180]="!showDebugPanel()" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </div>
+          <!-- Debug Entries -->
+          @if (showDebugPanel()) {
+            <div class="flex-1 overflow-y-auto font-mono text-[11px]">
+              @for (entry of apiLog.entries().slice().reverse(); track entry.id) {
+                <div class="border-b border-space-800/50 hover:bg-space-800/30">
+                  <!-- Summary Row -->
+                  <div class="flex items-center gap-2 px-3 py-1 cursor-pointer" (click)="toggleLogEntry(entry.id)">
+                    <span class="text-slate-600 w-16 shrink-0">{{ entry.timestamp | date:'HH:mm:ss' }}</span>
+                    <span class="font-bold w-10 shrink-0"
+                      [class.text-blue-400]="entry.method === 'POST'"
+                      [class.text-emerald-400]="entry.method === 'GET'"
+                      [class.text-amber-400]="entry.method === 'PUT'"
+                      [class.text-red-400]="entry.method === 'DELETE'"
+                    >{{ entry.method }}</span>
+                    <span class="text-slate-400 truncate flex-1">{{ entry.url }}</span>
+                    <span class="shrink-0 w-8 text-right" [class]="getStatusClass(entry)">
+                      {{ entry.error ? 'ERR' : entry.status ?? '...' }}
+                    </span>
+                    <span class="text-slate-600 w-12 text-right shrink-0">
+                      {{ entry.durationMs != null ? entry.durationMs + 'ms' : '' }}
+                    </span>
+                  </div>
+                  <!-- Expanded Detail -->
+                  @if (expandedLogEntry() === entry.id) {
+                    <div class="px-3 pb-2 space-y-1.5">
+                      <!-- Request Headers (collapsed) -->
+                      <div>
+                        <button (click)="toggleLogSection('reqH'); $event.stopPropagation()"
+                          class="text-[10px] uppercase text-slate-600 hover:text-slate-400 flex items-center gap-1">
+                          <svg class="w-2.5 h-2.5 transition-transform" [class.rotate-90]="expandedLogSections()['reqH']" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M6 4l8 6-8 6V4z"/>
+                          </svg>
+                          Request Headers
+                          <span class="text-slate-700">({{ headerEntries(entry.requestHeaders).length }})</span>
+                        </button>
+                        @if (expandedLogSections()['reqH']) {
+                          <div class="bg-space-950 rounded p-2 mt-0.5 text-[10px]">
+                            @for (h of headerEntries(entry.requestHeaders); track h[0]) {
+                              <div class="flex gap-2">
+                                <span class="text-blue-400/70 shrink-0">{{ h[0] }}:</span>
+                                <span class="text-slate-400 break-all">{{ h[1] }}</span>
+                              </div>
+                            }
+                          </div>
+                        }
+                      </div>
+                      <!-- Request Body -->
+                      @if (entry.requestBody) {
+                        <div>
+                          <span class="text-[10px] uppercase text-slate-600">Request Body</span>
+                          <pre class="text-slate-400 text-[10px] whitespace-pre-wrap break-all bg-space-950 rounded p-2 mt-0.5 max-h-28 overflow-auto">{{ entry.requestBody }}</pre>
+                        </div>
+                      }
+                      <!-- Response Headers (collapsed) -->
+                      @if (headerEntries(entry.responseHeaders).length > 0) {
+                        <div>
+                          <button (click)="toggleLogSection('resH'); $event.stopPropagation()"
+                            class="text-[10px] uppercase text-slate-600 hover:text-slate-400 flex items-center gap-1">
+                            <svg class="w-2.5 h-2.5 transition-transform" [class.rotate-90]="expandedLogSections()['resH']" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M6 4l8 6-8 6V4z"/>
+                            </svg>
+                            Response Headers
+                            <span class="text-slate-700">({{ headerEntries(entry.responseHeaders).length }})</span>
+                          </button>
+                          @if (expandedLogSections()['resH']) {
+                            <div class="bg-space-950 rounded p-2 mt-0.5 text-[10px]">
+                              @for (h of headerEntries(entry.responseHeaders); track h[0]) {
+                                <div class="flex gap-2">
+                                  <span class="text-emerald-400/70 shrink-0">{{ h[0] }}:</span>
+                                  <span class="text-slate-400 break-all">{{ h[1] }}</span>
+                                </div>
+                              }
+                            </div>
+                          }
+                        </div>
+                      }
+                      <!-- Response Body -->
+                      @if (entry.responseBody) {
+                        <div>
+                          <span class="text-[10px] uppercase text-slate-600">Response Body</span>
+                          <pre class="text-emerald-300/60 text-[10px] whitespace-pre-wrap break-all bg-space-950 rounded p-2 mt-0.5 max-h-64 overflow-auto">{{ entry.responseBody }}</pre>
+                        </div>
+                      }
+                      <!-- Error -->
+                      @if (entry.error) {
+                        <div>
+                          <span class="text-red-600 text-[10px] uppercase">Error</span>
+                          <pre class="text-red-400 text-[10px] whitespace-pre-wrap break-all bg-red-950/30 rounded p-2 mt-0.5">{{ entry.error }}</pre>
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+              @if (apiLog.entries().length === 0) {
+                <div class="text-center text-slate-600 py-4 text-[10px]">No API calls yet</div>
+              }
+            </div>
+          }
+        </div>
+      </main>
+    </div>
+  }
+</div>

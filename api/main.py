@@ -1,5 +1,4 @@
 # api/main.py
-import os
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -10,6 +9,47 @@ from api.config import Settings
 
 log = logging.getLogger(__name__.rsplit('.')[-1])
 
+
+async def _seed_dev_database() -> None:
+    """Seed a fresh database with a dev user and sample observations.
+
+    Runs on startup only when the users collection is empty, so it
+    never touches production databases.  Gives new developers a
+    working login and data to search right after ``docker compose up``.
+    """
+    import json
+    from pathlib import Path
+    from ocadb.models import UserInDB, Observation
+    from api.services.crypto_service import CryptoService
+
+    if await UserInDB.count() > 0:
+        return
+
+    log.info("Empty database detected — seeding dev user (dev / dev) and sample observations")
+    user = UserInDB(
+        username="dev",
+        email="dev@localhost",
+        full_name="Developer",
+        hashed_password=CryptoService.get_password_hash("dev"),
+        moderator=True,
+        access_tags=["CAMK PAN"],
+    )
+    await user.insert()
+
+    seed_file = Path(__file__).resolve().parent.parent / "dev" / "seed_observations.json"
+    if seed_file.exists():
+        raw = json.loads(seed_file.read_text())
+        for entry in raw:
+            try:
+                obs = Observation(**entry)
+                await obs.insert()
+            except Exception as e:
+                log.warning("Seed observation %s skipped: %s", entry.get("obs_name"), e)
+        log.info("Seeded %d sample observations", len(raw))
+    else:
+        log.info("No seed file found at %s, skipping observation seed", seed_file)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -18,6 +58,7 @@ async def lifespan(app: FastAPI):
     database_name = env_settings.MONGODB_DATABASE
 
     await database.Connection().ensure_connection(mongo_url, database_name)
+    await _seed_dev_database()
     yield
     # Shutdown (if needed)
 

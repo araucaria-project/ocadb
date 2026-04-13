@@ -1,4 +1,4 @@
-# Development, runs mongodb,  fastapi app from api folder and vuejs web-app app from frontend folder
+# Development: MongoDB, FastAPI backend, Angular frontend, Mongo Express admin
 services:
   mongodb:
     image: mongo:latest
@@ -14,14 +14,16 @@ services:
       ME_CONFIG_MONGODB_SERVER: mongodb
     ports:
       - "8083:8081"
-  vuejs:
-    image: node:20
+  frontend:
+    image: node:22
     volumes:
       - ./frontend:/app
     working_dir: /app
-    command: bash -c "npm install && npm run serve"
+    command: bash -c "npm install && npx ng serve --host 0.0.0.0 --port 8085 --configuration=local"
     ports:
-      - "8085:8080"
+      - "8085:8085"
+    depends_on:
+      - fastapi
   fastapi:
     build:
       context: .
@@ -32,10 +34,10 @@ services:
     ports:
       - "8084:8000"
     environment:
-      - MONGODB_URL=mongodb://mongodb:27017
-      - MONGODB_DATABASE=ocadb
+      - ocadb.MONGODB_URL=mongodb://mongodb:27017
+      - ocadb.MONGODB_DATABASE=ocadb
     depends_on:
       - mongodb
-      
+
 volumes:
   mongodbdata:

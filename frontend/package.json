@@ -1,43 +1,30 @@
 {
-  "name": "app",
-  "version": "0.1.0",
+  "name": "ocadb-frontend",
   "private": true,
+  "version": "1.0.0",
+  "type": "module",
   "scripts": {
-    "serve": "vue-cli-service serve",
-    "build": "vue-cli-service build",
-    "lint": "vue-cli-service lint"
+    "dev": "ng serve",
+    "dev:local": "ng serve --configuration=local",
+    "dev:remote": "ng serve --configuration=remote",
+    "build": "ng build",
+    "preview": "ng serve --configuration=production"
   },
   "dependencies": {
-    "core-js": "^3.8.3",
-    "vue": "^3.2.13"
+    "rxjs": "^7.8.2",
+    "@angular/compiler": "^21.1.0",
+    "@angular/platform-browser": "^21.1.0",
+    "@angular/core": "^21.1.0",
+    "@angular/common": "^21.1.0",
+    "@angular/forms": "^21.1.3",
+    "@angular/build": "^21.1.0",
+    "@angular/cli": "^21.1.0",
+    "@angular/compiler-cli": "^21.1.0",
+    "tailwindcss": "latest"
   },
   "devDependencies": {
-    "@babel/core": "^7.12.16",
-    "@babel/eslint-parser": "^7.12.16",
-    "@vue/cli-plugin-babel": "~5.0.0",
-    "@vue/cli-plugin-eslint": "~5.0.0",
-    "@vue/cli-service": "~5.0.0",
-    "eslint": "^7.32.0",
-    "eslint-plugin-vue": "^8.0.3"
-  },
-  "eslintConfig": {
-    "root": true,
-    "env": {
-      "node": true
-    },
-    "extends": [
-      "plugin:vue/vue3-essential",
-      "eslint:recommended"
-    ],
-    "parserOptions": {
-      "parser": "@babel/eslint-parser"
-    },
-    "rules": {}
-  },
-  "browserslist": [
-    "> 1%",
-    "last 2 versions",
-    "not dead",
-    "not ie 11"
-  ]
+    "@types/node": "^22.14.0",
+    "typescript": "^5.9.0",
+    "vite": "^6.2.0"
+  }
 }
