@@ -32,6 +32,7 @@ pydantic-settings = "^2.2.1"
 motor = "^3.4.0"  # driver for mongodb used by api and conamdline
 typer = "^0.16.0"
 pyaraucaria = {git = "https://github.com/araucaria-project/pyaraucaria.git"}
+ocafitsfiles = {git = "https://github.com/araucaria-project/ocafitsfiles.git"}
 aioboto3 = "^15.2.0"
 
 [tool.poetry.extras]

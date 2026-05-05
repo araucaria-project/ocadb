@@ -89,6 +89,7 @@ async def upsert_fitsfile(
                 "fits_header": file_data.fits_header,
                 "file_status": file_data.file_status,
                 "metadata": file_data.metadata,
+                "access_tags": file_data.access_tags,
                 "updated_at": datetime.utcnow(),
             },
             "$setOnInsert": {
@@ -292,7 +293,8 @@ async def update_file_status_by_stage(
     if file is None:
         raise HTTPException(status_code=404, detail="File not found")
 
-    file.file_status[storage_stage_name] = file_location_status
-    file.replace()
+    file.file_status = file.file_status.model_copy(update={storage_stage_name: file_location_status})
+    file.updated_at = datetime.utcnow()
+    await file.replace()
 
     return file

@@ -153,6 +153,12 @@ class FITSFile(Document):
     # Storage tracking
     file_status: StorageStatus = Field(..., description="Storage status across all locations")
 
+    # Access control — denormalized from parent Observation for aggregation filtering
+    access_tags: List[str] = Field(
+        default_factory=list,
+        description="Access control tags inherited from parent observation (INSTRUME, ORIGIN, PI)"
+    )
+
     # Timestamps
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
@@ -184,6 +190,7 @@ class FITSFile(Document):
             IndexModel([("file_status.cloud.check_needed", pymongo.ASCENDING)]),
             IndexModel([("file_status.cloud.ready", pymongo.ASCENDING)]),
             IndexModel([("file_status.cloud.status", pymongo.ASCENDING)]),
+            IndexModel([("access_tags", pymongo.ASCENDING)]),
             IndexModel([("created_at", pymongo.DESCENDING)]),
         ]
         validate_assignment = True

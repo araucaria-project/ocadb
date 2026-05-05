@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str = "fallback-secret-key-for-development-only"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: str = "30"
+    REFRESH_TOKEN_EXPIRE_DAYS: str = "7"
 
     # administration information
     app_name: str = "ocadb_api"

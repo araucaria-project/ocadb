@@ -4,6 +4,7 @@ from pathlib import Path
 from beanie.odm.operators.find.comparison import In
 from beanie.odm.operators.find.geospatial import NearSphere, GeoWithin
 from fastapi import APIRouter, HTTPException, status, Body, Depends
+from fastapi.responses import Response
 from beanie import PydanticObjectId, exceptions
 from typing import List, Annotated, Dict, Any, Tuple, Optional, Union
 from datetime import datetime, timedelta
@@ -22,6 +23,7 @@ from ocadb.models.s3_presigned_url import S3PresignedUrl, S3PresignedUrlBatchLis
 from api.services.auth_service import AuthService
 from api.routers.api_auth import read_users_me
 from api.services.s3_api_service import S3Connection
+from api.schemas import DownloadScriptRequest
 
 
 
@@ -252,6 +254,10 @@ async def search_multi(
         observations = observations.find(math.floor(Observation.fits_header.JD) >= search_form.jd_from)
     if search_form.jd_to is not None:
         observations = observations.find(math.floor(Observation.fits_header.JD) >= search_form.jd_to)
+    if search_form.cone_search is not None:
+        observations = observations.find(
+        OcaWithin(Observation.telescope_coordinates.lon_lat, (search_form.cone_search.get_ref_lon(), search_form.cone_search.get_ref_lat()),
+                  search_form.cone_search.rad_distance()))
 
     observations = await observations.find(fetch_links=True).aggregate(AggregationQueryBuilder.aggregate(match_query={}, access_tags=user.access_tags, page=page, page_size=page_size)).to_list()
 
@@ -309,3 +315,47 @@ async def get_values_telescope_filter(
     # values = Observation.find(Observation.fits_header.TELESCOP == telescope).distinct("fits_header.FILTER")
     values = Observation.distinct("fits_header.FILTER")
     return values
+
+
+@router.post("/download-script", response_description="Generate a POSIX shell download script for selected observations")
+async def generate_download_script(
+        request: Annotated[DownloadScriptRequest, Body(...)],
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    """Generate a self-contained shell script that downloads FITS files for the given observations.
+
+    File classes are filtered server-side; the script embeds the authenticated user's username
+    and handles password acquisition and token refresh at runtime.
+    """
+    from ocafitsfiles import render_download_script
+
+    user = await read_users_me(token)
+
+    try:
+        obs_ids = [PydanticObjectId(oid) for oid in request.obs_ids]
+    except Exception:
+        raise HTTPException(status_code=422, detail="One or more observation IDs are invalid")
+
+    observations = await Observation.find(In(Observation.id, obs_ids)).to_list()
+
+    if not observations:
+        raise HTTPException(status_code=404, detail="No observations found for the given IDs")
+
+    filenames: List[str] = []
+    for obs in observations:
+        await obs.fetch_all_links()
+        for f in obs.files:
+            filenames.append(f.filename)
+
+    if not filenames:
+        raise HTTPException(status_code=404, detail="No files found for the selected observations")
+
+    data_block = "\n".join(filenames)
+    script_username = request.username or user.username
+    script = render_download_script(data_block, username=script_username)
+
+    return Response(
+        content=script,
+        media_type="text/x-shellscript",
+        headers={"Content-Disposition": "attachment; filename=download.sh"}
+    )

@@ -1,5 +1,6 @@
 import os
 import logging
+import hashlib
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
@@ -10,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 from api.services.crypto_service import CryptoService
 from api.services.database_connection import DatabaseConnection
 from api.schemas import TokenData
+from ocadb.models.refresh_token import RefreshTokenDocument
 
 from api import config
 
@@ -44,6 +46,44 @@ class AuthService:
         if not CryptoService.verify_password(password, user.hashed_password):
             return False
         return user
+
+    @staticmethod
+    async def create_refresh_token(username: str, expire_days: int) -> str:
+        raw, token_hash = RefreshTokenDocument.generate()
+        now = datetime.now(timezone.utc)
+        await RefreshTokenDocument(
+            token_hash=token_hash,
+            username=username,
+            issued_at=now,
+            expires_at=now + timedelta(days=expire_days),
+        ).insert()
+        return raw
+
+    @staticmethod
+    async def rotate_refresh_token(raw_token: str, expire_days: int) -> tuple[str, str]:
+        token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+        doc = await RefreshTokenDocument.find_one(RefreshTokenDocument.token_hash == token_hash)
+        if doc is None or doc.revoked:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or revoked refresh token",
+            )
+        expires_at = doc.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) > expires_at:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Refresh token expired",
+            )
+        doc.revoked = True
+        await doc.replace()
+        access_token = AuthService.create_access_token(
+            data={"sub": doc.username},
+            expires_delta=timedelta(minutes=AuthService.ACCESS_TOKEN_EXPIRE_MINUTES),
+        )
+        new_refresh = await AuthService.create_refresh_token(doc.username, expire_days)
+        return access_token, new_refresh
 
     @staticmethod
     async def validate_token(token: Annotated[str, Depends(oauth2_scheme)]):

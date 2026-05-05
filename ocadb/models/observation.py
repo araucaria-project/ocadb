@@ -3,7 +3,7 @@ import array
 import pymongo
 from astropy.units.quantity_helper.function_helpers import unique
 from attr.filters import exclude
-from beanie import Document, Indexed, PydanticObjectId, Link
+from beanie import Document, Indexed, PydanticObjectId, Link, after_event, Replace, Update, Insert
 from pyaraucaria.fits import fits_header
 from pydantic import BaseModel, Field, model_validator, PrivateAttr
 from typing import Optional, Dict, Any, Annotated, List
@@ -109,6 +109,19 @@ class Observation(Document):
             self.access_tags.append(self.fits_header.PI)
 
         return self
+
+    @after_event(Insert, Replace, Update)
+    async def propagate_access_tags(self):
+        """Propagate access_tags to all linked FITSFile documents after any write."""
+        if not self.files:
+            return
+        file_ids = [
+            f.id if isinstance(f, FITSFile) else f.ref.id
+            for f in self.files
+        ]
+        await FITSFile.find({"_id": {"$in": file_ids}}).update_many(
+            {"$set": {"access_tags": self.access_tags}}
+        )
 
     # Processing timestamps
     created_at: Optional[datetime] = Field(default_factory=datetime.utcnow, description="Record creation time")

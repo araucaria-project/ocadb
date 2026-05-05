@@ -6,12 +6,15 @@ from fastapi.security import OAuth2PasswordRequestFormStrict
 from pydantic import BaseModel
 
 from api.services.auth_service import AuthService
-from api.schemas import Token
+from api.schemas import Token, TokenPair, RefreshRequest
+from api import config
 from ocadb.models import User, UserInDB
 from api.services.database_connection import DatabaseConnection
 from api.services.crypto_service import CryptoService
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
+
+_REFRESH_EXPIRE_DAYS = int(config.Settings().REFRESH_TOKEN_EXPIRE_DAYS)
 
 
 class UserCreate(BaseModel):
@@ -42,7 +45,7 @@ async def login_for_plain_access_token(
 @router.post("/token/")
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestFormStrict, Depends()]
-) -> Token:
+) -> TokenPair:
     user = await AuthService.authenticate_user(form_data.username, form_data.password)
     if not user:
         raise HTTPException(
@@ -54,7 +57,14 @@ async def login_for_access_token(
     access_token = AuthService.create_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
-    return Token(access_token=access_token, token_type="bearer")
+    refresh_token = await AuthService.create_refresh_token(user.username, _REFRESH_EXPIRE_DAYS)
+    return TokenPair(access_token=access_token, refresh_token=refresh_token, token_type="bearer")
+
+
+@router.post("/refresh/")
+async def refresh_access_token(body: RefreshRequest) -> TokenPair:
+    new_access, new_refresh = await AuthService.rotate_refresh_token(body.refresh_token, _REFRESH_EXPIRE_DAYS)
+    return TokenPair(access_token=new_access, refresh_token=new_refresh, token_type="bearer")
 
 
 @router.post("/register/", response_model=User)

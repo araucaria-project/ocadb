@@ -2,6 +2,41 @@ import { Injectable, signal, computed, inject } from '@angular/core';
 import { environment } from '../environments/environment';
 import { ApiLogService } from './api-log.service';
 
+export type FileClassification = 'raw' | 'zdf' | 'master' | 'source' | 'tmp' | 'test';
+export type StorageStatusType = 'not_stored' | 'deleted' | 'stored' | 'corrupted' | 'requested' | 'scheduled' | 'queued' | 'storing';
+
+export interface StorageLocationStatus {
+  ready: boolean;
+  check_needed: boolean;
+  status: StorageStatusType;
+  expected_time?: string | null;
+}
+
+export interface StorageStatus {
+  observatory: StorageLocationStatus;
+  hub: StorageLocationStatus;
+  cloud: StorageLocationStatus;
+}
+
+export interface FitsFile {
+  _id?: string | null;
+  filename: string;
+  file_class: FileClassification;
+  path?: string | null;
+  filesize?: number | null;
+  mtime?: string | null;
+  digest?: string | null;
+  observation_id?: string | null;
+  obs_name: string;
+  source_filenames: string[];
+  fits_header?: FitsHeader | null;
+  file_status: StorageStatus;
+  access_tags: string[];
+  created_at?: string | null;
+  updated_at?: string | null;
+  metadata: Record<string, any>;
+}
+
 export interface FitsHeader {
   OBJECT?: string | null;
   TELESCOP?: string | null;
@@ -27,7 +62,7 @@ export interface Observation {
   obs_name: string;
   file_name?: string | null;
   object_id?: string | null;
-  files: any[];
+  files: FitsFile[];
   fits_header: FitsHeader;
   metadata: Record<string, any>;
   created_at?: string | null;
@@ -65,12 +100,15 @@ export interface PaginationState {
 })
 export class OcadbService {
   private readonly baseUrl = environment.apiBaseUrl;
+  private readonly v2BaseUrl = environment.apiV2BaseUrl;
   private readonly apiLog = inject(ApiLogService);
 
   loading = signal(false);
   error = signal<string | null>(null);
 
   token = signal<string | null>(null);
+  refreshToken = signal<string | null>(null);
+  currentUser = signal<string | null>(null);
   lastRequestInfo = signal('System initialized');
   isAuthenticated = computed(() => !!this.token());
 
@@ -78,8 +116,12 @@ export class OcadbService {
 
   constructor() {
     const savedToken = localStorage.getItem('ocadb_token');
+    const savedRefresh = localStorage.getItem('ocadb_refresh_token');
+    const savedUser = localStorage.getItem('ocadb_user');
     if (savedToken) {
       this.token.set(savedToken);
+      this.refreshToken.set(savedRefresh);
+      this.currentUser.set(savedUser);
       this.lastRequestInfo.set('Session restored from local storage');
     }
   }
@@ -122,7 +164,11 @@ export class OcadbService {
       if (!data.access_token) throw new Error('Invalid server response: no access token.');
 
       this.token.set(data.access_token);
+      this.refreshToken.set(data.refresh_token ?? null);
+      this.currentUser.set(username);
       localStorage.setItem('ocadb_token', data.access_token);
+      if (data.refresh_token) localStorage.setItem('ocadb_refresh_token', data.refresh_token);
+      localStorage.setItem('ocadb_user', username);
       this.lastRequestInfo.set('Login successful.');
       this.loading.set(false);
       return true;
@@ -134,12 +180,46 @@ export class OcadbService {
 
   logout() {
     this.token.set(null);
+    this.refreshToken.set(null);
+    this.currentUser.set(null);
     localStorage.removeItem('ocadb_token');
+    localStorage.removeItem('ocadb_refresh_token');
+    localStorage.removeItem('ocadb_user');
     this.error.set(null);
     this.lastRequestInfo.set('User logged out');
   }
 
-  async searchObservations(filters: SearchFilters): Promise<Observation[]> {
+  private async authenticatedFetch(url: string, init?: RequestInit): Promise<Response> {
+    const response = await this.loggedFetch(url, { ...init, headers: this.authHeaders() });
+    if (response.status !== 401 && response.status !== 403) return response;
+    const refreshed = await this.tryRefresh();
+    if (refreshed) return this.loggedFetch(url, { ...init, headers: this.authHeaders() });
+    this.logout();
+    return response;
+  }
+
+  private async tryRefresh(): Promise<boolean> {
+    const rt = this.refreshToken();
+    if (!rt) return false;
+    try {
+      const res = await this.loggedFetch(`${this.baseUrl}/auth/refresh/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: rt })
+      });
+      if (!res.ok) return false;
+      const data = await res.json();
+      this.token.set(data.access_token);
+      this.refreshToken.set(data.refresh_token ?? null);
+      localStorage.setItem('ocadb_token', data.access_token);
+      if (data.refresh_token) localStorage.setItem('ocadb_refresh_token', data.refresh_token);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async searchObservations(filters: SearchFilters, page?: number): Promise<Observation[]> {
     if (!this.token()) {
       this.error.set('You must be logged in to search.');
       return [];
@@ -155,6 +235,7 @@ export class OcadbService {
 
     try {
       const pag = this.pagination();
+      const currentPage = page ?? pag.page;
       const body: Record<string, any> = {};
 
       if (filters.telescop) body.telescop = filters.telescop;
@@ -170,24 +251,22 @@ export class OcadbService {
       if (filters.sciprog) body.sciprog = filters.sciprog;
       if (filters.cone_search) body.cone_search = filters.cone_search;
 
-      const url = `${this.baseUrl}/observations/search`;
-      this.lastRequestInfo.set(`POST /observations/search ${JSON.stringify(body)}`);
+      const url = `${this.v2BaseUrl}/observations/search?page=${currentPage}&page_size=${pag.pageSize}`;
+      this.lastRequestInfo.set(`POST /api/v2/observations/search (page ${currentPage})`);
 
-      const response = await this.loggedFetch(url, {
+      const response = await this.authenticatedFetch(url, {
         method: 'POST',
-        headers: this.authHeaders(),
         body: JSON.stringify(body)
       });
 
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
-          this.logout();
           throw new Error('Session expired. Please login again.');
         }
         if (response.status === 404) {
           this.lastRequestInfo.set('No results found');
           this.loading.set(false);
-          this.pagination.update(p => ({ ...p, total: 0 }));
+          this.pagination.update(p => ({ ...p, total: 0, page: 1 }));
           return [];
         }
         if (response.status === 422) {
@@ -200,11 +279,12 @@ export class OcadbService {
         throw new Error(`API Error: ${response.status} ${response.statusText}`);
       }
 
-      const data: Observation[] = await response.json();
-      this.pagination.update(p => ({ ...p, total: data.length }));
-      this.lastRequestInfo.set(`Loaded ${data.length} observations`);
+      const result: { data: Observation[]; metadata: { total_count: number }[] } = await response.json();
+      const total = result.metadata?.[0]?.total_count ?? 0;
+      this.pagination.update(p => ({ ...p, total, page: currentPage }));
+      this.lastRequestInfo.set(`Loaded ${result.data.length} of ${total} observations (page ${currentPage})`);
       this.loading.set(false);
-      return data;
+      return result.data ?? [];
     } catch (e: any) {
       this.handleFetchError(e, 'Search');
       return [];
@@ -213,11 +293,8 @@ export class OcadbService {
 
   async fetchValuesList(field: 'telescop' | 'imagetyp' | 'obstype' | 'pi' | 'object'): Promise<string[]> {
     if (!this.token()) return [];
-
     try {
-      const response = await this.loggedFetch(`${this.baseUrl}/observations/values/${field}`, {
-        headers: this.authHeaders()
-      });
+      const response = await this.authenticatedFetch(`${this.v2BaseUrl}/observations/values/${field}`);
       if (!response.ok) return [];
       return await response.json();
     } catch {
@@ -225,13 +302,45 @@ export class OcadbService {
     }
   }
 
+  async fetchPresignedUrl(filename: string, expiresIn?: number): Promise<string | null> {
+    try {
+      let url = `${this.v2BaseUrl}/files/by-filename/${encodeURIComponent(filename)}/plainurl`;
+      if (expiresIn != null) url += `?expires_in=${expiresIn}`;
+      const response = await this.authenticatedFetch(url);
+      if (!response.ok) return null;
+      return await response.json();
+    } catch {
+      return null;
+    }
+  }
+
+  async downloadScript(ids: string[], username?: string): Promise<void> {
+    try {
+      const response = await this.authenticatedFetch(`${this.v2BaseUrl}/observations/download-script`, {
+        method: 'POST',
+        body: JSON.stringify({ obs_ids: ids, ...(username ? { username } : {}) })
+      });
+      if (!response.ok) {
+        const msg = await this.extractErrorMessage(response, `Download script failed (${response.status})`);
+        this.error.set(msg);
+        return;
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'download.sh';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      this.handleFetchError(e, 'Download script');
+    }
+  }
+
   async fetchTelescopeFilters(telescope: string): Promise<string[]> {
     if (!this.token() || !telescope) return [];
-
     try {
-      const response = await this.loggedFetch(`${this.baseUrl}/observations/values/${telescope}/filter`, {
-        headers: this.authHeaders()
-      });
+      const response = await this.authenticatedFetch(`${this.v2BaseUrl}/observations/values/${telescope}/filter`);
       if (!response.ok) return [];
       return await response.json();
     } catch {

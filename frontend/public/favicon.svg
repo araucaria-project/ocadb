@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="1.8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <linearGradient id="sh" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0"/>
+      <stop offset="50%" stop-color="#38bdf8" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="sv" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0"/>
+      <stop offset="50%" stop-color="#38bdf8" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="32" height="32" rx="7" fill="#0b0d17"/>
+
+  <!-- Diffraction spikes -->
+  <rect x="3" y="15.4" width="26" height="1.2" rx="0.6" fill="url(#sh)" filter="url(#glow)"/>
+  <rect x="15.4" y="3" width="1.2" height="26" rx="0.6" fill="url(#sv)" filter="url(#glow)"/>
+
+  <!-- Center dot: glow layer + crisp core -->
+  <circle cx="16" cy="16" r="3.2" fill="white" filter="url(#glow)"/>
+  <circle cx="16" cy="16" r="2" fill="#e0f2fe"/>
+</svg>

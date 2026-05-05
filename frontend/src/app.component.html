@@ -97,6 +97,9 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
               </svg>
             </div>
+            @if (ocadbService.currentUser()) {
+              <span class="text-xs text-slate-400 truncate max-w-[120px]">{{ ocadbService.currentUser() }}</span>
+            }
             <button
               (click)="handleLogout()"
               class="text-slate-500 hover:text-red-400 transition-colors p-1 rounded hover:bg-space-800"
@@ -122,6 +125,7 @@
               (keyup.enter)="search()"
               placeholder="e.g. V404 Cyg"
               class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm focus:border-accent-500 focus:outline-none"
+              [class.border-accent-500]="filters().object"
             >
           </div>
 
@@ -132,6 +136,7 @@
               [ngModel]="filters().telescop ?? ''"
               (ngModelChange)="onTelescopeChange($event)"
               class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm focus:border-accent-500 focus:outline-none"
+              [class.border-accent-500]="filters().telescop"
             >
               <option value="">All</option>
               @for (t of telescopes(); track t) {
@@ -148,6 +153,7 @@
                 [ngModel]="filters().imagetyp ?? ''"
                 (ngModelChange)="updateFilter('imagetyp', $event)"
                 class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm focus:border-accent-500 focus:outline-none"
+                [class.border-accent-500]="filters().imagetyp"
               >
                 <option value="">All</option>
                 @for (t of imageTypes(); track t) {
@@ -161,6 +167,7 @@
                 [ngModel]="filters().obstype ?? ''"
                 (ngModelChange)="updateFilter('obstype', $event)"
                 class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm focus:border-accent-500 focus:outline-none"
+                [class.border-accent-500]="filters().obstype"
               >
                 <option value="">All</option>
                 @for (t of obsTypes(); track t) {
@@ -178,8 +185,10 @@
                 type="text"
                 [ngModel]="(filters().filter ?? []).join(', ')"
                 (ngModelChange)="updateFilterArray('filter', $event)"
+                (keyup.enter)="search()"
                 placeholder="e.g. V, B, I"
                 class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm focus:border-accent-500 focus:outline-none"
+                [class.border-accent-500]="filters().filter?.length"
               >
               <div class="flex flex-wrap gap-1 mt-1">
                 @for (f of availableFilters(); track f) {
@@ -197,16 +206,22 @@
             <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Date Range</label>
             <div class="flex gap-2">
               <input
-                type="date"
-                [ngModel]="filters().date_obs_from ?? ''"
-                (ngModelChange)="updateFilter('date_obs_from', $event)"
-                class="flex-1 bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs text-slate-300 focus:border-accent-500 focus:outline-none"
+                type="text"
+                placeholder="YYYY-MM-DD"
+                [value]="filters().date_obs_from ?? ''"
+                (input)="formatDateInput($event, 'date_obs_from')"
+                (keyup.enter)="search()"
+                class="flex-1 min-w-0 bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs text-slate-300 placeholder-slate-600 focus:border-accent-500 focus:outline-none"
+                [class.border-accent-500]="filters().date_obs_from"
               >
               <input
-                type="date"
-                [ngModel]="filters().date_obs_to ?? ''"
-                (ngModelChange)="updateFilter('date_obs_to', $event)"
-                class="flex-1 bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs text-slate-300 focus:border-accent-500 focus:outline-none"
+                type="text"
+                placeholder="YYYY-MM-DD"
+                [value]="filters().date_obs_to ?? ''"
+                (input)="formatDateInput($event, 'date_obs_to')"
+                (keyup.enter)="search()"
+                class="flex-1 min-w-0 bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs text-slate-300 placeholder-slate-600 focus:border-accent-500 focus:outline-none"
+                [class.border-accent-500]="filters().date_obs_to"
               >
             </div>
           </div>
@@ -219,15 +234,19 @@
                 type="text"
                 [ngModel]="filters().exptime_from ?? ''"
                 (ngModelChange)="updateFilter('exptime_from', $event)"
+                (keyup.enter)="search()"
                 placeholder="from"
-                class="flex-1 bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs focus:border-accent-500 focus:outline-none"
+                class="flex-1 min-w-0 bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs focus:border-accent-500 focus:outline-none"
+                [class.border-accent-500]="filters().exptime_from"
               >
               <input
                 type="text"
                 [ngModel]="filters().exptime_to ?? ''"
                 (ngModelChange)="updateFilter('exptime_to', $event)"
+                (keyup.enter)="search()"
                 placeholder="to"
-                class="flex-1 bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs focus:border-accent-500 focus:outline-none"
+                class="flex-1 min-w-0 bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs focus:border-accent-500 focus:outline-none"
+                [class.border-accent-500]="filters().exptime_to"
               >
             </div>
           </div>
@@ -242,6 +261,7 @@
               (keyup.enter)="search()"
               placeholder="e.g. CN2025B-123"
               class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm focus:border-accent-500 focus:outline-none"
+              [class.border-accent-500]="filters().sciprog"
             >
           </div>
 
@@ -255,7 +275,76 @@
               (keyup.enter)="search()"
               placeholder="Principal Investigator"
               class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm focus:border-accent-500 focus:outline-none"
+              [class.border-accent-500]="filters().pi"
             >
+          </div>
+
+          <!-- Cone Search -->
+          <div>
+            <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Cone Search</label>
+            <div class="space-y-2">
+              <div class="flex gap-2">
+                <div class="flex-1">
+                  <label class="block text-[10px] text-slate-500 mb-1">RA (deg)</label>
+                  <input
+                    type="number"
+                    step="any"
+                    [ngModel]="coneRa()"
+                    (ngModelChange)="coneRa.set($event); coneSearchError.set(null)"
+                    (keyup.enter)="search()"
+                    placeholder="0.0"
+                    class="w-full min-w-0 bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs text-slate-300 focus:border-accent-500 focus:outline-none"
+                    [class.border-red-500]="coneSearchError() && coneDec() != null && coneRa() == null"
+                    [class.border-accent-500]="coneRa() != null"
+                  >
+                </div>
+                <div class="flex-1">
+                  <label class="block text-[10px] text-slate-500 mb-1">Dec (deg)</label>
+                  <input
+                    type="number"
+                    step="any"
+                    [ngModel]="coneDec()"
+                    (ngModelChange)="coneDec.set($event); coneSearchError.set(null)"
+                    (keyup.enter)="search()"
+                    placeholder="0.0"
+                    class="w-full min-w-0 bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs text-slate-300 focus:border-accent-500 focus:outline-none"
+                    [class.border-red-500]="coneSearchError() && coneRa() != null && coneDec() == null"
+                    [class.border-accent-500]="coneDec() != null"
+                  >
+                </div>
+              </div>
+              @if (coneSearchError()) {
+                <p class="text-[10px] text-red-400">{{ coneSearchError() }}</p>
+              }
+              <div class="flex gap-2">
+                <div class="flex-1">
+                  <label class="block text-[10px] text-slate-500 mb-1">Radius (arcsec)</label>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    [ngModel]="coneRadius()"
+                    (ngModelChange)="coneRadius.set($event)"
+                    (keyup.enter)="search()"
+                    placeholder="60"
+                    class="w-full min-w-0 bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs text-slate-300 focus:border-accent-500 focus:outline-none"
+                    [class.border-accent-500]="coneRadius() !== 60"
+                  >
+                </div>
+                <div class="flex-1">
+                  <label class="block text-[10px] text-slate-500 mb-1">Epoch</label>
+                  <input
+                    type="text"
+                    [ngModel]="coneEpoch()"
+                    (ngModelChange)="coneEpoch.set($event)"
+                    (keyup.enter)="search()"
+                    placeholder="2000.0"
+                    class="w-full min-w-0 bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs text-slate-300 focus:border-accent-500 focus:outline-none"
+                    [class.border-accent-500]="coneEpoch() !== '2000.0'"
+                  >
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -272,6 +361,7 @@
 
           <div class="flex gap-2">
             <button
+              type="button"
               (click)="search()"
               [disabled]="ocadbService.loading()"
               class="flex-1 py-2 bg-accent-600 hover:bg-accent-500 text-white font-medium rounded text-sm transition-colors flex justify-center items-center gap-2"
@@ -282,6 +372,7 @@
               Search
             </button>
             <button
+              type="button"
               (click)="clearFilters()"
               class="px-3 py-2 bg-space-800 hover:bg-space-700 text-slate-400 rounded text-sm transition-colors"
             >
@@ -312,45 +403,80 @@
       <!-- Main Content: Results Table + Debug Panel -->
       <main class="flex-1 min-h-0 bg-space-950 relative overflow-hidden flex flex-col">
         <!-- Results Count & Pagination Top -->
-        <div class="px-6 py-3 border-b border-space-800 flex justify-between items-center bg-space-900/50">
-          <span class="text-xs text-slate-400">
-            {{ observations().length }} observations
-            @if (observations().length > 0) {
+        <div class="px-4 h-10 border-b border-space-800 flex items-center gap-3 bg-space-900/50 relative z-10 shrink-0">
+
+          <!-- Left: count -->
+          <span class="text-xs text-slate-400 shrink-0">
+            {{ ocadbService.pagination().total }} observations
+            @if (ocadbService.pagination().total > 0) {
               <span class="text-slate-600">
                 — page {{ ocadbService.pagination().page }} of {{ totalPages }}
               </span>
             }
           </span>
 
-          @if (totalPages > 1) {
-            <div class="flex items-center gap-1">
-              <button
-                (click)="goToPage(ocadbService.pagination().page - 1)"
-                [disabled]="ocadbService.pagination().page <= 1"
-                class="px-2 py-1 text-xs rounded bg-space-800 text-slate-400 hover:bg-space-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >Prev</button>
+          <!-- Center: pagination -->
+          <div class="flex-1 flex justify-center">
+            @if (totalPages > 1) {
+              <div class="flex items-center gap-1">
+                <button
+                  (click)="goToPage(ocadbService.pagination().page - 1)"
+                  [disabled]="ocadbService.pagination().page <= 1"
+                  class="px-2 py-1 text-xs rounded bg-space-800 text-slate-400 hover:bg-space-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >Prev</button>
 
-              @for (p of [].constructor(totalPages); track $index) {
-                @if ($index + 1 === ocadbService.pagination().page || $index + 1 === 1 || $index + 1 === totalPages || ($index + 1 >= ocadbService.pagination().page - 1 && $index + 1 <= ocadbService.pagination().page + 1)) {
-                  <button
-                    (click)="goToPage($index + 1)"
-                    class="px-2 py-1 text-xs rounded transition-colors"
-                    [class.bg-accent-600]="$index + 1 === ocadbService.pagination().page"
-                    [class.text-white]="$index + 1 === ocadbService.pagination().page"
-                    [class.bg-space-800]="$index + 1 !== ocadbService.pagination().page"
-                    [class.text-slate-400]="$index + 1 !== ocadbService.pagination().page"
-                    [class.hover:bg-space-700]="$index + 1 !== ocadbService.pagination().page"
-                  >{{ $index + 1 }}</button>
+                @for (p of visiblePages; track $index) {
+                  @if (p === null) {
+                    <span class="px-1 py-1 text-xs text-slate-600">…</span>
+                  } @else {
+                    <button
+                      (click)="goToPage(p)"
+                      class="px-2 py-1 text-xs rounded transition-colors"
+                      [class.bg-accent-600]="p === ocadbService.pagination().page"
+                      [class.text-white]="p === ocadbService.pagination().page"
+                      [class.bg-space-800]="p !== ocadbService.pagination().page"
+                      [class.text-slate-400]="p !== ocadbService.pagination().page"
+                      [class.hover:bg-space-700]="p !== ocadbService.pagination().page"
+                    >{{ p }}</button>
+                  }
                 }
-              }
 
+                <button
+                  (click)="goToPage(ocadbService.pagination().page + 1)"
+                  [disabled]="ocadbService.pagination().page >= totalPages"
+                  class="px-2 py-1 text-xs rounded bg-space-800 text-slate-400 hover:bg-space-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >Next</button>
+              </div>
+            }
+          </div>
+
+          <!-- Right: download action buttons -->
+          <div class="flex items-center gap-2 shrink-0">
+            @if (selectedObsIds().size > 0) {
               <button
-                (click)="goToPage(ocadbService.pagination().page + 1)"
-                [disabled]="ocadbService.pagination().page >= totalPages"
-                class="px-2 py-1 text-xs rounded bg-space-800 text-slate-400 hover:bg-space-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >Next</button>
-            </div>
-          }
+                (click)="clearSelection()"
+                class="px-4 py-1.5 rounded font-medium transition-colors border text-xs bg-amber-700/40 border-amber-600/50 text-amber-300 hover:bg-amber-700/60"
+              >
+                Clear selection
+              </button>
+            }
+            @if (selectedObsIds().size > 0) {
+              <button
+                (click)="openDownloadDialog()"
+                [disabled]="scriptLoading()"
+                class="px-4 py-1.5 rounded font-medium transition-colors border text-xs disabled:cursor-not-allowed bg-emerald-700/40 border-emerald-600/50 text-emerald-300 hover:bg-emerald-700/60"
+              >
+                @if (scriptLoading()) {
+                  <svg class="animate-spin w-3.5 h-3.5 mx-auto" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                  </svg>
+                } @else {
+                  GET DOWNLOADER SCRIPT FOR {{ selectedObsIds().size }}
+                }
+              </button>
+            }
+          </div>
         </div>
 
         <!-- Table -->
@@ -369,34 +495,58 @@
             <table class="w-full text-left text-xs text-slate-300">
               <thead class="bg-space-900 text-[10px] uppercase font-medium text-slate-500 sticky top-0 z-10">
                 <tr>
+                  <th class="px-3 py-2 border-b border-space-800 w-10">
+                    <input type="checkbox"
+                      [checked]="allOnPageSelected()"
+                      (change)="toggleSelectAll()"
+                      class="cursor-pointer accent-sky-400"
+                    >
+                  </th>
                   <th class="px-4 py-2 border-b border-space-800">Object</th>
+                  <th class="px-4 py-2 border-b border-space-800 text-right">OCA-JD</th>
                   <th class="px-4 py-2 border-b border-space-800">Date-Obs</th>
                   <th class="px-4 py-2 border-b border-space-800">Telescope</th>
                   <th class="px-4 py-2 border-b border-space-800">Filter</th>
-                  <th class="px-4 py-2 border-b border-space-800 text-right">Exp (s)</th>
                   <th class="px-4 py-2 border-b border-space-800">Type</th>
-                  <th class="px-4 py-2 border-b border-space-800 text-right">Airmass</th>
+                  <th class="px-4 py-2 border-b border-space-800 text-right">RA</th>
+                  <th class="px-4 py-2 border-b border-space-800 text-right">Dec</th>
+                  <th class="px-4 py-2 border-b border-space-800 text-right">Equinox</th>
+                  <th class="px-4 py-2 border-b border-space-800">obs-name</th>
                   <th class="px-4 py-2 border-b border-space-800">Files</th>
-                  <th class="px-4 py-2 border-b border-space-800">Obs Name</th>
+                  <th class="px-4 py-2 border-b border-space-800">Metadata</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-space-800/50">
                 @for (obs of displayedObservations(); track obs._id ?? $index) {
-                  <tr class="hover:bg-space-800/30 transition-colors">
+                  <tr class="hover:bg-space-800/30 transition-colors cursor-pointer"
+                    [class.bg-space-800/40]="selectedObsIds().has(obs._id!)"
+                    (click)="selectedObservation.set(obs)">
+                    <td class="px-3 py-2 w-10 cursor-pointer"
+                      (click)="toggleObsSelection(obs._id!); $event.stopPropagation()">
+                      <input type="checkbox"
+                        [checked]="selectedObsIds().has(obs._id!)"
+                        (click)="$event.stopPropagation()"
+                        (change)="toggleObsSelection(obs._id!)"
+                        class="cursor-pointer accent-sky-400 pointer-events-none"
+                      >
+                    </td>
                     <td class="px-4 py-2 font-medium text-slate-200 whitespace-nowrap">
                       {{ obs.fits_header['OBJECT'] ?? '—' }}
+                    </td>
+                    <td class="px-4 py-2 text-right font-mono whitespace-nowrap text-slate-400">
+                      {{ ocaJd(obs.fits_header['JD']) }}
                     </td>
                     <td class="px-4 py-2 whitespace-nowrap font-mono text-slate-400">
                       {{ obs.fits_header['DATE-OBS']?.substring(0, 19) ?? '—' }}
                     </td>
                     <td class="px-4 py-2 whitespace-nowrap">
-                      {{ obs.fits_header['TELESCOP'] ?? '—' }}
+                      <div class="flex items-center gap-1.5">
+                        <span class="inline-block w-2 h-2 rounded-full shrink-0" [style.background-color]="getTelescopeColor(obs.fits_header['TELESCOP'])"></span>
+                        {{ obs.fits_header['TELESCOP'] ?? '—' }}
+                      </div>
                     </td>
                     <td class="px-4 py-2 whitespace-nowrap">
                       {{ obs.fits_header['FILTER'] ?? '—' }}
-                    </td>
-                    <td class="px-4 py-2 text-right font-mono whitespace-nowrap">
-                      {{ obs.fits_header['EXPTIME'] != null ? obs.fits_header['EXPTIME'].toFixed(1) : '—' }}
                     </td>
                     <td class="px-4 py-2 whitespace-nowrap">
                       <span class="px-1.5 py-0.5 rounded text-[10px] font-medium"
@@ -410,24 +560,45 @@
                         {{ obs.fits_header['IMAGETYP'] ?? obs.fits_header['OBSTYPE'] ?? '—' }}
                       </span>
                     </td>
-                    <td class="px-4 py-2 text-right font-mono whitespace-nowrap">
-                      {{ obs.fits_header['AIRMASS'] != null ? obs.fits_header['AIRMASS'].toFixed(3) : '—' }}
+                    <td class="px-4 py-2 text-right font-mono whitespace-nowrap text-slate-400">
+                      {{ obs.fits_header['RA'] != null ? obs.fits_header['RA'].toFixed(4) : '—' }}
+                    </td>
+                    <td class="px-4 py-2 text-right font-mono whitespace-nowrap text-slate-400">
+                      {{ obs.fits_header['DEC'] != null ? obs.fits_header['DEC'].toFixed(4) : '—' }}
+                    </td>
+                    <td class="px-4 py-2 text-right font-mono whitespace-nowrap text-slate-400">
+                      {{ obs.fits_header['EQUINOX'] != null ? (+obs.fits_header['EQUINOX']).toFixed(1) : '—' }}
+                    </td>
+                    <td class="px-4 py-2 whitespace-nowrap font-mono text-slate-500 text-[10px]">
+                      {{ obs.obs_name }}
                     </td>
                     <td class="px-4 py-2 whitespace-nowrap">
                       <div class="flex flex-wrap gap-1">
-                        @for (file of obs.files; track $index) {
-                          <span class="px-1.5 py-0.5 rounded text-[10px] font-medium border"
-                            [class]="getFileBadgeClass(file)">
+                        @for (file of sortedFiles(obs.files); track $index) {
+                          <button
+                            (click)="selectedFile.set(file); $event.stopPropagation()"
+                            class="px-1.5 py-0.5 rounded text-[10px] font-medium border cursor-pointer hover:brightness-125 transition-all"
+                            [class]="getFileBadgeClass(file)"
+                            [title]="file.filename">
                             {{ getFileLabel(file) }}
-                          </span>
+                          </button>
                         }
                         @if (obs.files.length === 0) {
                           <span class="text-slate-600 text-[10px]">—</span>
                         }
                       </div>
                     </td>
-                    <td class="px-4 py-2 whitespace-nowrap font-mono text-slate-500 text-[10px]">
-                      {{ obs.obs_name }}
+                    <td class="px-4 py-2 whitespace-nowrap">
+                      @if (hasMetadata(obs)) {
+                        <button
+                          (click)="selectedMetadata.set({ obs_name: obs.obs_name, metadata: obs.metadata }); $event.stopPropagation()"
+                          class="px-1.5 py-0.5 rounded border text-[10px] font-medium bg-violet-900/30 text-violet-300 border-violet-600/50 hover:brightness-125 transition-all"
+                          title="View metadata">
+                          METADATA
+                        </button>
+                      } @else {
+                        <span class="text-slate-600 text-[10px]">—</span>
+                      }
                     </td>
                   </tr>
                 }
@@ -578,5 +749,514 @@
         </div>
       </main>
     </div>
+
+    <!-- Observation Detail Modal -->
+    @if (selectedObservation()) {
+      <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+        (click)="selectedObservation.set(null)">
+        <div class="relative bg-space-900 border border-space-700 rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col m-4"
+          (click)="$event.stopPropagation()">
+
+          <!-- Header -->
+          <div class="flex items-center justify-between p-4 border-b border-space-800 shrink-0">
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="min-w-0">
+                <div class="font-mono text-sm text-slate-200 truncate">{{ selectedObservation()!.obs_name }}</div>
+                <div class="text-xs text-slate-500 mt-0.5">{{ selectedObservation()!.fits_header['OBJECT'] ?? '—' }}</div>
+              </div>
+              @if (hasMetadata(selectedObservation()!)) {
+                <button
+                  (click)="selectedMetadata.set({ obs_name: selectedObservation()!.obs_name, metadata: selectedObservation()!.metadata })"
+                  class="px-2.5 py-1 rounded border text-xs font-medium bg-violet-900/30 text-violet-300 border-violet-600/50 hover:brightness-125 transition-all shrink-0"
+                  title="View metadata">
+                  View metadata
+                </button>
+              }
+            </div>
+            <div class="flex items-center gap-2 shrink-0 ml-3">
+              @if (selectedObservation()!._id) {
+                <button
+                  (click)="toggleObsSelection(selectedObservation()!._id!)"
+                  class="group flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors duration-75 border"
+                  [ngClass]="selectedObsIds().has(selectedObservation()!._id!)
+                    ? 'bg-emerald-700/40 text-emerald-300 border-emerald-600/50 hover:bg-amber-700/40 hover:text-amber-300 hover:border-amber-600/50'
+                    : 'bg-space-800 text-slate-400 border-space-700 hover:bg-space-700'">
+                  @if (!selectedObsIds().has(selectedObservation()!._id!)) {
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Select
+                  } @else {
+                    <span class="flex items-center gap-1.5 group-hover:hidden">
+                      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                      </svg>
+                      Selected
+                    </span>
+                    <span class="hidden group-hover:flex items-center gap-1.5">
+                      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                      </svg>
+                      Deselect
+                    </span>
+                  }
+                </button>
+              }
+              <button (click)="selectedObservation.set(null)"
+                class="text-slate-500 hover:text-white transition-colors">
+                <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Body -->
+          <div class="flex-1 overflow-y-auto p-4 space-y-4 text-sm">
+
+            <!-- Key fields -->
+            <div class="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+              <div class="text-slate-500 uppercase tracking-wider">Telescope</div>
+              <div class="flex items-center gap-1.5 text-slate-300">
+                <span class="inline-block w-2 h-2 rounded-full shrink-0" [style.background-color]="getTelescopeColor(selectedObservation()!.fits_header['TELESCOP'])"></span>
+                {{ selectedObservation()!.fits_header['TELESCOP'] ?? '—' }}
+              </div>
+
+              <div class="text-slate-500 uppercase tracking-wider">Date-Obs</div>
+              <div class="font-mono text-slate-300">{{ selectedObservation()!.fits_header['DATE-OBS']?.substring(0, 19) ?? '—' }}</div>
+
+              <div class="text-slate-500 uppercase tracking-wider">Filter</div>
+              <div class="text-slate-300">{{ selectedObservation()!.fits_header['FILTER'] ?? '—' }}</div>
+
+              <div class="text-slate-500 uppercase tracking-wider">Exp Time</div>
+              <div class="font-mono text-slate-300">{{ selectedObservation()!.fits_header['EXPTIME'] != null ? selectedObservation()!.fits_header['EXPTIME'].toFixed(1) + ' s' : '—' }}</div>
+
+              <div class="text-slate-500 uppercase tracking-wider">Image Type</div>
+              <div class="text-slate-300">{{ selectedObservation()!.fits_header['IMAGETYP'] ?? '—' }}</div>
+
+              <div class="text-slate-500 uppercase tracking-wider">Obs Type</div>
+              <div class="text-slate-300">{{ selectedObservation()!.fits_header['OBSTYPE'] ?? '—' }}</div>
+
+              <div class="text-slate-500 uppercase tracking-wider">Airmass</div>
+              <div class="font-mono text-slate-300">{{ selectedObservation()!.fits_header['AIRMASS'] != null ? selectedObservation()!.fits_header['AIRMASS'].toFixed(3) : '—' }}</div>
+
+              <div class="text-slate-500 uppercase tracking-wider">Instrument</div>
+              <div class="text-slate-300">{{ selectedObservation()!.fits_header['INSTRUME'] ?? '—' }}</div>
+
+              @if (selectedObservation()!.fits_header['OBSERVER']) {
+                <div class="text-slate-500 uppercase tracking-wider">Observer</div>
+                <div class="text-slate-300">{{ selectedObservation()!.fits_header['OBSERVER'] }}</div>
+              }
+              @if (selectedObservation()!.fits_header['OBS-PROG']) {
+                <div class="text-slate-500 uppercase tracking-wider">Program</div>
+                <div class="text-slate-300">{{ selectedObservation()!.fits_header['OBS-PROG'] }}</div>
+              }
+              @if (selectedObservation()!.fits_header['RA'] != null) {
+                <div class="text-slate-500 uppercase tracking-wider">RA / Dec</div>
+                <div class="font-mono text-slate-300">{{ selectedObservation()!.fits_header['RA']?.toFixed(5) }} / {{ selectedObservation()!.fits_header['DEC']?.toFixed(5) }}</div>
+              }
+
+              <div class="text-slate-500 uppercase tracking-wider">Created</div>
+              <div class="font-mono text-slate-300">{{ selectedObservation()!.created_at?.substring(0, 19) ?? '—' }}</div>
+            </div>
+
+            <!-- Files -->
+            @if (selectedObservation()!.files.length > 0) {
+              <div>
+                <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Files</div>
+                <div class="space-y-1.5">
+                  @for (file of sortedFiles(selectedObservation()!.files); track $index) {
+                    <div class="flex items-center gap-2 bg-space-950 rounded px-3 py-2 cursor-pointer hover:bg-space-800/60 transition-colors"
+                      (click)="selectedFile.set(file)">
+                      <span class="px-1.5 py-0.5 rounded border text-[10px] font-medium shrink-0"
+                        [class]="getFileBadgeClass(file)">
+                        {{ getFileLabel(file) }}
+                      </span>
+                      <span class="font-mono text-[11px] text-slate-400 truncate flex-1">{{ file.filename }}</span>
+                      <span class="text-[10px] shrink-0" [class]="getStorageStatusClass(file.file_status.cloud.status, file.file_status.cloud.ready)">
+                        ☁ {{ file.file_status.cloud.status }}
+                      </span>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+
+            <!-- Full FITS Header -->
+            <div>
+              <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">FITS Header</div>
+              <div class="bg-space-950 rounded p-3 font-mono text-[11px] grid grid-cols-[auto_1fr] gap-x-4 gap-y-0.5 max-h-64 overflow-y-auto">
+                @for (entry of headerEntries2(selectedObservation()!.fits_header); track entry[0]) {
+                  <span class="text-blue-400/70 whitespace-nowrap">{{ entry[0] }}</span>
+                  <span class="text-slate-300 break-all">{{ entry[1] }}</span>
+                }
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Metadata Modal -->
+    @if (selectedMetadata()) {
+      <div class="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+        (click)="selectedMetadata.set(null)">
+        <div class="relative bg-space-900 border border-space-700 rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col m-4"
+          (click)="$event.stopPropagation()">
+
+          <div class="flex items-center justify-between p-4 border-b border-space-800 shrink-0">
+            <div class="flex items-center gap-3 min-w-0">
+              <span class="px-2 py-0.5 rounded border text-xs font-bold bg-violet-900/30 text-violet-300 border-violet-600/50 shrink-0">METADATA</span>
+              <span class="font-mono text-sm text-slate-200 truncate">{{ selectedMetadata()!.obs_name }}</span>
+            </div>
+            <button (click)="selectedMetadata.set(null)"
+              class="text-slate-500 hover:text-white transition-colors shrink-0 ml-3">
+              <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+              </svg>
+            </button>
+          </div>
+
+          <div class="flex-1 overflow-y-auto p-4">
+            <pre class="font-mono text-[11px] text-slate-300 whitespace-pre-wrap break-all bg-space-950 rounded p-3">{{ selectedMetadata()!.metadata | json }}</pre>
+          </div>
+
+        </div>
+      </div>
+    }
+
+    <!-- File Detail Modal -->
+    @if (selectedFile()) {
+      <div class="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+        (click)="selectedFile.set(null)">
+        <div class="relative bg-space-900 border border-space-700 rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col m-4"
+          (click)="$event.stopPropagation()">
+
+          <!-- Modal Header -->
+          <div class="flex items-start justify-between p-4 border-b border-space-800 shrink-0">
+            <div class="flex items-center gap-3 min-w-0">
+              @if (selectedObservation()) {
+                <button (click)="selectedFile.set(null)"
+                  class="flex items-center gap-1 text-slate-400 hover:text-white transition-colors shrink-0 text-xs">
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                  </svg>
+                  Back
+                </button>
+                <span class="text-slate-700 shrink-0">|</span>
+              }
+              <span class="px-2 py-0.5 rounded text-xs font-bold border shrink-0"
+                [class]="getFileBadgeClass(selectedFile()!)">
+                {{ getFileLabel(selectedFile()!) }}
+              </span>
+              <span class="font-mono text-sm text-slate-200 truncate">{{ selectedFile()!.filename }}</span>
+            </div>
+            <div class="flex items-center gap-2 shrink-0 ml-3">
+              @if (selectedFile()!.file_status.cloud.status === 'stored' && selectedFile()!.file_status.cloud.ready) {
+                <button
+                  (click)="openShare(selectedFile()!)"
+                  class="flex items-center gap-1.5 px-2.5 py-1 rounded bg-sky-700/40 hover:bg-sky-700/60 text-sky-300 text-xs font-medium transition-colors"
+                  title="Share from cloud">
+                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
+                  </svg>
+                  Share
+                </button>
+                <button
+                  (click)="downloadFile(selectedFile()!)"
+                  [disabled]="downloadingFile()"
+                  class="flex items-center gap-1.5 px-2.5 py-1 rounded bg-emerald-700/40 hover:bg-emerald-700/60 text-emerald-300 text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Download file directly from cloud">
+                  @if (downloadingFile()) {
+                    <svg class="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                    </svg>
+                  } @else {
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                    </svg>
+                  }
+                  Download directly
+                </button>
+              }
+              <button (click)="selectedFile.set(null); selectedObservation.set(null)"
+                class="text-slate-500 hover:text-white transition-colors">
+                <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Modal Body -->
+          <div class="flex-1 overflow-y-auto p-4 space-y-4 text-sm">
+
+            <!-- File Info -->
+            <div class="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+              <div class="text-slate-500 uppercase tracking-wider">Telescope</div>
+              <div class="flex items-center gap-1.5 text-slate-300">
+                <span class="inline-block w-2 h-2 rounded-full shrink-0" [style.background-color]="getTelescopeColor(selectedFile()!.fits_header?.['TELESCOP'])"></span>
+                {{ selectedFile()!.fits_header?.['TELESCOP'] ?? '—' }}
+              </div>
+
+              <div class="text-slate-500 uppercase tracking-wider">Obs Name</div>
+              <div class="font-mono text-slate-300">{{ selectedFile()!.obs_name }}</div>
+
+              <div class="text-slate-500 uppercase tracking-wider">Size</div>
+              <div class="font-mono text-slate-300">{{ formatFilesize(selectedFile()!.filesize) }}</div>
+
+              <div class="text-slate-500 uppercase tracking-wider">Modified</div>
+              <div class="font-mono text-slate-300">{{ selectedFile()!.mtime?.substring(0, 19) ?? '—' }}</div>
+
+              @if (selectedFile()!.path) {
+                <div class="text-slate-500 uppercase tracking-wider">Path</div>
+                <div class="font-mono text-slate-400 break-all">{{ selectedFile()!.path }}</div>
+              }
+
+              @if (selectedFile()!.digest) {
+                <div class="text-slate-500 uppercase tracking-wider">Digest</div>
+                <div class="font-mono text-slate-400 break-all text-[10px]">{{ selectedFile()!.digest }}</div>
+              }
+            </div>
+
+            <!-- Storage Status -->
+            <div>
+              <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-3">Storage Status</div>
+              <div class="relative flex items-start">
+                <div class="absolute left-[16.67%] right-[16.67%] top-[5px] border-t border-dashed border-slate-700"></div>
+                @for (loc of [['Observatory', selectedFile()!.file_status.observatory], ['Hub', selectedFile()!.file_status.hub], ['Cloud', selectedFile()!.file_status.cloud]]; track loc[0]) {
+                  <div class="flex-1 flex flex-col items-center z-10">
+                    <div class="w-3 h-3 rounded-full" [class]="getStorageStatusBgClass($any(loc[1]).status, $any(loc[1]).ready)"></div>
+                    <div class="text-[10px] font-medium mt-1.5" [class]="getStorageStatusClass($any(loc[1]).status, $any(loc[1]).ready)">
+                      {{ $any(loc[1]).status }}
+                    </div>
+                    @if ($any(loc[1]).expected_time) {
+                      <div class="text-[10px] text-slate-600">{{ $any(loc[1]).expected_time?.substring(0, 16) }}</div>
+                    }
+                    <div class="text-[10px] uppercase tracking-wider text-slate-600 mt-0.5">{{ loc[0] }}</div>
+                  </div>
+                }
+              </div>
+            </div>
+
+            <!-- Source Files -->
+            @if (selectedFile()!.source_filenames?.length > 0) {
+              <div>
+                <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">Source Files</div>
+                <div class="space-y-0.5">
+                  @for (src of selectedFile()!.source_filenames; track src) {
+                    <div class="font-mono text-[11px] text-slate-400">{{ src }}</div>
+                  }
+                </div>
+              </div>
+            }
+
+            <!-- FITS Header -->
+            @if (fitsHeaderEntries(selectedFile()!).length > 0) {
+              <div>
+                <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">FITS Header</div>
+                <div class="bg-space-950 rounded p-3 font-mono text-[11px] grid grid-cols-[auto_1fr] gap-x-4 gap-y-0.5 max-h-64 overflow-y-auto">
+                  @for (entry of fitsHeaderEntries(selectedFile()!); track entry[0]) {
+                    <span class="text-blue-400/70 whitespace-nowrap">{{ entry[0] }}</span>
+                    <span class="text-slate-300 break-all">{{ entry[1] }}</span>
+                  }
+                </div>
+              </div>
+            }
+
+          </div>
+        </div>
+      </div>
+    }
+
   }
+
+  <!-- Share Dialog -->
+  @if (shareFile()) {
+    <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-[70] p-4">
+      <div class="bg-slate-900 border border-slate-700 rounded-lg w-full max-w-lg shadow-2xl">
+        <!-- Header -->
+        <div class="flex items-center justify-between px-4 py-3 border-b border-slate-700">
+          <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
+            </svg>
+            <span class="text-sm font-medium text-slate-200">Share file</span>
+          </div>
+          <button (click)="closeShare()" class="text-slate-500 hover:text-white transition-colors">
+            <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Body -->
+        <div class="p-4 space-y-4">
+          <p class="text-xs text-slate-400 font-mono truncate">{{ shareFile()!.filename }}</p>
+
+          <!-- Expiry input -->
+          <div class="flex items-center gap-2">
+            <label class="text-xs text-slate-400 shrink-0">Expires in (seconds)</label>
+            <input
+              type="number"
+              min="60"
+              [ngModel]="shareExpiry()"
+              (ngModelChange)="shareExpiry.set($event)"
+              (keydown.enter)="regenerateShareUrl()"
+              class="flex-1 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-sky-500 min-w-0"
+            />
+            <button
+              (click)="regenerateShareUrl()"
+              [disabled]="shareLoading()"
+              class="flex items-center gap-1 px-2.5 py-1 rounded bg-sky-700/40 hover:bg-sky-700/60 text-sky-300 text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0">
+              @if (shareLoading()) {
+                <svg class="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+              </svg>
+              } @else {
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+              }
+              Generate
+            </button>
+          </div>
+
+          <!-- URL display -->
+          <div class="space-y-2">
+            @if (shareLoading() && !shareUrl()) {
+              <div class="h-16 bg-slate-800 rounded border border-slate-700 flex items-center justify-center">
+                <svg class="animate-spin w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                </svg>
+              </div>
+            } @else if (shareUrl()) {
+              <div class="bg-slate-800 border border-slate-700 rounded px-3 py-2">
+                <p class="text-xs text-slate-300 font-mono break-all leading-relaxed">{{ shareUrl() }}</p>
+              </div>
+              <button
+                (click)="copyShareUrl()"
+                class="w-full flex items-center justify-center gap-2 px-3 py-2 rounded transition-colors text-xs font-medium"
+                [class]="shareCopied() ? 'bg-emerald-700/40 text-emerald-300' : 'bg-slate-700 hover:bg-slate-600 text-slate-200'">
+                @if (shareCopied()) {
+                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                  </svg>
+                  Copied!
+                } @else {
+                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/>
+                  </svg>
+                  Copy to clipboard
+                }
+              </button>
+            } @else {
+              <div class="h-16 bg-slate-800 rounded border border-slate-700 flex items-center justify-center">
+                <span class="text-xs text-slate-500">Failed to generate URL</span>
+              </div>
+            }
+          </div>
+        </div>
+
+      </div>
+    </div>
+  }
+
+  <!-- Download Script Dialog -->
+  @if (showDownloadDialog()) {
+    <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-[70] p-4"
+      (click)="showDownloadDialog.set(false)">
+      <div class="bg-space-900 border border-space-700 rounded-lg w-full max-w-md shadow-2xl"
+        (click)="$event.stopPropagation()">
+
+        <!-- Header -->
+        <div class="flex items-center justify-between px-4 py-3 border-b border-space-800">
+          <div>
+            <div class="text-sm font-medium text-slate-200">Generate downloader script</div>
+            <div class="text-[11px] text-slate-500 mt-0.5">{{ selectedObsIds().size }} observation{{ selectedObsIds().size === 1 ? '' : 's' }} selected</div>
+          </div>
+          <button (click)="showDownloadDialog.set(false)" class="text-slate-500 hover:text-white transition-colors">
+            <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Body -->
+        <div class="p-4 space-y-3">
+          <p class="text-xs text-slate-400">Generate script for:</p>
+
+          <!-- Option: current user -->
+          <button
+            (click)="downloadForCurrentUser.set(true)"
+            class="w-full flex items-center gap-3 px-3 py-2.5 rounded border text-left transition-colors"
+            [class.border-accent-500]="downloadForCurrentUser()"
+            [class.bg-accent-900/20]="downloadForCurrentUser()"
+            [class.border-space-700]="!downloadForCurrentUser()"
+            [class.hover:border-space-600]="!downloadForCurrentUser()"
+          >
+            <div class="w-3.5 h-3.5 rounded-full border-2 shrink-0 flex items-center justify-center"
+              [class.border-accent-500]="downloadForCurrentUser()"
+              [class.border-slate-600]="!downloadForCurrentUser()">
+              @if (downloadForCurrentUser()) {
+                <div class="w-1.5 h-1.5 rounded-full bg-accent-500"></div>
+              }
+            </div>
+            <div>
+              <div class="text-xs font-medium text-slate-200">Current user</div>
+              <div class="text-[11px] text-slate-500 font-mono">{{ ocadbService.currentUser() }}</div>
+            </div>
+          </button>
+
+          <!-- Option: custom user -->
+          <div
+            (click)="downloadForCurrentUser.set(false)"
+            class="w-full rounded border transition-colors cursor-pointer"
+            [class.border-accent-500]="!downloadForCurrentUser()"
+            [class.bg-accent-900/20]="!downloadForCurrentUser()"
+            [class.border-space-700]="downloadForCurrentUser()"
+            [class.hover:border-space-600]="downloadForCurrentUser()"
+          >
+            <div class="flex items-center gap-3 px-3 py-2.5">
+              <div class="w-3.5 h-3.5 rounded-full border-2 shrink-0 flex items-center justify-center"
+                [class.border-accent-500]="!downloadForCurrentUser()"
+                [class.border-slate-600]="downloadForCurrentUser()">
+                @if (!downloadForCurrentUser()) {
+                  <div class="w-1.5 h-1.5 rounded-full bg-accent-500"></div>
+                }
+              </div>
+              <div class="text-xs font-medium text-slate-200">Another user</div>
+            </div>
+            @if (!downloadForCurrentUser()) {
+              <div class="px-3 pb-3" (click)="$event.stopPropagation()">
+                <input
+                  type="text"
+                  [ngModel]="downloadCustomUsername()"
+                  (ngModelChange)="downloadCustomUsername.set($event)"
+                  (keydown.enter)="executeDownloadScript()"
+                  placeholder="Username"
+                  autofocus
+                  class="w-full bg-space-950 border border-space-700 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:border-accent-500 focus:outline-none"
+                >
+              </div>
+            }
+          </div>
+
+          <button
+            (click)="executeDownloadScript()"
+            [disabled]="!downloadForCurrentUser() && !downloadCustomUsername().trim()"
+            class="w-full py-2 bg-emerald-700/40 hover:bg-emerald-700/60 border border-emerald-600/50 text-emerald-300 rounded text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Generate &amp; download
+          </button>
+        </div>
+
+      </div>
+    </div>
+  }
+
 </div>
