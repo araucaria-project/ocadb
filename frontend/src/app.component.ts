@@ -1,4 +1,4 @@
-import { Component, signal, inject, OnInit } from '@angular/core';
+import { Component, signal, inject, OnInit, ElementRef, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { OcadbService, Observation, SearchFilters, FitsFile, StorageStatusType } from './services/ocadb.service';
@@ -28,13 +28,16 @@ export class AppComponent implements OnInit {
   selectedMetadata = signal<{ obs_name: string; metadata: Record<string, any> } | null>(null);
   selectedObservation = signal<Observation | null>(null);
   showFilters = signal(true);
-  showDebugPanel = signal(true);
+  showDebugPanel = signal(false);
   selectedObsIds = signal<Set<string>>(new Set());
   scriptLoading = signal(false);
   showDownloadDialog = signal(false);
   downloadForCurrentUser = signal(true);
   downloadCustomUsername = signal('');
   expandedLogEntry = signal<number | null>(null);
+  editingPage = signal(false);
+  pageInputValue = signal('');
+  @ViewChild('pageInput') pageInputRef?: ElementRef<HTMLInputElement>;
 
   filters = signal<SearchFilters>({});
 
@@ -170,6 +173,18 @@ export class AppComponent implements OnInit {
     this.displayedObservations.set(results);
   }
 
+  startPageEdit() {
+    this.pageInputValue.set(String(this.ocadbService.pagination().page));
+    this.editingPage.set(true);
+    setTimeout(() => this.pageInputRef?.nativeElement.focus(), 0);
+  }
+
+  async commitPageEdit() {
+    const p = parseInt(this.pageInputValue(), 10);
+    this.editingPage.set(false);
+    if (!isNaN(p)) await this.goToPage(p);
+  }
+
   toggleObsSelection(id: string) {
     this.selectedObsIds.update(set => {
       const next = new Set(set);
@@ -225,6 +240,12 @@ export class AppComponent implements OnInit {
     this.coneEpoch.set('2000.0');
     this.coneSearchError.set(null);
     this.search();
+  }
+
+  resetToHome() {
+    this.selectedObsIds.set(new Set());
+    this.selectedObservation.set(null);
+    this.clearFilters();
   }
 
   expandedLogSections = signal<Record<string, boolean>>({});
