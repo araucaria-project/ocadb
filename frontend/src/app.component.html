@@ -874,6 +874,36 @@
               </div>
             }
 
+            <!-- Calibration Files -->
+            @if (calibrationFiles().length > 0 || calibrationMissingFiles().length > 0) {
+              <div>
+                <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Calibration files</div>
+                <div class="space-y-1.5">
+                  @for (file of calibrationFiles(); track file.filename) {
+                    <div class="flex items-center gap-2 bg-space-950 rounded px-3 py-2 cursor-pointer hover:bg-space-800/60 transition-colors"
+                      (click)="selectedFile.set(file)">
+                      <span class="px-1.5 py-0.5 rounded border text-[10px] font-medium shrink-0 bg-space-800 text-slate-400 border-slate-600/50">
+                        {{ getCalibDisplayLabel(file) }}
+                      </span>
+                      <span class="font-mono text-[11px] text-slate-400 truncate flex-1">{{ file.filename }}</span>
+                      <span class="text-[10px] shrink-0" [class]="getStorageStatusClass(file.file_status.cloud.status, file.file_status.cloud.ready)">
+                        ☁ {{ file.file_status.cloud.status }}
+                      </span>
+                    </div>
+                  }
+                  @for (filename of calibrationMissingFiles(); track filename) {
+                    <div class="flex items-center gap-2 bg-space-950 rounded px-3 py-2 opacity-60">
+                      <span class="px-1.5 py-0.5 rounded border text-[10px] font-medium shrink-0 bg-space-800 text-slate-500 border-slate-700/50">
+                        {{ getCalibFileLabel(filename) }}
+                      </span>
+                      <span class="font-mono text-[11px] text-slate-500 truncate flex-1">{{ filename }}</span>
+                      <span class="text-[10px] text-slate-500 shrink-0">⏳ scheduled</span>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+
             <!-- Full FITS Header -->
             <div>
               <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">FITS Header</div>
@@ -899,6 +929,16 @@
 
           <div class="flex items-center justify-between p-4 border-b border-space-800 shrink-0">
             <div class="flex items-center gap-3 min-w-0">
+              @if (selectedObservation()) {
+                <button (click)="selectedMetadata.set(null)"
+                  class="flex items-center gap-1 text-slate-400 hover:text-white transition-colors shrink-0 text-xs">
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                  </svg>
+                  Back
+                </button>
+                <span class="text-slate-700 shrink-0">|</span>
+              }
               <span class="px-2 py-0.5 rounded border text-xs font-bold bg-violet-900/30 text-violet-300 border-violet-600/50 shrink-0">METADATA</span>
               <span class="font-mono text-sm text-slate-200 truncate">{{ selectedMetadata()!.obs_name }}</span>
             </div>
@@ -921,15 +961,15 @@
     <!-- File Detail Modal -->
     @if (selectedFile()) {
       <div class="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm"
-        (click)="selectedFile.set(null)">
+        (click)="closeFileViewer()">
         <div class="relative bg-space-900 border border-space-700 rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col m-4"
           (click)="$event.stopPropagation()">
 
           <!-- Modal Header -->
           <div class="flex items-start justify-between p-4 border-b border-space-800 shrink-0">
             <div class="flex items-center gap-3 min-w-0">
-              @if (selectedObservation()) {
-                <button (click)="selectedFile.set(null)"
+              @if (selectedObservation() || fileHistory().length > 0) {
+                <button (click)="goBackFile()"
                   class="flex items-center gap-1 text-slate-400 hover:text-white transition-colors shrink-0 text-xs">
                   <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
@@ -970,10 +1010,10 @@
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                     </svg>
                   }
-                  Download directly
+                  Download
                 </button>
               }
-              <button (click)="selectedFile.set(null); selectedObservation.set(null)"
+              <button (click)="closeFileViewer(); selectedObservation.set(null)"
                 class="text-slate-500 hover:text-white transition-colors">
                 <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
                   <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
@@ -1034,12 +1074,30 @@
             </div>
 
             <!-- Source Files -->
-            @if (selectedFile()!.source_filenames?.length > 0) {
+            @if (sourceFiles().length > 0 || sourceMissingFiles().length > 0) {
               <div>
                 <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">Source Files</div>
-                <div class="space-y-0.5">
-                  @for (src of selectedFile()!.source_filenames; track src) {
-                    <div class="font-mono text-[11px] text-slate-400">{{ src }}</div>
+                <div class="space-y-1.5">
+                  @for (file of sourceFiles(); track file.filename) {
+                    <div class="flex items-center gap-2 bg-space-950 rounded px-3 py-2 cursor-pointer hover:bg-space-800/60 transition-colors"
+                      (click)="openSourceFile(file)">
+                      <span class="px-1.5 py-0.5 rounded border text-[10px] font-medium shrink-0 bg-space-800 text-slate-400 border-slate-600/50">
+                        {{ getCalibDisplayLabel(file) }}
+                      </span>
+                      <span class="font-mono text-[11px] text-slate-400 truncate flex-1">{{ file.filename }}</span>
+                      <span class="text-[10px] shrink-0" [class]="getStorageStatusClass(file.file_status.cloud.status, file.file_status.cloud.ready)">
+                        ☁ {{ file.file_status.cloud.status }}
+                      </span>
+                    </div>
+                  }
+                  @for (filename of sourceMissingFiles(); track filename) {
+                    <div class="flex items-center gap-2 bg-space-950 rounded px-3 py-2 opacity-60">
+                      <span class="px-1.5 py-0.5 rounded border text-[10px] font-medium shrink-0 bg-space-800 text-slate-500 border-slate-700/50">
+                        {{ getCalibFileLabel(filename) }}
+                      </span>
+                      <span class="font-mono text-[11px] text-slate-500 truncate flex-1">{{ filename }}</span>
+                      <span class="text-[10px] text-slate-500 shrink-0">⏳ scheduled</span>
+                    </div>
                   }
                 </div>
               </div>
@@ -1235,6 +1293,56 @@
                   class="w-full bg-space-950 border border-space-700 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:border-accent-500 focus:outline-none"
                 >
               </div>
+            }
+          </div>
+
+          <!-- Include files (obs / calibration) -->
+          <div class="border-t border-space-800 pt-3 space-y-2">
+            <p class="text-xs text-slate-400">Include files:</p>
+            <label class="flex items-center gap-2.5 cursor-not-allowed opacity-60">
+              <div class="w-4 h-4 rounded border border-accent-500 bg-accent-600 flex items-center justify-center shrink-0">
+                <svg class="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                </svg>
+              </div>
+              <span class="text-xs text-slate-300">Observation files</span>
+            </label>
+            <label class="flex items-center gap-2.5 cursor-pointer" (click)="downloadIncludeCalibration.set(!downloadIncludeCalibration())">
+              <div class="w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors"
+                [class.bg-accent-600]="downloadIncludeCalibration()"
+                [class.border-accent-500]="downloadIncludeCalibration()"
+                [class.bg-space-950]="!downloadIncludeCalibration()"
+                [class.border-space-600]="!downloadIncludeCalibration()">
+                @if (downloadIncludeCalibration()) {
+                  <svg class="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                  </svg>
+                }
+              </div>
+              <span class="text-xs text-slate-300">Calibration files</span>
+            </label>
+          </div>
+
+          <!-- File type filter -->
+          <div class="border-t border-space-800 pt-3 space-y-2">
+            <p class="text-xs text-slate-400">File types:</p>
+            @for (type of DOWNLOAD_FILE_TYPES; track type) {
+              @if (downloadIncludeCalibration() || type === 'raw' || type === 'zdf') {
+              <label class="flex items-center gap-2.5 cursor-pointer select-none" (click)="toggleDownloadFileType(type)">
+                <div class="w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors"
+                  [class.bg-accent-600]="downloadFileTypes().has(type)"
+                  [class.border-accent-500]="downloadFileTypes().has(type)"
+                  [class.bg-space-950]="!downloadFileTypes().has(type)"
+                  [class.border-space-600]="!downloadFileTypes().has(type)">
+                  @if (downloadFileTypes().has(type)) {
+                    <svg class="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                    </svg>
+                  }
+                </div>
+                <span class="font-mono text-xs text-slate-300">{{ type }}</span>
+              </label>
+              }
             }
           </div>
 

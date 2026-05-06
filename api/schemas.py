@@ -27,3 +27,5 @@ class TokenData(BaseModel):
 class DownloadScriptRequest(BaseModel):
     obs_ids: List[str]
     username: str | None = None
+    include_calibration: bool = False
+    file_types: List[str] | None = None  # None = all types

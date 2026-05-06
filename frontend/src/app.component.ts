@@ -1,4 +1,4 @@
-import { Component, signal, inject, OnInit, ElementRef, ViewChild } from '@angular/core';
+import { Component, signal, inject, OnInit, ElementRef, ViewChild, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { OcadbService, Observation, SearchFilters, FitsFile, StorageStatusType } from './services/ocadb.service';
@@ -13,10 +13,17 @@ import { ApiLogService, ApiLogEntry } from './services/api-log.service';
 export class AppComponent implements OnInit {
   ocadbService = inject(OcadbService);
   apiLog = inject(ApiLogService);
+  private _lastCalibrationKey: string | null = null;
+  private _lastSourceKey: string | null = null;
 
   loginData = { username: '', password: '' };
 
   displayedObservations = signal<Observation[]>([]);
+  calibrationFiles = signal<FitsFile[]>([]);
+  calibrationMissingFiles = signal<string[]>([]);
+  sourceFiles = signal<FitsFile[]>([]);
+  sourceMissingFiles = signal<string[]>([]);
+  fileHistory = signal<FitsFile[]>([]);
   hasSearched = signal(false);
   selectedFile = signal<FitsFile | null>(null);
   downloadingFile = signal(false);
@@ -34,6 +41,9 @@ export class AppComponent implements OnInit {
   showDownloadDialog = signal(false);
   downloadForCurrentUser = signal(true);
   downloadCustomUsername = signal('');
+  downloadIncludeCalibration = signal(false);
+  readonly DOWNLOAD_FILE_TYPES = ['raw', 'zdf', 'master_f', 'master_d', 'master_z'] as const;
+  downloadFileTypes = signal<Set<string>>(new Set(this.DOWNLOAD_FILE_TYPES));
   expandedLogEntry = signal<number | null>(null);
   editingPage = signal(false);
   pageInputValue = signal('');
@@ -53,6 +63,91 @@ export class AppComponent implements OnInit {
   obsTypes = signal<string[]>([]);
   availableFilters = signal<string[]>([]);
 
+  constructor() {
+    effect(() => {
+      const expired = this.ocadbService.sessionExpiredUser();
+      if (expired) this.loginData.username = expired;
+    });
+
+    effect((onCleanup) => {
+      const obs = this.selectedObservation();
+      if (!obs?._id) return;
+
+      const intervalId = setInterval(async () => {
+        const fresh = await this.ocadbService.fetchObservationById(obs._id!);
+        if (!fresh) return;
+        this.selectedObservation.set(fresh);
+        this.displayedObservations.update(list =>
+          list.map(o => o._id === fresh._id ? fresh : o)
+        );
+      }, 5000);
+
+      onCleanup(() => clearInterval(intervalId));
+    });
+
+    effect(() => {
+      const obs = this.selectedObservation();
+      const obsFilenames = new Set(obs?.files.map(f => f.filename) ?? []);
+      const names = [...new Set(
+        (obs?.files.flatMap(f => f.source_filenames ?? []) ?? []).filter(n => !obsFilenames.has(n))
+      )];
+      const key = names.slice().sort().join('\0');
+
+      if (key === this._lastCalibrationKey) return;
+      this._lastCalibrationKey = key;
+
+      if (!names.length) {
+        this.calibrationFiles.set([]);
+        this.calibrationMissingFiles.set([]);
+        return;
+      }
+      Promise.all(names.map(n => this.ocadbService.fetchFileByFilename(n).then(f => ({ name: n, file: f }))))
+        .then(results => {
+          this.calibrationFiles.set(results.filter(r => r.file !== null).map(r => r.file!));
+          this.calibrationMissingFiles.set(results.filter(r => r.file === null).map(r => r.name));
+        });
+    });
+
+    effect((onCleanup) => {
+      const file = this.selectedFile();
+      if (!file?.filename) return;
+
+      const intervalId = setInterval(async () => {
+        const fresh = await this.ocadbService.fetchFileByFilename(file.filename);
+        if (!fresh) return;
+        this.selectedFile.set(fresh);
+        this.displayedObservations.update(list =>
+          list.map(obs => ({
+            ...obs,
+            files: obs.files.map(f => f._id === fresh._id ? fresh : f)
+          }))
+        );
+      }, 5000);
+
+      onCleanup(() => clearInterval(intervalId));
+    });
+
+    effect(() => {
+      const file = this.selectedFile();
+      const names = [...new Set(file?.source_filenames ?? [])];
+      const key = names.slice().sort().join('\0');
+
+      if (key === this._lastSourceKey) return;
+      this._lastSourceKey = key;
+
+      if (!names.length) {
+        this.sourceFiles.set([]);
+        this.sourceMissingFiles.set([]);
+        return;
+      }
+      Promise.all(names.map(n => this.ocadbService.fetchFileByFilename(n).then(f => ({ name: n, file: f }))))
+        .then(results => {
+          this.sourceFiles.set(results.filter(r => r.file !== null).map(r => r.file!));
+          this.sourceMissingFiles.set(results.filter(r => r.file === null).map(r => r.name));
+        });
+    });
+  }
+
   ngOnInit() {
     if (this.ocadbService.isAuthenticated()) {
       this.loadDropdowns();
@@ -67,6 +162,28 @@ export class AppComponent implements OnInit {
       this.loadDropdowns();
       this.search();
     }
+  }
+
+  openSourceFile(file: FitsFile) {
+    const current = this.selectedFile();
+    if (current) this.fileHistory.update(h => [...h, current]);
+    this.selectedFile.set(file);
+  }
+
+  goBackFile() {
+    const history = this.fileHistory();
+    if (history.length > 0) {
+      const prev = history[history.length - 1];
+      this.fileHistory.update(h => h.slice(0, -1));
+      this.selectedFile.set(prev);
+    } else {
+      this.selectedFile.set(null);
+    }
+  }
+
+  closeFileViewer() {
+    this.selectedFile.set(null);
+    this.fileHistory.set([]);
   }
 
   handleLogout() {
@@ -216,7 +333,17 @@ export class AppComponent implements OnInit {
   openDownloadDialog() {
     this.downloadForCurrentUser.set(true);
     this.downloadCustomUsername.set('');
+    this.downloadIncludeCalibration.set(false);
+    this.downloadFileTypes.set(new Set(this.DOWNLOAD_FILE_TYPES));
     this.showDownloadDialog.set(true);
+  }
+
+  toggleDownloadFileType(type: string) {
+    this.downloadFileTypes.update(set => {
+      const next = new Set(set);
+      next.has(type) ? next.delete(type) : next.add(type);
+      return next;
+    });
   }
 
   async executeDownloadScript() {
@@ -227,7 +354,8 @@ export class AppComponent implements OnInit {
       : this.downloadCustomUsername().trim() || undefined;
     this.scriptLoading.set(true);
     this.showDownloadDialog.set(false);
-    await this.ocadbService.downloadScript(ids, username);
+    const allTypes = this.downloadFileTypes().size === this.DOWNLOAD_FILE_TYPES.length;
+    await this.ocadbService.downloadScript(ids, username, this.downloadIncludeCalibration(), allTypes ? undefined : [...this.downloadFileTypes()]);
     this.scriptLoading.set(false);
   }
 
@@ -314,6 +442,20 @@ export class AppComponent implements OnInit {
     const url = await this.ocadbService.fetchPresignedUrl(file.filename, this.shareExpiry());
     this.shareLoading.set(false);
     this.shareUrl.set(url);
+  }
+
+  getCalibDisplayLabel(file: FitsFile): string {
+    const parsed = this.getCalibFileLabel(file.filename);
+    const imagetyp = (file.fits_header?.['IMAGETYP'] as string | null | undefined)?.toLowerCase();
+    if (imagetyp && imagetyp !== 'raw') return imagetyp;
+    return parsed;
+  }
+
+  getCalibFileLabel(filename: string): string {
+    const name = filename.split('/').pop() ?? filename;
+    const m = /\w{5}.\d{4}_\d{5}(?:_(\w+))?\.(?:fits|fz)/i.exec(name);
+    if (!m) return '—';
+    return m[1] ?? 'raw';
   }
 
   closeShare() {

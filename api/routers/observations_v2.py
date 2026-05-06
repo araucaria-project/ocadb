@@ -18,6 +18,7 @@ from api.services.aggregation_query_builder import AggregationQueryBuilder
 from api.services.oca_geospatial_query import OcaWithin
 from api.services.query_builder import MultiSearchForm
 from ocadb.models import Observation, FitsHeader, SkyCoord
+from ocadb.models.file import FITSFile
 from ocadb.models.geo import ArchDistance
 from ocadb.models.s3_presigned_url import S3PresignedUrl, S3PresignedUrlBatchList
 from api.services.auth_service import AuthService
@@ -327,7 +328,7 @@ async def generate_download_script(
     File classes are filtered server-side; the script embeds the authenticated user's username
     and handles password acquisition and token refresh at runtime.
     """
-    from ocafitsfiles import render_download_script
+    from ocafitsfiles import render_download_script, parse_filename
 
     user = await read_users_me(token)
 
@@ -342,10 +343,37 @@ async def generate_download_script(
         raise HTTPException(status_code=404, detail="No observations found for the given IDs")
 
     filenames: List[str] = []
+    calib_seed: set = set()
     for obs in observations:
         await obs.fetch_all_links()
         for f in obs.files:
             filenames.append(f.filename)
+            if request.include_calibration:
+                calib_seed.update(f.source_filenames or [])
+
+    if request.include_calibration:
+        obs_name_set = set(filenames)
+        collected: set = set()
+        frontier = calib_seed - obs_name_set
+        while frontier:
+            new_names = frontier - collected
+            if not new_names:
+                break
+            collected.update(new_names)
+            db_files = await FITSFile.find({"filename": {"$in": list(new_names)}}).to_list()
+            frontier = set()
+            for f in db_files:
+                frontier.update(f.source_filenames or [])
+        filenames.extend(n for n in sorted(collected) if n not in obs_name_set)
+    else:
+        obs_name_set = set(filenames)
+
+    if request.file_types is not None:
+        allowed = set(request.file_types)
+        def _ftype(name: str) -> str:
+            _, suffix = parse_filename(name)
+            return suffix if suffix else 'raw'
+        filenames = [n for n in filenames if _ftype(n) in allowed]
 
     if not filenames:
         raise HTTPException(status_code=404, detail="No files found for the selected observations")

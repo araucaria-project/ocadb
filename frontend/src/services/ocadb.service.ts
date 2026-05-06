@@ -109,6 +109,7 @@ export class OcadbService {
   token = signal<string | null>(null);
   refreshToken = signal<string | null>(null);
   currentUser = signal<string | null>(null);
+  sessionExpiredUser = signal<string | null>(null);
   lastRequestInfo = signal('System initialized');
   isAuthenticated = computed(() => !!this.token());
 
@@ -166,6 +167,7 @@ export class OcadbService {
       this.token.set(data.access_token);
       this.refreshToken.set(data.refresh_token ?? null);
       this.currentUser.set(username);
+      this.sessionExpiredUser.set(null);
       localStorage.setItem('ocadb_token', data.access_token);
       if (data.refresh_token) localStorage.setItem('ocadb_refresh_token', data.refresh_token);
       localStorage.setItem('ocadb_user', username);
@@ -194,11 +196,20 @@ export class OcadbService {
     if (response.status !== 401 && response.status !== 403) return response;
     const refreshed = await this.tryRefresh();
     if (refreshed) return this.loggedFetch(url, { ...init, headers: this.authHeaders() });
+    this.sessionExpiredUser.set(this.currentUser());
     this.logout();
     return response;
   }
 
-  private async tryRefresh(): Promise<boolean> {
+  private _refreshPromise: Promise<boolean> | null = null;
+
+  private tryRefresh(): Promise<boolean> {
+    if (this._refreshPromise) return this._refreshPromise;
+    this._refreshPromise = this._doRefresh().finally(() => { this._refreshPromise = null; });
+    return this._refreshPromise;
+  }
+
+  private async _doRefresh(): Promise<boolean> {
     const rt = this.refreshToken();
     if (!rt) return false;
     try {
@@ -314,11 +325,16 @@ export class OcadbService {
     }
   }
 
-  async downloadScript(ids: string[], username?: string): Promise<void> {
+  async downloadScript(ids: string[], username?: string, includeCalibration = false, fileTypes?: string[]): Promise<void> {
     try {
       const response = await this.authenticatedFetch(`${this.v2BaseUrl}/observations/download-script`, {
         method: 'POST',
-        body: JSON.stringify({ obs_ids: ids, ...(username ? { username } : {}) })
+        body: JSON.stringify({
+          obs_ids: ids,
+          ...(username ? { username } : {}),
+          include_calibration: includeCalibration,
+          ...(fileTypes ? { file_types: fileTypes } : {})
+        })
       });
       if (!response.ok) {
         const msg = await this.extractErrorMessage(response, `Download script failed (${response.status})`);
@@ -334,6 +350,26 @@ export class OcadbService {
       URL.revokeObjectURL(url);
     } catch (e: any) {
       this.handleFetchError(e, 'Download script');
+    }
+  }
+
+  async fetchObservationById(id: string): Promise<Observation | null> {
+    try {
+      const response = await this.authenticatedFetch(`${this.v2BaseUrl}/observations/${id}/`);
+      if (!response.ok) return null;
+      return await response.json();
+    } catch {
+      return null;
+    }
+  }
+
+  async fetchFileByFilename(filename: string): Promise<FitsFile | null> {
+    try {
+      const response = await this.authenticatedFetch(`${this.v2BaseUrl}/files/by-filename/${encodeURIComponent(filename)}/`);
+      if (!response.ok) return null;
+      return await response.json();
+    } catch {
+      return null;
     }
   }
 
