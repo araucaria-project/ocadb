@@ -75,7 +75,7 @@ class Observation(Document):
 
     # observation date
     date_obs: datetime = Field(datetime, description="internal ISO Date to datetime conversion", exclude=True) # exclude field from json dump
-    oca_jd: int = Field(int, description="OCM representation of observation date")
+    oca_jd: Optional[int] = Field(None, description="OCM representation of observation date")
 
     def store_fits_header(self, fits_header):
         self.fits_header = fits_header
@@ -129,7 +129,8 @@ class Observation(Document):
 
     @model_validator(mode='after')
     def store_oca_jd(self):
-        self.oca_jd = int(self.fits_header.JD) % 10000
+        if self.fits_header.JD is not None:
+            self.oca_jd = int(self.fits_header.JD) % 10000
         return self
 
     @after_event(Insert, Replace, Update)
