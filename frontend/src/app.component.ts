@@ -1,4 +1,4 @@
-import { Component, signal, inject, OnInit, ElementRef, ViewChild, effect } from '@angular/core';
+import { Component, signal, computed, inject, OnInit, ElementRef, ViewChild, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
@@ -38,6 +38,18 @@ export class AppComponent implements OnInit {
   showFilters = signal(true);
   showDebugPanel = signal(false);
   selectedObsIds = signal<Set<string>>(new Set());
+  selectionPageMap = signal<Map<string, number>>(new Map());
+
+  hasSelectionOnPrevPages = computed(() => {
+    const currentPage = this.ocadbService.pagination().page;
+    const selected = this.selectedObsIds();
+    return [...this.selectionPageMap().entries()].some(([id, page]) => selected.has(id) && page < currentPage);
+  });
+  hasSelectionOnNextPages = computed(() => {
+    const currentPage = this.ocadbService.pagination().page;
+    const selected = this.selectedObsIds();
+    return [...this.selectionPageMap().entries()].some(([id, page]) => selected.has(id) && page > currentPage);
+  });
   scriptLoading = signal(false);
   showDownloadDialog = signal(false);
   downloadForCurrentUser = signal(true);
@@ -182,6 +194,44 @@ export class AppComponent implements OnInit {
       this.displayedObservations();
       setTimeout(() => this.updateSelectionIndicators(), 0);
     });
+  }
+
+  scrollToNearestSelectionAbove() {
+    const container = this.tableScrollContainer?.nativeElement;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    let nearest: Element | null = null;
+    let nearestBottom = -Infinity;
+    for (const id of this.selectedObsIds()) {
+      const td = container.querySelector(`td[data-obs-id="${id}"]`);
+      if (!td) continue;
+      const tr = td.closest('tr')!;
+      const rowRect = tr.getBoundingClientRect();
+      if (rowRect.bottom < rect.top && rowRect.bottom > nearestBottom) {
+        nearestBottom = rowRect.bottom;
+        nearest = tr;
+      }
+    }
+    nearest?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  scrollToNearestSelectionBelow() {
+    const container = this.tableScrollContainer?.nativeElement;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    let nearest: Element | null = null;
+    let nearestTop = Infinity;
+    for (const id of this.selectedObsIds()) {
+      const td = container.querySelector(`td[data-obs-id="${id}"]`);
+      if (!td) continue;
+      const tr = td.closest('tr')!;
+      const rowRect = tr.getBoundingClientRect();
+      if (rowRect.top > rect.bottom && rowRect.top < nearestTop) {
+        nearestTop = rowRect.top;
+        nearest = tr;
+      }
+    }
+    nearest?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
   updateSelectionIndicators() {
@@ -410,9 +460,16 @@ export class AppComponent implements OnInit {
   }
 
   toggleObsSelection(id: string) {
+    const isSelected = this.selectedObsIds().has(id);
+    const currentPage = this.ocadbService.pagination().page;
     this.selectedObsIds.update(set => {
       const next = new Set(set);
-      next.has(id) ? next.delete(id) : next.add(id);
+      isSelected ? next.delete(id) : next.add(id);
+      return next;
+    });
+    this.selectionPageMap.update(m => {
+      const next = new Map(m);
+      isSelected ? next.delete(id) : next.set(id, currentPage);
       return next;
     });
   }
@@ -421,9 +478,15 @@ export class AppComponent implements OnInit {
   private _dragSelectMode: 'select' | 'deselect' = 'select';
 
   private _applyDragSelect(obsId: string) {
+    const currentPage = this.ocadbService.pagination().page;
     this.selectedObsIds.update(set => {
       const next = new Set(set);
       this._dragSelectMode === 'select' ? next.add(obsId) : next.delete(obsId);
+      return next;
+    });
+    this.selectionPageMap.update(m => {
+      const next = new Map(m);
+      this._dragSelectMode === 'select' ? next.set(obsId, currentPage) : next.delete(obsId);
       return next;
     });
   }
@@ -462,6 +525,7 @@ export class AppComponent implements OnInit {
   }
 
   toggleSelectAll() {
+    const currentPage = this.ocadbService.pagination().page;
     const ids = this.displayedObservations().map(o => o._id).filter((id): id is string => !!id);
     const allSelected = ids.every(id => this.selectedObsIds().has(id));
     this.selectedObsIds.update(set => {
@@ -470,10 +534,35 @@ export class AppComponent implements OnInit {
       else ids.forEach(id => next.add(id));
       return next;
     });
+    this.selectionPageMap.update(m => {
+      const next = new Map(m);
+      if (allSelected) ids.forEach(id => next.delete(id));
+      else ids.forEach(id => next.set(id, currentPage));
+      return next;
+    });
   }
 
   clearSelection() {
     this.selectedObsIds.set(new Set());
+    this.selectionPageMap.set(new Map());
+  }
+
+  async goToNearestSelectionBefore() {
+    const currentPage = this.ocadbService.pagination().page;
+    const selected = this.selectedObsIds();
+    const pages = [...this.selectionPageMap().entries()]
+      .filter(([id, page]) => selected.has(id) && page < currentPage)
+      .map(([, page]) => page);
+    if (pages.length) await this.goToPage(Math.max(...pages));
+  }
+
+  async goToNearestSelectionAfter() {
+    const currentPage = this.ocadbService.pagination().page;
+    const selected = this.selectedObsIds();
+    const pages = [...this.selectionPageMap().entries()]
+      .filter(([id, page]) => selected.has(id) && page > currentPage)
+      .map(([, page]) => page);
+    if (pages.length) await this.goToPage(Math.min(...pages));
   }
 
   openDownloadDialog() {
@@ -518,6 +607,7 @@ export class AppComponent implements OnInit {
 
   resetToHome() {
     this.selectedObsIds.set(new Set());
+    this.selectionPageMap.set(new Map());
     this.selectedObservation.set(null);
     this.clearFilters();
   }

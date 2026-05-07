@@ -630,8 +630,8 @@
 
         <!-- Selected above indicator (outside scroll container so thead doesn't cover it) -->
         @if (hasSelectionAbove()) {
-          <div class="absolute top-10 left-0 right-0 flex justify-center z-30 pointer-events-none">
-            <div class="bg-amber-500 text-amber-950 px-3 py-0.5 rounded-b text-[10px] font-bold flex items-center gap-1 shadow-md">
+          <div class="absolute top-10 left-0 right-0 flex justify-center z-30">
+            <div (click)="scrollToNearestSelectionAbove()" class="bg-amber-500 text-amber-950 px-3 py-0.5 rounded-b text-[10px] font-bold flex items-center gap-1 shadow-md cursor-pointer hover:bg-amber-400 transition-colors">
               <svg class="w-2.5 h-2.5" viewBox="0 0 10 6" fill="currentColor"><path d="M5 0L10 6H0z"/></svg>
               selected above
             </div>
@@ -809,8 +809,8 @@
             </table>
           }
           @if (hasSelectionBelow()) {
-            <div class="sticky bottom-0 z-10 flex justify-center pointer-events-none">
-              <div class="bg-amber-500 text-amber-950 px-3 py-0.5 rounded-t text-[10px] font-bold flex items-center gap-1 shadow-md">
+            <div class="sticky bottom-0 z-10 flex justify-center">
+              <div (click)="scrollToNearestSelectionBelow()" class="bg-amber-500 text-amber-950 px-3 py-0.5 rounded-t text-[10px] font-bold flex items-center gap-1 shadow-md cursor-pointer hover:bg-amber-400 transition-colors">
                 <svg class="w-2.5 h-2.5" viewBox="0 0 10 6" fill="currentColor"><path d="M5 6L0 0H10z"/></svg>
                 selected below
               </div>
@@ -822,6 +822,9 @@
         @if (totalPages > 1) {
           <div class="px-6 py-2 border-t border-space-800 flex justify-center items-center bg-space-900/50">
             <div class="flex items-center gap-1">
+              @if (hasSelectionOnPrevPages()) {
+                <span (click)="goToNearestSelectionBefore()" class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 select-none mr-1 cursor-pointer hover:bg-amber-500/40 transition-colors">◀ sel</span>
+              }
               <button
                 (click)="goToPage(1)"
                 [disabled]="ocadbService.pagination().page <= 1"
@@ -840,6 +843,7 @@
                   [ngModel]="pageInputValue()"
                   (ngModelChange)="pageInputValue.set($event)"
                   (keydown.enter)="commitPageEdit()"
+                  (focus)="$any($event.target).select()"
                   (blur)="editingPage.set(false)"
                   class="w-16 px-1 py-0.5 text-xs text-center rounded bg-space-700 border border-accent-500 text-slate-200 outline-none"
                 />
@@ -854,6 +858,9 @@
                 [disabled]="ocadbService.pagination().page >= totalPages"
                 class="px-2 py-1 text-xs rounded bg-space-800 text-slate-400 hover:bg-space-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >Next</button>
+              @if (hasSelectionOnNextPages()) {
+                <span (click)="goToNearestSelectionAfter()" class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 select-none ml-1 cursor-pointer hover:bg-amber-500/40 transition-colors">sel ▶</span>
+              }
             </div>
           </div>
         }
@@ -995,7 +1002,7 @@
           <div class="flex items-center justify-between p-4 border-b border-space-800 shrink-0">
             <div class="flex items-center gap-3 min-w-0">
               <div class="min-w-0">
-                <div class="text-[10px] uppercase tracking-widest text-slate-600 mb-0.5">Observation</div>
+                <div class="text-[10px] uppercase tracking-widest text-slate-400 mb-0.5">Observation</div>
                 <div class="font-mono text-sm text-slate-200 truncate">{{ selectedObservation()!.obs_name }}</div>
                 <div class="text-xs text-slate-500 mt-0.5">{{ selectedObservation()!.fits_header['OBJECT'] ?? '—' }}</div>
               </div>
@@ -1214,7 +1221,7 @@
           (click)="$event.stopPropagation()">
 
           <!-- Modal Header -->
-          <div class="flex items-start justify-between p-4 border-b border-space-800 shrink-0">
+          <div class="flex items-center justify-between p-4 border-b border-space-800 shrink-0">
             <div class="flex items-center gap-3 min-w-0">
               @if (selectedObservation() || fileHistory().length > 0) {
                 <button (click)="goBackFile()"
@@ -1231,7 +1238,7 @@
                 {{ getFileLabel(selectedFile()!) }}
               </span>
               <div class="min-w-0">
-                <div class="text-[10px] uppercase tracking-widest text-slate-600 mb-0.5">FITS File</div>
+                <div class="text-[10px] uppercase tracking-widest text-slate-400 mb-0.5">FITS File</div>
                 <span class="font-mono text-sm text-slate-200 truncate">{{ selectedFile()!.filename }}</span>
               </div>
             </div>
