@@ -6,7 +6,7 @@ from attr.filters import exclude
 from beanie import Document, Indexed, PydanticObjectId, Link, after_event, Replace, Update, Insert
 from pyaraucaria.fits import fits_header
 from pydantic import BaseModel, Field, model_validator, PrivateAttr
-from typing import Optional, Dict, Any, Annotated, List
+from typing import Optional, Dict, Any, Annotated, List, Set
 from datetime import datetime
 from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import core_schema
@@ -14,7 +14,7 @@ from pymongo import IndexModel
 from dateutil import parser
 from pyaraucaria.lookup_objects import name_canonizator
 
-from ocadb.models.file import FitsHeader, FITSFile
+from ocadb.models.file import FitsHeader, FITSFile, FileClassification
 from ocadb.models.geo import SkyCoord, Point2D
 
 
@@ -37,9 +37,20 @@ class Observation(Document):
 
     # files support
     files: List[Link[FITSFile]] = []
+    filetypes: Set[FileClassification] = set()
+    source_files: Set[str] = set()
 
-    def store_file(self, fits_file: FITSFile):
+    # async def update_source_files(self, new_file:FITSFile):
+    #     if new_file.filename not in self.source_files:
+    #         self.source_files.add(new_file.filename)
+    #         for file in new_file.source_filenames:
+    #             fits_file = await FITSFile.find_one(FITSFile.filename == file)
+    #             await self.update_source_files(fits_file)
+
+    async def store_file(self, fits_file: FITSFile):
         self.files.append(fits_file)
+        self.filetypes.add(fits_file.file_class)
+        self.source_files.update(fits_file.source_filenames)
 
     def store_metadata(self, metadata: dict):
         self.metadata = metadata
@@ -64,9 +75,12 @@ class Observation(Document):
 
     # observation date
     date_obs: datetime = Field(datetime, description="internal ISO Date to datetime conversion", exclude=True) # exclude field from json dump
+    oca_jd: int = Field(int, description="OCM representation of observation date")
 
     def store_fits_header(self, fits_header):
         self.fits_header = fits_header
+
+
 
     @model_validator(mode='after')
     def store_skycoord(self):
@@ -105,9 +119,17 @@ class Observation(Document):
             self.access_tags.append(self.fits_header.INSTRUME)
         if hasattr(self.fits_header, 'ORIGIN') and self.fits_header.ORIGIN is not None:
             self.access_tags.append(self.fits_header.ORIGIN)
-        if hasattr(self.fits_header, 'PI') and self.fits_header.PI is not None:
+        if hasattr(self.fits_header, 'PI') and self.fits_header.PI:
             self.access_tags.append(self.fits_header.PI)
+        if hasattr(self.fits_header, 'OBSTYPE'):
+            if self.fits_header.OBSTYPE == 'calib':
+                self.access_tags.append((self.fits_header.OBSTYPE))
 
+        return self
+
+    @model_validator(mode='after')
+    def store_oca_jd(self):
+        self.oca_jd = int(self.fits_header.JD) % 10000
         return self
 
     @after_event(Insert, Replace, Update)
@@ -135,11 +157,18 @@ class Observation(Document):
             IndexModel([("obs_name")], unique=True),
             "object_id",
             "canonized_object_name",
+            "date_obs",
             "fits_header.DATE_OBS",
             "fits_header.OBJECT",
             "fits_header.FILTER",
             "fits_header.TELESCOP",
             "fits_header.JD",
+            "fits_header.IMAGETYP",
+            "fits_header.OBSTYPE",
+            "fits_header.PI",
+            "fits_header.SCIPROG",
+            "oca_jd",
+            "access_tags",
             IndexModel([("telescope_coordinates.lon_lat", pymongo.GEOSPHERE)], name="skycoord_spatial_index"), # geospatial index
         ]
         validate_assignment = True

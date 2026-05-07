@@ -228,11 +228,11 @@ async def search_multi(
         search_form: Annotated[MultiSearchForm, Body(...)],
         token: Annotated[str, Depends(AuthService.validate_token)],
         page: int = 1,
-        page_size: int = 50
+        page_size: int = 30
 ):
     user = await read_users_me(token)
 
-    observations = Observation.find()
+    observations = Observation.find_all()
     if search_form.telescop is not None:
         observations = observations.find(Observation.fits_header.TELESCOP == search_form.telescop)
     if search_form.imagetyp is not None:
@@ -251,6 +251,10 @@ async def search_multi(
         observations = observations.find(Observation.date_obs >= parser.parse(search_form.date_obs_from))
     if search_form.date_obs_to is not None:
         observations = observations.find(Observation.date_obs <= parser.parse(search_form.date_obs_to))
+    if search_form.oca_jd_from is not None:
+        observations = observations.find(Observation.oca_jd >= search_form.oca_jd_from)
+    if search_form.oca_jd_to is not None:
+        observations = observations.find(Observation.oca_jd <= search_form.oca_jd_to)
     if search_form.jd_from is not None:
         observations = observations.find(math.floor(Observation.fits_header.JD) >= search_form.jd_from)
     if search_form.jd_to is not None:
@@ -260,7 +264,9 @@ async def search_multi(
         OcaWithin(Observation.telescope_coordinates.lon_lat, (search_form.cone_search.get_ref_lon(), search_form.cone_search.get_ref_lat()),
                   search_form.cone_search.rad_distance()))
 
-    observations = await observations.find(fetch_links=True).aggregate(AggregationQueryBuilder.aggregate(match_query={}, access_tags=user.access_tags, page=page, page_size=page_size)).to_list()
+    pipeline = AggregationQueryBuilder.aggregate(match_query={}, access_tags=user.access_tags, page=page, page_size=page_size)
+    pipeline[-1]['$facet']['data'].append({"$addFields": {"files": []}})
+    observations = await observations.find(fetch_links=False).aggregate(pipeline).to_list()
 
     if not observations:
         raise HTTPException(status_code=404, detail=f"No observations found")
@@ -313,9 +319,9 @@ async def get_values_telescope_filter(
         telescope: str,
         token: Annotated[str, Depends(AuthService.validate_token)]
 ):
-    # values = Observation.find(Observation.fits_header.TELESCOP == telescope).distinct("fits_header.FILTER")
-    values = Observation.distinct("fits_header.FILTER")
-    return values
+    collection = Observation.get_motor_collection()
+    values = await collection.distinct("fits_header.FILTER", {"fits_header.TELESCOP": telescope})
+    return [v for v in values if v is not None]
 
 
 @router.post("/download-script", response_description="Generate a POSIX shell download script for selected observations")

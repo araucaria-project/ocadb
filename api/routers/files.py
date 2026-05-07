@@ -49,7 +49,7 @@ async def create_file(
             except HTTPException as exc:
                 observation = await create_observation(observation_data=Observation(obs_name=file_data.obs_name, file_name=file_data.filename, fits_header=file_data.fits_header), token=token)
 
-            observation.store_file(file_data)
+            await observation.store_file(file_data)
             await observation.replace()
     except DuplicateKeyError as e:
         raise HTTPException(status_code=403, detail=f"Observation with filename {file_data.filename} already exists.")

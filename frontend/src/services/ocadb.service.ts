@@ -63,10 +63,12 @@ export interface Observation {
   file_name?: string | null;
   object_id?: string | null;
   files: FitsFile[];
+  filetypes?: string[];
   fits_header: FitsHeader;
   metadata: Record<string, any>;
   created_at?: string | null;
   updated_at?: string | null;
+  oca_jd?: number | null;
 }
 
 export interface SearchFilters {
@@ -76,11 +78,17 @@ export interface SearchFilters {
   imagetyp?: string | null;
   obstype?: string | null;
   object?: string | null;
+  obs_name?: string | null;
   filter?: string[] | null;
   exptime_from?: string | null;
   exptime_to?: string | null;
   pi?: string | null;
   sciprog?: string | null;
+  jd_from?: number | null;
+  jd_to?: number | null;
+  oca_jd_from?: string | null;
+  oca_jd_to?: string | null;
+  file_types?: string[] | null;
   cone_search?: {
     ra: number;
     dec: number;
@@ -113,7 +121,7 @@ export class OcadbService {
   lastRequestInfo = signal('System initialized');
   isAuthenticated = computed(() => !!this.token());
 
-  pagination = signal<PaginationState>({ page: 1, pageSize: 50, total: 0 });
+  pagination = signal<PaginationState>({ page: 1, pageSize: 30, total: 0 });
 
   constructor() {
     const savedToken = localStorage.getItem('ocadb_token');
@@ -260,6 +268,8 @@ export class OcadbService {
       if (filters.exptime_to) body.exptime_to = filters.exptime_to;
       if (filters.pi) body.pi = filters.pi;
       if (filters.sciprog) body.sciprog = filters.sciprog;
+      if (filters.oca_jd_from) body.oca_jd_from = Number(filters.oca_jd_from);
+      if (filters.oca_jd_to) body.oca_jd_to = Number(filters.oca_jd_to);
       if (filters.cone_search) body.cone_search = filters.cone_search;
 
       const url = `${this.v2BaseUrl}/observations/search?page=${currentPage}&page_size=${pag.pageSize}`;
@@ -350,6 +360,16 @@ export class OcadbService {
       URL.revokeObjectURL(url);
     } catch (e: any) {
       this.handleFetchError(e, 'Download script');
+    }
+  }
+
+  async fetchObservationByName(name: string): Promise<Observation | null> {
+    try {
+      const response = await this.authenticatedFetch(`${this.v2BaseUrl}/observations/by-observation-name/${encodeURIComponent(name)}/`);
+      if (!response.ok) return null;
+      return await response.json();
+    } catch {
+      return null;
     }
   }
 

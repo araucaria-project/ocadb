@@ -16,6 +16,8 @@ class MultiSearchForm(BaseModel):
     telescop: Optional[str] = None
     date_obs_from: Optional[str] = None
     date_obs_to: Optional[str] = None
+    oca_jd_from: Optional[int] = None
+    oca_jd_to: Optional[int] = None
     jd_from: Optional[int] = None
     jd_to: Optional[int] = None
     imagetyp: Optional[str] = None

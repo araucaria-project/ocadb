@@ -1,6 +1,7 @@
 import { Component, signal, inject, OnInit, ElementRef, ViewChild, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { OcadbService, Observation, SearchFilters, FitsFile, StorageStatusType } from './services/ocadb.service';
 import { ApiLogService, ApiLogEntry } from './services/api-log.service';
 
@@ -48,8 +49,17 @@ export class AppComponent implements OnInit {
   editingPage = signal(false);
   pageInputValue = signal('');
   @ViewChild('pageInput') pageInputRef?: ElementRef<HTMLInputElement>;
+  @ViewChild('tableScrollContainer') tableScrollContainer?: ElementRef<HTMLElement>;
+
+  hasSelectionAbove = signal(false);
+  hasSelectionBelow = signal(false);
 
   filters = signal<SearchFilters>({});
+  telescopeDropdownOpen = signal(false);
+  obsTypeDropdownOpen = signal(false);
+  imageTypDropdownOpen = signal(false);
+  obsNameFocused = signal(false);
+  otherFieldsFocused = signal(false);
 
   coneRa = signal<number | null>(null);
   coneDec = signal<number | null>(null);
@@ -76,16 +86,17 @@ export class AppComponent implements OnInit {
       const intervalId = setInterval(async () => {
         const fresh = await this.ocadbService.fetchObservationById(obs._id!);
         if (!fresh) return;
+        if (this.selectedObservation()?._id !== obs._id) return;
         this.selectedObservation.set(fresh);
         this.displayedObservations.update(list =>
           list.map(o => o._id === fresh._id ? fresh : o)
         );
-      }, 5000);
+      }, 10000);
 
       onCleanup(() => clearInterval(intervalId));
     });
 
-    effect(() => {
+    effect((onCleanup) => {
       const obs = this.selectedObservation();
       const obsFilenames = new Set(obs?.files.map(f => f.filename) ?? []);
       const names = [...new Set(
@@ -93,7 +104,7 @@ export class AppComponent implements OnInit {
       )];
       const key = names.slice().sort().join('\0');
 
-      if (key === this._lastCalibrationKey) return;
+      const keyChanged = key !== this._lastCalibrationKey;
       this._lastCalibrationKey = key;
 
       if (!names.length) {
@@ -101,11 +112,20 @@ export class AppComponent implements OnInit {
         this.calibrationMissingFiles.set([]);
         return;
       }
-      Promise.all(names.map(n => this.ocadbService.fetchFileByFilename(n).then(f => ({ name: n, file: f }))))
-        .then(results => {
-          this.calibrationFiles.set(results.filter(r => r.file !== null).map(r => r.file!));
-          this.calibrationMissingFiles.set(results.filter(r => r.file === null).map(r => r.name));
-        });
+
+      const fetchKey = key;
+      const doFetch = () => {
+        Promise.all(names.map(n => this.ocadbService.fetchFileByFilename(n).then(f => ({ name: n, file: f }))))
+          .then(results => {
+            if (this._lastCalibrationKey !== fetchKey) return;
+            this.calibrationFiles.set(results.filter(r => r.file !== null).map(r => r.file!));
+            this.calibrationMissingFiles.set(results.filter(r => r.file === null).map(r => r.name));
+          });
+      };
+
+      if (keyChanged) doFetch();
+      const intervalId = setInterval(doFetch, 10000);
+      onCleanup(() => clearInterval(intervalId));
     });
 
     effect((onCleanup) => {
@@ -115,6 +135,7 @@ export class AppComponent implements OnInit {
       const intervalId = setInterval(async () => {
         const fresh = await this.ocadbService.fetchFileByFilename(file.filename);
         if (!fresh) return;
+        if (this.selectedFile()?.filename !== file.filename) return;
         this.selectedFile.set(fresh);
         this.displayedObservations.update(list =>
           list.map(obs => ({
@@ -122,17 +143,17 @@ export class AppComponent implements OnInit {
             files: obs.files.map(f => f._id === fresh._id ? fresh : f)
           }))
         );
-      }, 5000);
+      }, 10000);
 
       onCleanup(() => clearInterval(intervalId));
     });
 
-    effect(() => {
+    effect((onCleanup) => {
       const file = this.selectedFile();
       const names = [...new Set(file?.source_filenames ?? [])];
       const key = names.slice().sort().join('\0');
 
-      if (key === this._lastSourceKey) return;
+      const keyChanged = key !== this._lastSourceKey;
       this._lastSourceKey = key;
 
       if (!names.length) {
@@ -140,17 +161,52 @@ export class AppComponent implements OnInit {
         this.sourceMissingFiles.set([]);
         return;
       }
-      Promise.all(names.map(n => this.ocadbService.fetchFileByFilename(n).then(f => ({ name: n, file: f }))))
-        .then(results => {
-          this.sourceFiles.set(results.filter(r => r.file !== null).map(r => r.file!));
-          this.sourceMissingFiles.set(results.filter(r => r.file === null).map(r => r.name));
-        });
+
+      const fetchKey = key;
+      const doFetch = () => {
+        Promise.all(names.map(n => this.ocadbService.fetchFileByFilename(n).then(f => ({ name: n, file: f }))))
+          .then(results => {
+            if (this._lastSourceKey !== fetchKey) return;
+            this.sourceFiles.set(results.filter(r => r.file !== null).map(r => r.file!));
+            this.sourceMissingFiles.set(results.filter(r => r.file === null).map(r => r.name));
+          });
+      };
+
+      if (keyChanged) doFetch();
+      const intervalId = setInterval(doFetch, 10000);
+      onCleanup(() => clearInterval(intervalId));
     });
+
+    effect(() => {
+      this.selectedObsIds();
+      this.displayedObservations();
+      setTimeout(() => this.updateSelectionIndicators(), 0);
+    });
+  }
+
+  updateSelectionIndicators() {
+    const container = this.tableScrollContainer?.nativeElement;
+    if (!container || this.selectedObsIds().size === 0) {
+      this.hasSelectionAbove.set(false);
+      this.hasSelectionBelow.set(false);
+      return;
+    }
+    const rect = container.getBoundingClientRect();
+    let above = false, below = false;
+    for (const id of this.selectedObsIds()) {
+      const td = container.querySelector(`td[data-obs-id="${id}"]`);
+      if (!td) continue;
+      const rowRect = td.closest('tr')!.getBoundingClientRect();
+      if (rowRect.bottom < rect.top) above = true;
+      if (rowRect.top > rect.bottom) below = true;
+      if (above && below) break;
+    }
+    this.hasSelectionAbove.set(above);
+    this.hasSelectionBelow.set(below);
   }
 
   ngOnInit() {
     if (this.ocadbService.isAuthenticated()) {
-      this.loadDropdowns();
       this.search();
     }
   }
@@ -159,7 +215,6 @@ export class AppComponent implements OnInit {
     event.preventDefault();
     const success = await this.ocadbService.login(this.loginData.username, this.loginData.password);
     if (success) {
-      this.loadDropdowns();
       this.search();
     }
   }
@@ -181,9 +236,25 @@ export class AppComponent implements OnInit {
     }
   }
 
+  testSpinner() {
+    this.ocadbService.loading.set(true);
+    setTimeout(() => this.ocadbService.loading.set(false), 3000);
+  }
+
   closeFileViewer() {
     this.selectedFile.set(null);
     this.fileHistory.set([]);
+  }
+
+  async openObservation(obs: Observation) {
+    this.selectedObservation.set(obs);
+    if (!obs._id) return;
+    const full = await this.ocadbService.fetchObservationById(obs._id);
+    if (!full || this.selectedObservation()?._id !== obs._id) return;
+    this.selectedObservation.set(full);
+    this.displayedObservations.update(list =>
+      list.map(o => o._id === full._id ? full : o)
+    );
   }
 
   handleLogout() {
@@ -228,6 +299,14 @@ export class AppComponent implements OnInit {
     this.filters.update(f => ({ ...f, [key]: items }));
   }
 
+  toggleFileTypeFilter(ft: string) {
+    this.filters.update(f => {
+      const current = f.file_types ?? [];
+      const next = current.includes(ft) ? current.filter(t => t !== ft) : [...current, ft];
+      return { ...f, file_types: next.length ? next : null };
+    });
+  }
+
   async onTelescopeChange(telescope: string) {
     this.updateFilter('telescop', telescope);
     if (telescope) {
@@ -238,8 +317,37 @@ export class AppComponent implements OnInit {
     }
   }
 
+  get obsNameMode(): boolean {
+    return !!this.filters().obs_name || this.obsNameFocused();
+  }
+
+  get otherFiltersActive(): boolean {
+    if (this.otherFieldsFocused()) return true;
+    const f = this.filters();
+    return !!(f.telescop || f.object || f.imagetyp || f.obstype ||
+      f.filter?.length || f.date_obs_from || f.date_obs_to ||
+      f.pi || f.sciprog || f.jd_from != null || f.jd_to != null ||
+      f.oca_jd_from != null || f.oca_jd_to != null ||
+      f.file_types?.length || this.coneRa() != null);
+  }
+
+
   async search() {
     if (!this.ocadbService.isAuthenticated()) return;
+
+    this.hasSearched.set(true);
+    this.showFilters.set(false);
+
+    if (this.obsNameMode) {
+      this.ocadbService.loading.set(true);
+      const obs = await this.ocadbService.fetchObservationByName(this.filters().obs_name!);
+      this.ocadbService.loading.set(false);
+      const results = obs ? [obs] : [];
+      this.displayedObservations.set(results);
+      this.ocadbService.pagination.update(p => ({ ...p, total: results.length, page: 1 }));
+      this.loadDropdowns();
+      return;
+    }
 
     const hasRa = this.coneRa() != null;
     const hasDec = this.coneDec() != null;
@@ -256,11 +364,10 @@ export class AppComponent implements OnInit {
       epoch: this.coneEpoch() || '2000.0'
     } : null;
 
-    this.hasSearched.set(true);
-    this.showFilters.set(false);
     this.ocadbService.pagination.update(p => ({ ...p, page: 1 }));
     const results = await this.ocadbService.searchObservations({ ...this.filters(), cone_search }, 1);
     this.displayedObservations.set(results);
+    this.loadDropdowns();
   }
 
   get totalPages(): number {
@@ -308,6 +415,45 @@ export class AppComponent implements OnInit {
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+  }
+
+  private _dragSelectActive = false;
+  private _dragSelectMode: 'select' | 'deselect' = 'select';
+
+  private _applyDragSelect(obsId: string) {
+    this.selectedObsIds.update(set => {
+      const next = new Set(set);
+      this._dragSelectMode === 'select' ? next.add(obsId) : next.delete(obsId);
+      return next;
+    });
+  }
+
+  startDragSelect(obsId: string, event: MouseEvent | TouchEvent) {
+    event.stopPropagation();
+    event.preventDefault();
+    this._dragSelectActive = true;
+    this._dragSelectMode = this.selectedObsIds().has(obsId) ? 'deselect' : 'select';
+    this._applyDragSelect(obsId);
+
+    const onTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
+      const t = e.touches[0];
+      const el = document.elementFromPoint(t.clientX, t.clientY)?.closest('[data-obs-id]');
+      if (el) this._applyDragSelect(el.getAttribute('data-obs-id')!);
+    };
+    const onUp = () => {
+      this._dragSelectActive = false;
+      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('touchend', onUp);
+      document.removeEventListener('touchmove', onTouchMove);
+    };
+    document.addEventListener('mouseup', onUp);
+    document.addEventListener('touchend', onUp);
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
+  }
+
+  onDragSelectEnter(obsId: string) {
+    if (this._dragSelectActive) this._applyDragSelect(obsId);
   }
 
   allOnPageSelected(): boolean {
@@ -409,7 +555,11 @@ export class AppComponent implements OnInit {
   }
 
   getFileBadgeClass(file: FitsFile): string {
-    switch (file.file_class) {
+    return this.getFileBadgeClassByType(file.file_class);
+  }
+
+  getFileBadgeClassByType(fileClass: string): string {
+    switch (fileClass) {
       case 'zdf': return 'bg-emerald-900/40 text-emerald-300 border-emerald-600/50';
       case 'raw': return 'bg-amber-900/30 text-amber-300 border-amber-600/50';
       default: return 'bg-space-800 text-slate-400 border-slate-600/50';
@@ -417,10 +567,14 @@ export class AppComponent implements OnInit {
   }
 
   getFileLabel(file: FitsFile): string {
+    return this.getFileLabelByType(file.file_class);
+  }
+
+  getFileLabelByType(fileClass: string): string {
     const labels: Record<string, string> = {
       raw: 'RAW', zdf: 'ZDF', master: 'MASTER', source: 'SRC', tmp: 'TMP', test: 'TEST'
     };
-    return labels[file.file_class] ?? file.file_class.toUpperCase();
+    return labels[fileClass] ?? fileClass.toUpperCase();
   }
 
   async downloadFile(file: FitsFile) {
@@ -513,9 +667,19 @@ export class AppComponent implements OnInit {
     return [...files].sort((a, b) => (order[a.file_class] ?? 2) - (order[b.file_class] ?? 2));
   }
 
+  sortedFileTypes(types: string[]): string[] {
+    const order: Record<string, number> = { zdf: 0, raw: 1 };
+    return [...types].sort((a, b) => (order[a] ?? 2) - (order[b] ?? 2));
+  }
+
   ocaJd(jd: number | null | undefined): string {
     if (jd == null) return '—';
     return String(Math.floor(jd) % 10000).padStart(4, '0');
+  }
+
+  formatOcaJd(val: number | null | undefined): string {
+    if (val == null) return '—';
+    return String(val).padStart(4, '0');
   }
 
   hasMetadata(obs: Observation): boolean {
@@ -541,5 +705,38 @@ export class AppComponent implements OnInit {
     this.telescopes.set(telescopes);
     this.imageTypes.set(imageTypes);
     this.obsTypes.set(obsTypes);
+  }
+
+  private sanitizer = inject(DomSanitizer);
+
+  formatJsonHtml(obj: any): SafeHtml {
+    return this.sanitizer.bypassSecurityTrustHtml(this._jsonToHtml(obj, 0));
+  }
+
+  private _jsonToHtml(obj: any, indent: number): string {
+    const pad = '  '.repeat(indent);
+    const inner = '  '.repeat(indent + 1);
+    if (obj === null) return `<span style="color:#64748b">null</span>`;
+    if (typeof obj === 'boolean') return `<span style="color:#a78bfa">${obj}</span>`;
+    if (typeof obj === 'number') return `<span style="color:#fbbf24">${obj}</span>`;
+    if (typeof obj === 'string') return `<span style="color:#86efac">"${this._escHtml(obj)}"</span>`;
+    if (Array.isArray(obj)) {
+      if (!obj.length) return `<span style="color:#94a3b8">[]</span>`;
+      const items = obj.map(v => `${inner}${this._jsonToHtml(v, indent + 1)}`).join(`<span style="color:#64748b">,</span>\n`);
+      return `<span style="color:#94a3b8">[</span>\n${items}\n${pad}<span style="color:#94a3b8">]</span>`;
+    }
+    if (typeof obj === 'object') {
+      const keys = Object.keys(obj);
+      if (!keys.length) return `<span style="color:#94a3b8">{}</span>`;
+      const items = keys.map(k =>
+        `${inner}<span style="color:#38bdf8">"${this._escHtml(k)}"</span><span style="color:#64748b">: </span>${this._jsonToHtml(obj[k], indent + 1)}`
+      ).join(`<span style="color:#64748b">,</span>\n`);
+      return `<span style="color:#94a3b8">{</span>\n${items}\n${pad}<span style="color:#94a3b8">}</span>`;
+    }
+    return this._escHtml(String(obj));
+  }
+
+  private _escHtml(s: string): string {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 }

@@ -54,7 +54,7 @@ async def create_file(
             file_data.observation_id = observation.get_id()
             await file_data.insert()
 
-            observation.store_file(file_data)
+            await observation.store_file(file_data)
 
             if file_data.metadata:
                 observation.store_metadata(file_data.metadata)
@@ -121,7 +121,7 @@ async def upsert_fitsfile(
                 except HTTPException as e:
                     raise HTTPException(status_code=e.status_code, detail="Cannot create observation object.")
 
-            observation.store_file(file_data)
+            await observation.store_file(file_data)
 
             if file_data.metadata:
                 observation.store_metadata(file_data.metadata)
