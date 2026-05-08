@@ -27,6 +27,7 @@ export class AppComponent implements OnInit {
   loginData = { username: '', password: '' };
 
   displayedObservations = signal<Observation[]>([]);
+  filesLoading = signal(false);
   calibrationFiles = signal<FitsFile[]>([]);
   calibrationMissingFiles = signal<string[]>([]);
   sourceFiles = signal<FitsFile[]>([]);
@@ -321,10 +322,12 @@ export class AppComponent implements OnInit {
 
   async openObservation(obs: Observation) {
     this.selectedObservation.set(obs);
+    this.filesLoading.set(true);
     if (!obs._id) return;
     const full = await this.ocadbService.fetchObservationById(obs._id);
     if (!full || this.selectedObservation()?._id !== obs._id) return;
     this.selectedObservation.set(full);
+    this.filesLoading.set(false);
     this.displayedObservations.update(list =>
       list.map(o => o._id === full._id ? full : o)
     );
@@ -632,10 +635,12 @@ export class AppComponent implements OnInit {
     this.selectedObsIds.set(new Set());
     this.selectionPageMap.set(new Map());
     this.selectedObservation.set(null);
+    this.filesLoading.set(false);
     this.clearFilters();
   }
 
   expandedLogSections = signal<Record<string, boolean>>({});
+  coordMode = signal<'DEG' | 'SX'>('DEG');
 
   toggleLogEntry(id: number) {
     this.expandedLogEntry.update(current => current === id ? null : id);
@@ -755,6 +760,29 @@ export class AppComponent implements OnInit {
     if (['storing', 'queued', 'scheduled', 'requested'].includes(status)) return 'text-amber-400';
     if (status === 'corrupted') return 'text-red-400';
     return 'text-slate-600';
+  }
+
+  private formatSexagesimal(value: number, isRA: boolean): string {
+    const total = isRA ? value / 15 : Math.abs(value);
+    const sign = (!isRA && value < 0) ? '-' : (isRA ? '' : '+');
+    const h = Math.floor(total);
+    const mTotal = (total - h) * 60;
+    const m = Math.floor(mTotal);
+    const s = (mTotal - m) * 60;
+    const hStr = String(h).padStart(2, '0');
+    const mStr = String(m).padStart(2, '0');
+    const sStr = s.toFixed(1).padStart(4, '0');
+    return `${sign}${hStr}:${mStr}:${sStr}`;
+  }
+
+  formatRA(ra: number | null | undefined): string {
+    if (ra == null) return '—';
+    return this.coordMode() === 'SX' ? this.formatSexagesimal(ra, true) : ra.toFixed(4);
+  }
+
+  formatDec(dec: number | null | undefined): string {
+    if (dec == null) return '—';
+    return this.coordMode() === 'SX' ? this.formatSexagesimal(dec, false) : dec.toFixed(4);
   }
 
   getTelescopeColor(telescope: string | null | undefined): string {

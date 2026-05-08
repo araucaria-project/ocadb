@@ -88,8 +88,9 @@
       <aside class="w-full md:w-80 bg-space-900 border-r border-space-800 flex flex-col md:h-full z-10 shadow-2xl shrink-0">
         <!-- Header -->
         <div class="p-3 md:p-4 border-b border-space-800">
-          <div class="flex justify-between items-center">
+          <div class="flex items-center">
             <div class="flex items-center gap-2 cursor-pointer" (click)="resetToHome()">
+              <img src="/logo.svg" alt="OCADB logo" class="w-6 h-6 shrink-0">
               <h1 class="text-lg md:text-xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
                 OCADB Access
               </h1>
@@ -97,6 +98,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
               </svg>
             </div>
+            <div class="flex items-center gap-2 ml-auto">
             @if (ocadbService.currentUser()) {
               <span class="text-xs text-slate-400 truncate max-w-[120px]">{{ ocadbService.currentUser() }}</span>
             }
@@ -109,6 +111,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
               </svg>
             </button>
+            </div>
           </div>
         </div>
 
@@ -126,7 +129,7 @@
                 (blur)="otherFieldsFocused.set(false)"
                 (keyup.enter)="search()"
                 placeholder="e.g. V404 Cyg"
-                class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm focus:border-accent-500 focus:outline-none"
+                class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm placeholder-slate-600 focus:border-accent-500 focus:outline-none"
                 [class.pr-7]="filters().object"
                 [class.border-accent-500]="filters().object">
               @if (filters().object) {
@@ -150,7 +153,7 @@
                 (blur)="obsNameFocused.set(false)"
                 (keyup.enter)="search()"
                 placeholder="e.g. jk15c_2137_13371"
-                class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm focus:border-accent-500 focus:outline-none"
+                class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm placeholder-slate-600 focus:border-accent-500 focus:outline-none"
                 [class.pr-7]="filters().obs_name"
                 [class.border-accent-500]="filters().obs_name">
               @if (filters().obs_name) {
@@ -188,14 +191,14 @@
                   <div class="fixed inset-0 z-10" (click)="telescopeDropdownOpen.set(false)"></div>
                   <div class="absolute z-20 w-full mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden">
                     <button type="button"
-                      (click)="onTelescopeChange(''); telescopeDropdownOpen.set(false); otherFieldsFocused.set(false)"
+                      (click)="onTelescopeChange(''); telescopeDropdownOpen.set(false); otherFieldsFocused.set(false); search()"
                       class="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-slate-400 hover:bg-space-800 transition-colors text-left">
                       <span class="inline-block w-2 h-2 rounded-full bg-slate-600 shrink-0"></span>
                       All
                     </button>
                     @for (t of telescopes(); track t) {
                       <button type="button"
-                        (click)="onTelescopeChange(t); telescopeDropdownOpen.set(false)"
+                        (click)="onTelescopeChange(t); telescopeDropdownOpen.set(false); search()"
                         class="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-space-800 transition-colors text-left"
                         [class.text-slate-200]="filters().telescop === t"
                         [class.text-slate-400]="filters().telescop !== t">
@@ -220,7 +223,7 @@
                   (blur)="otherFieldsFocused.set(false)"
                   (keyup.enter)="search()"
                   placeholder="e.g. V, B, I"
-                  class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm focus:border-accent-500 focus:outline-none"
+                  class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm placeholder-slate-600 focus:border-accent-500 focus:outline-none"
                   [class.pr-7]="filters().filter?.length"
                   [class.border-accent-500]="filters().filter?.length">
                 @if (filters().filter?.length) {
@@ -254,13 +257,13 @@
                     <div class="fixed inset-0 z-10" (click)="obsTypeDropdownOpen.set(false)"></div>
                     <div class="absolute z-20 w-full mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden max-h-48 overflow-y-auto">
                       <button type="button"
-                        (click)="updateFilter('obstype', ''); obsTypeDropdownOpen.set(false); otherFieldsFocused.set(false)"
+                        (click)="updateFilter('obstype', ''); obsTypeDropdownOpen.set(false); otherFieldsFocused.set(false); search()"
                         class="w-full px-3 py-1.5 text-sm text-slate-400 hover:bg-space-800 transition-colors text-left">
                         All
                       </button>
                       @for (t of obsTypes(); track t) {
                         <button type="button"
-                          (click)="updateFilter('obstype', t); obsTypeDropdownOpen.set(false)"
+                          (click)="updateFilter('obstype', t); obsTypeDropdownOpen.set(false); search()"
                           class="w-full px-3 py-1.5 text-sm hover:bg-space-800 transition-colors text-left"
                           [class.text-slate-200]="filters().obstype === t"
                           [class.text-slate-400]="filters().obstype !== t">
@@ -290,13 +293,13 @@
                     <div class="fixed inset-0 z-10" (click)="imageTypDropdownOpen.set(false)"></div>
                     <div class="absolute z-20 w-full mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden max-h-48 overflow-y-auto">
                       <button type="button"
-                        (click)="updateFilter('imagetyp', ''); imageTypDropdownOpen.set(false); otherFieldsFocused.set(false)"
+                        (click)="updateFilter('imagetyp', ''); imageTypDropdownOpen.set(false); otherFieldsFocused.set(false); search()"
                         class="w-full px-3 py-1.5 text-sm text-slate-400 hover:bg-space-800 transition-colors text-left">
                         All
                       </button>
                       @for (t of imageTypes(); track t) {
                         <button type="button"
-                          (click)="updateFilter('imagetyp', t); imageTypDropdownOpen.set(false)"
+                          (click)="updateFilter('imagetyp', t); imageTypDropdownOpen.set(false); search()"
                           class="w-full px-3 py-1.5 text-sm hover:bg-space-800 transition-colors text-left"
                           [class.text-slate-200]="filters().imagetyp === t"
                           [class.text-slate-400]="filters().imagetyp !== t">
@@ -406,8 +409,8 @@
                     (focus)="otherFieldsFocused.set(true)"
                     (blur)="otherFieldsFocused.set(false)"
                     (keyup.enter)="search()"
-                    placeholder="PI"
-                    class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm focus:border-accent-500 focus:outline-none"
+                    placeholder="e.g. apigulski"
+                    class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm placeholder-slate-600 focus:border-accent-500 focus:outline-none"
                     [class.pr-7]="filters().pi"
                     [class.border-accent-500]="filters().pi">
                   @if (filters().pi) {
@@ -428,8 +431,8 @@
                     (focus)="otherFieldsFocused.set(true)"
                     (blur)="otherFieldsFocused.set(false)"
                     (keyup.enter)="search()"
-                    placeholder="CN2025B-123"
-                    class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm focus:border-accent-500 focus:outline-none"
+                    placeholder="e.g. oclu_young"
+                    class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm placeholder-slate-600 focus:border-accent-500 focus:outline-none"
                     [class.pr-7]="filters().sciprog"
                     [class.border-accent-500]="filters().sciprog">
                   @if (filters().sciprog) {
@@ -691,18 +694,32 @@
                     >
                   </th>
                   <th class="px-4 py-2 border-b border-space-800">Object</th>
-                  <th class="px-4 py-2 border-b border-space-800 text-right">OCA-JD</th>
+                  <th class="px-4 py-2 border-b border-space-800 font-mono">obs-name</th>
                   <th class="px-4 py-2 border-b border-space-800">Date-Obs</th>
                   <th class="px-4 py-2 border-b border-space-800">Telescope</th>
                   <th class="px-4 py-2 border-b border-space-800">Filter</th>
+                  <th class="px-4 py-2 border-b border-space-800 text-right">Airmass</th>
+                  <th class="px-4 py-2 border-b border-space-800 text-right">Exp</th>
                   <th class="px-4 py-2 border-b border-space-800">Type</th>
-                  <th class="px-4 py-2 border-b border-space-800 text-right">RA</th>
-                  <th class="px-4 py-2 border-b border-space-800 text-right">Dec</th>
-                  <th class="px-4 py-2 border-b border-space-800 text-right">Equinox</th>
+                  <th class="px-4 py-2 border-b border-space-800 text-right">
+                    RA / Dec
+                    <span class="ml-1 font-normal text-[10px] select-none">
+                      [<span
+                        class="cursor-pointer"
+                        [class.text-slate-200]="coordMode() === 'DEG'"
+                        [class.text-slate-600]="coordMode() !== 'DEG'"
+                        (click)="coordMode.set('DEG'); $event.stopPropagation()">DEG</span>
+                      <span class="text-slate-600">/</span>
+                      <span
+                        class="cursor-pointer"
+                        [class.text-slate-200]="coordMode() === 'SX'"
+                        [class.text-slate-600]="coordMode() !== 'SX'"
+                        (click)="coordMode.set('SX'); $event.stopPropagation()">SX</span>]
+                    </span>
+                  </th>
+                  <th class="px-4 py-2 border-b border-space-800">Sciprog</th>
                   <th class="px-4 py-2 border-b border-space-800">PI</th>
-                  <th class="px-4 py-2 border-b border-space-800">Files</th>
-                  <th class="px-4 py-2 border-b border-space-800">Metadata</th>
-                  <th class="px-4 py-2 border-b border-space-800">obs-name</th>
+                  <th class="px-4 py-2 border-b border-space-800">Tags</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-space-800/50">
@@ -724,8 +741,8 @@
                     <td class="px-4 py-2 font-medium text-slate-200 whitespace-nowrap">
                       {{ obs.fits_header['OBJECT'] ?? '—' }}
                     </td>
-                    <td class="px-4 py-2 text-right font-mono whitespace-nowrap text-slate-400">
-                      {{ formatOcaJd(obs.oca_jd) }}
+                    <td class="px-4 py-2 whitespace-nowrap font-mono text-slate-400">
+                      {{ obs.obs_name }}
                     </td>
                     <td class="px-4 py-2 whitespace-nowrap font-mono text-slate-400">
                       {{ obs.fits_header['DATE-OBS']?.substring(0, 19) ?? '—' }}
@@ -738,6 +755,12 @@
                     </td>
                     <td class="px-4 py-2 whitespace-nowrap">
                       {{ obs.fits_header['FILTER'] ?? '—' }}
+                    </td>
+                    <td class="px-4 py-2 text-right font-mono whitespace-nowrap text-slate-400">
+                      {{ obs.fits_header['AIRMASS'] != null ? (+obs.fits_header['AIRMASS']).toFixed(3) : '—' }}
+                    </td>
+                    <td class="px-4 py-2 text-right font-mono whitespace-nowrap text-slate-400">
+                      {{ obs.fits_header['EXPTIME'] != null ? (+obs.fits_header['EXPTIME']).toFixed(1) : '—' }}
                     </td>
                     <td class="px-4 py-2 whitespace-nowrap">
                       <span class="px-1.5 py-0.5 rounded text-[10px] font-medium"
@@ -752,13 +775,10 @@
                       </span>
                     </td>
                     <td class="px-4 py-2 text-right font-mono whitespace-nowrap text-slate-400">
-                      {{ obs.fits_header['RA'] != null ? obs.fits_header['RA'].toFixed(4) : '—' }}
+                      {{ formatRA(obs.fits_header['RA']) }} / {{ formatDec(obs.fits_header['DEC']) }}
                     </td>
-                    <td class="px-4 py-2 text-right font-mono whitespace-nowrap text-slate-400">
-                      {{ obs.fits_header['DEC'] != null ? obs.fits_header['DEC'].toFixed(4) : '—' }}
-                    </td>
-                    <td class="px-4 py-2 text-right font-mono whitespace-nowrap text-slate-400">
-                      {{ obs.fits_header['EQUINOX'] != null ? (+obs.fits_header['EQUINOX']).toFixed(1) : '—' }}
+                    <td class="px-4 py-2 whitespace-nowrap text-slate-300">
+                      {{ obs.fits_header['SCIPROG'] ?? '—' }}
                     </td>
                     <td class="px-4 py-2 whitespace-nowrap text-slate-300">
                       {{ obs.fits_header['PI'] ?? '—' }}
@@ -782,26 +802,19 @@
                               {{ getFileLabelByType(ft) }}
                             </span>
                           }
-                          @if (!(obs.filetypes?.length)) {
+                          @if (!(obs.filetypes?.length) && !hasMetadata(obs)) {
                             <span class="text-slate-600 text-[10px]">—</span>
                           }
                         }
+                        @if (hasMetadata(obs)) {
+                          <button
+                            (click)="openMetadata(obs); $event.stopPropagation()"
+                            class="px-1.5 py-0.5 rounded border text-[10px] font-medium bg-violet-900/30 text-violet-300 border-violet-600/50 hover:brightness-125 transition-all"
+                            title="View metadata">
+                            meta
+                          </button>
+                        }
                       </div>
-                    </td>
-                    <td class="px-4 py-2 whitespace-nowrap">
-                      @if (hasMetadata(obs)) {
-                        <button
-                          (click)="openMetadata(obs); $event.stopPropagation()"
-                          class="px-1.5 py-0.5 rounded border text-[10px] font-medium bg-violet-900/30 text-violet-300 border-violet-600/50 hover:brightness-125 transition-all"
-                          title="View metadata">
-                          METADATA
-                        </button>
-                      } @else {
-                        <span class="text-slate-600 text-[10px]">—</span>
-                      }
-                    </td>
-                    <td class="px-4 py-2 whitespace-nowrap font-mono text-slate-500 text-[10px]">
-                      {{ obs.obs_name }}
                     </td>
                   </tr>
                 }
@@ -999,7 +1012,7 @@
           (click)="$event.stopPropagation()">
 
           <!-- Header -->
-          <div class="flex items-center justify-between p-4 border-b border-space-800 shrink-0">
+          <div class="flex items-start justify-between p-4 border-b border-space-800 shrink-0">
             <div class="flex items-center gap-3 min-w-0">
               <div class="min-w-0">
                 <div class="text-[10px] uppercase tracking-widest text-slate-400 mb-0.5">Observation</div>
@@ -1015,41 +1028,52 @@
                 </button>
               }
             </div>
-            <div class="flex items-center gap-2 shrink-0 ml-3">
-              @if (selectedObservation()!._id) {
-                <button
-                  (click)="toggleObsSelection(selectedObservation()!._id!)"
-                  class="group flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors duration-75 border"
-                  [ngClass]="selectedObsIds().has(selectedObservation()!._id!)
-                    ? 'bg-emerald-700/40 text-emerald-300 border-emerald-600/50 hover:bg-amber-700/40 hover:text-amber-300 hover:border-amber-600/50'
-                    : 'bg-space-800 text-slate-400 border-space-700 hover:bg-space-700'">
-                  @if (!selectedObsIds().has(selectedObservation()!._id!)) {
-                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                    Select
-                  } @else {
-                    <span class="flex items-center gap-1.5 group-hover:hidden">
+            <div class="flex flex-col items-end gap-1 shrink-0 ml-3">
+              <div class="flex items-center gap-2">
+                @if (selectedObservation()!._id) {
+                  <button
+                    (click)="toggleObsSelection(selectedObservation()!._id!)"
+                    class="group flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors duration-75 border"
+                    [ngClass]="selectedObsIds().has(selectedObservation()!._id!)
+                      ? 'bg-emerald-700/40 text-emerald-300 border-emerald-600/50 hover:bg-amber-700/40 hover:text-amber-300 hover:border-amber-600/50'
+                      : 'bg-space-800 text-slate-400 border-space-700 hover:bg-space-700'">
+                    @if (!selectedObsIds().has(selectedObservation()!._id!)) {
                       <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                       </svg>
-                      Selected
-                    </span>
-                    <span class="hidden group-hover:flex items-center gap-1.5">
-                      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                      </svg>
-                      Deselect
-                    </span>
-                  }
+                      Select
+                    } @else {
+                      <span class="flex items-center gap-1.5 group-hover:hidden">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        Selected
+                      </span>
+                      <span class="hidden group-hover:flex items-center gap-1.5">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                        Deselect
+                      </span>
+                    }
+                  </button>
+                }
+                <button (click)="selectedObservation.set(null)"
+                  class="text-slate-500 hover:text-white transition-colors">
+                  <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                  </svg>
                 </button>
-              }
-              <button (click)="selectedObservation.set(null)"
-                class="text-slate-500 hover:text-white transition-colors">
-                <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
-                </svg>
-              </button>
+              </div>
+              <div class="text-[10px] text-slate-500 text-right font-mono leading-tight mt-auto">
+                @if (selectedObservation()!.updated_at) {
+                  <div>created {{ selectedObservation()!.created_at | date:'yyyy-MM-dd HH:mm' }}</div>
+                  <div>updated {{ selectedObservation()!.updated_at | date:'yyyy-MM-dd HH:mm' }}</div>
+                } @else {
+                  <div class="invisible">—</div>
+                  <div>created {{ selectedObservation()!.created_at | date:'yyyy-MM-dd HH:mm' }}</div>
+                }
+              </div>
             </div>
           </div>
 
@@ -1080,10 +1104,10 @@
               <div class="text-slate-300">{{ selectedObservation()!.fits_header['INSTRUME'] ?? '—' }}</div>
 
               <div class="text-slate-500 uppercase tracking-wider">RA / Dec</div>
-              <div class="font-mono text-slate-300">{{ selectedObservation()!.fits_header['RA'] != null ? selectedObservation()!.fits_header['RA'].toFixed(5) : '—' }} / {{ selectedObservation()!.fits_header['DEC'] != null ? selectedObservation()!.fits_header['DEC'].toFixed(5) : '—' }}</div>
+              <div class="font-mono text-slate-300">{{ formatRA(selectedObservation()!.fits_header['RA']) }} / {{ formatDec(selectedObservation()!.fits_header['DEC']) }}</div>
 
-              <div class="text-slate-500 uppercase tracking-wider">RA_tel / Dec_tel</div>
-              <div class="font-mono text-slate-300">{{ selectedObservation()!.fits_header['RA_TEL'] != null ? selectedObservation()!.fits_header['RA_TEL'].toFixed(5) : '—' }} / {{ selectedObservation()!.fits_header['DEC_TEL'] != null ? selectedObservation()!.fits_header['DEC_TEL'].toFixed(5) : '—' }}</div>
+              <div class="text-slate-500 uppercase tracking-wider">Telescope RA / Dec</div>
+              <div class="font-mono text-slate-300">{{ formatRA(selectedObservation()!.fits_header['RA_TEL']) }} / {{ formatDec(selectedObservation()!.fits_header['DEC_TEL']) }}</div>
 
               <div class="text-slate-500 uppercase tracking-wider">Equinox</div>
               <div class="font-mono text-slate-300">{{ selectedObservation()!.fits_header['EQUINOX'] ?? '—' }}</div>
@@ -1100,30 +1124,35 @@
               <div class="text-slate-500 uppercase tracking-wider">Image Type</div>
               <div class="text-slate-300">{{ selectedObservation()!.fits_header['IMAGETYP'] ?? '—' }}</div>
 
-              <div class="text-slate-500 uppercase tracking-wider">Created</div>
-              <div class="font-mono text-slate-300">{{ selectedObservation()!.created_at?.substring(0, 19) ?? '—' }}</div>
-
-              <div class="text-slate-500 uppercase tracking-wider">Updated</div>
-              <div class="font-mono text-slate-300">{{ selectedObservation()!.updated_at?.substring(0, 19) ?? '—' }}</div>
             </div>
 
             <!-- Files -->
-            @if (selectedObservation()!.files.length > 0) {
+            @if (filesLoading() ? (selectedObservation()!.filetypes?.length ?? 0) > 0 : selectedObservation()!.files.length > 0) {
               <div>
                 <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Files</div>
                 <div class="space-y-1.5">
-                  @for (file of sortedFiles(selectedObservation()!.files).filter(f => f.filename); track $index) {
-                    <div class="flex items-center gap-2 bg-space-950 rounded px-3 py-2 cursor-pointer hover:bg-space-800/60 transition-colors"
-                      (click)="selectedFile.set(file)">
-                      <span class="px-1.5 py-0.5 rounded border text-[10px] font-medium shrink-0"
-                        [class]="getFileBadgeClass(file)">
-                        {{ getFileLabel(file) }}
-                      </span>
-                      <span class="font-mono text-[11px] text-slate-400 truncate flex-1">{{ file.filename }}</span>
-                      <span class="text-[10px] shrink-0" [class]="getStorageStatusClass(file.file_status.cloud.status, file.file_status.cloud.ready)">
-                        ☁ {{ file.file_status.cloud.status }}
-                      </span>
-                    </div>
+                  @if (filesLoading()) {
+                    @for (ft of (selectedObservation()!.filetypes ?? []); track $index) {
+                      <div class="flex items-center gap-2 bg-space-950 rounded px-3 py-2 animate-pulse">
+                        <span class="h-[18px] w-8 rounded bg-space-700 shrink-0"></span>
+                        <span class="h-[14px] flex-1 rounded bg-space-800"></span>
+                        <span class="h-[14px] w-16 rounded bg-space-800 shrink-0"></span>
+                      </div>
+                    }
+                  } @else {
+                    @for (file of sortedFiles(selectedObservation()!.files).filter(f => f.filename); track $index) {
+                      <div class="flex items-center gap-2 bg-space-950 rounded px-3 py-2 cursor-pointer hover:bg-space-800/60 transition-colors"
+                        (click)="selectedFile.set(file)">
+                        <span class="px-1.5 py-0.5 rounded border text-[10px] font-medium shrink-0"
+                          [class]="getFileBadgeClass(file)">
+                          {{ getFileLabel(file) }}
+                        </span>
+                        <span class="font-mono text-[11px] text-slate-400 truncate flex-1">{{ file.filename }}</span>
+                        <span class="text-[10px] shrink-0" [class]="getStorageStatusClass(file.file_status.cloud.status, file.file_status.cloud.ready)">
+                          ☁ {{ file.file_status.cloud.status }}
+                        </span>
+                      </div>
+                    }
                   }
                 </div>
               </div>
@@ -1385,8 +1414,10 @@
 
   <!-- Share Dialog -->
   @if (shareFile()) {
-    <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-[70] p-4">
-      <div class="bg-slate-900 border border-slate-700 rounded-lg w-full max-w-lg shadow-2xl">
+    <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-[70] p-4"
+      (click)="closeShare()">
+      <div class="bg-slate-900 border border-slate-700 rounded-lg w-full max-w-lg shadow-2xl"
+        (click)="$event.stopPropagation()">
         <!-- Header -->
         <div class="flex items-center justify-between px-4 py-3 border-b border-slate-700">
           <div class="flex items-center gap-2">
