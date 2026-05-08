@@ -17,8 +17,8 @@ class UserInDB(Document, User):
     """User document stored in MongoDB (includes hashed password)"""
     hashed_password: str
 
-    observation_viewer_config: str
-    file_viewer_config: str
+    # observation_viewer_config: str
+    # file_viewer_config: str
 
     def __str__(self):
         return "> username: " + self.username + "\n> full name: " + self.full_name + "\n> email: " + self.email + "\n> access tags: " + str(
