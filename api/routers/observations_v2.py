@@ -1,3 +1,4 @@
+import asyncio
 import math
 from pathlib import Path
 
@@ -323,6 +324,68 @@ async def get_values_telescope_filter(
     values = await collection.distinct("fits_header.FILTER", {"fits_header.TELESCOP": telescope})
     return [v for v in values if v is not None]
 
+_migration_job: Dict[str, Any] = {"status": "idle"}
+
+
+async def _run_migration() -> None:
+    global _migration_job
+    _migration_job = {"status": "running", "started_at": datetime.utcnow().isoformat(), "updated": 0, "errors": 0, "total": 0}
+    try:
+        total = await Observation.count()
+        _migration_job["total"] = total
+        log.warning(f"Migrating {total} observations (using $set — existing fields untouched)...")
+
+        updated = 0
+        errors = 0
+
+        async for obs in Observation.find_all(fetch_links=True):
+            try:
+                filetypes = set()
+                source_files = set()
+                for f in obs.files:
+                    if isinstance(f, FITSFile):
+                        filetypes.add(f.file_class)
+                        source_files.update(f.source_filenames)
+
+                fields = {
+                    "filetypes": list(filetypes),
+                    "source_files": list(source_files),
+                }
+                if obs.oca_jd is not None:
+                    fields["oca_jd"] = obs.oca_jd
+
+                await obs.update({"$set": fields})
+                updated += 1
+                _migration_job["updated"] = updated
+                if updated % 100 == 0:
+                    log.info(f"  {updated}/{total}")
+            except Exception as e:
+                log.error(f"Failed on obs {obs.id} ({getattr(obs, 'obs_name', '?')}): {e}")
+                errors += 1
+                _migration_job["errors"] = errors
+
+        _migration_job.update({"status": "done", "finished_at": datetime.utcnow().isoformat()})
+        log.warning(f"Done. Updated: {updated}, Errors: {errors}")
+    except Exception as e:
+        _migration_job.update({"status": "failed", "error": str(e), "finished_at": datetime.utcnow().isoformat()})
+        log.error(f"Migration failed: {e}")
+
+
+@router.post("/migrate-api", response_description="Start migration job in the background", status_code=status.HTTP_202_ACCEPTED)
+async def migrate_api(
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    if _migration_job.get("status") == "running":
+        raise HTTPException(status_code=409, detail="Migration already running")
+    asyncio.create_task(_run_migration())
+    return {"status": "accepted", "message": "Migration started. Poll /migrate-api/status for progress."}
+
+
+@router.get("/migrate-api/status", response_description="Get migration job status")
+async def migrate_api_status(
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    return _migration_job
 
 @router.post("/download-script", response_description="Generate a POSIX shell download script for selected observations")
 async def generate_download_script(

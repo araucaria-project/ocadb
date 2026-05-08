@@ -17,6 +17,13 @@ export class AppComponent implements OnInit {
   private _lastCalibrationKey: string | null = null;
   private _lastSourceKey: string | null = null;
 
+  private static readonly LOGIN_BACKGROUNDS = Array.from({length: 23}, (_, i) => `/${i + 1}b.JPG`);
+  loginBackground = signal(
+    inject(DomSanitizer).bypassSecurityTrustStyle(
+      `url(${AppComponent.LOGIN_BACKGROUNDS[Math.floor(Math.random() * AppComponent.LOGIN_BACKGROUNDS.length)]})`
+    )
+  );
+
   loginData = { username: '', password: '' };
 
   displayedObservations = signal<Observation[]>([]);
@@ -34,6 +41,10 @@ export class AppComponent implements OnInit {
   shareLoading = signal(false);
   shareCopied = signal(false);
   selectedMetadata = signal<{ obs_name: string; metadata: Record<string, any> } | null>(null);
+  selectedMetadataHtml = computed(() => {
+    const m = this.selectedMetadata();
+    return m ? this.formatJsonHtml(m.metadata) : null;
+  });
   selectedObservation = signal<Observation | null>(null);
   showFilters = signal(true);
   showDebugPanel = signal(false);
@@ -294,6 +305,18 @@ export class AppComponent implements OnInit {
   closeFileViewer() {
     this.selectedFile.set(null);
     this.fileHistory.set([]);
+  }
+
+  async openMetadata(obs: Observation) {
+    if (obs.metadata && Object.keys(obs.metadata).length > 0) {
+      this.selectedMetadata.set({ obs_name: obs.obs_name, metadata: obs.metadata });
+      return;
+    }
+    if (!obs._id) return;
+    const full = await this.ocadbService.fetchObservationById(obs._id);
+    if (!full) return;
+    this.displayedObservations.update(list => list.map(o => o._id === full._id ? full : o));
+    this.selectedMetadata.set({ obs_name: full.obs_name, metadata: full.metadata });
   }
 
   async openObservation(obs: Observation) {
@@ -661,6 +684,7 @@ export class AppComponent implements OnInit {
   }
 
   getFileLabelByType(fileClass: string): string {
+    if (!fileClass) return '?';
     const labels: Record<string, string> = {
       raw: 'RAW', zdf: 'ZDF', master: 'MASTER', source: 'SRC', tmp: 'TMP', test: 'TEST'
     };
