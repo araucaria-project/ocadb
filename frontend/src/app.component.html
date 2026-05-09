@@ -1022,7 +1022,7 @@
               @if (hasMetadata(selectedObservation()!)) {
                 <button
                   (click)="selectedMetadata.set({ obs_name: selectedObservation()!.obs_name, metadata: selectedObservation()!.metadata })"
-                  class="px-2.5 py-1 rounded border text-xs font-medium bg-violet-900/30 text-violet-300 border-violet-600/50 hover:brightness-125 transition-all shrink-0"
+                  class="px-2.5 py-1 rounded border text-xs font-medium bg-violet-900/30 text-violet-300 border-violet-600/50 hover:brightness-125 transition-all shrink-0 cursor-pointer"
                   title="View metadata">
                   View metadata
                 </button>
@@ -1084,7 +1084,7 @@
             <div class="text-xs">
               @for (key of visibleFields(); track key) {
                 <div class="group flex items-center gap-3 py-0.5 transition-opacity"
-                  draggable="true"
+                  [attr.draggable]="dragHandleActive() ? true : null"
                   (dragstart)="onDragStart($event, key)"
                   (dragover)="onDragOver($event, key)"
                   (dragleave)="onDragLeave($event, key)"
@@ -1121,7 +1121,9 @@
                     </svg>
                   </button>
                   <div class="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-slate-300 transition-all shrink-0 cursor-grab active:cursor-grabbing"
-                    title="Drag to reorder">
+                    title="Drag to reorder"
+                    (mousedown)="dragHandleActive.set(true)"
+                    (mouseup)="dragHandleActive.set(false)">
                     <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                       <circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/>
                       <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>

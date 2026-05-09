@@ -690,6 +690,7 @@ export class AppComponent implements OnInit {
   dragKey = signal<string | null>(null);
   dragOverKey = signal<string | null>(null);
   dragOverEnd = signal(false);
+  dragHandleActive = signal(false);
 
   togglePin(key: string) {
     const canonical = this.FIELD_ALIASES[key] ?? key;
@@ -775,6 +776,7 @@ export class AppComponent implements OnInit {
     this.dragKey.set(null);
     this.dragOverKey.set(null);
     this.dragOverEnd.set(false);
+    this.dragHandleActive.set(false);
   }
 
   toggleLogEntry(id: number) {
