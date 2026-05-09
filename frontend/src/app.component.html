@@ -1076,14 +1076,15 @@
           <div class="flex-1 overflow-y-auto p-4 space-y-4 text-sm">
 
             <!-- Key fields -->
-            <div class="text-xs">
+            <div class="text-xs"
+              (dragover)="onContainerDragOver($event)"
+              (dragleave)="onContainerDragLeave($event)"
+              (drop)="onContainerDrop($event)">
               @for (key of visibleFields(); track key) {
                 <div class="group flex items-center gap-3 py-0.5 transition-opacity"
                   [attr.draggable]="dragHandleActive() ? true : null"
+                  [attr.data-drag-key]="key"
                   (dragstart)="onDragStart($event, key)"
-                  (dragover)="onDragOver($event, key)"
-                  (dragleave)="onDragLeave($event, key)"
-                  (drop)="onDrop($event, key)"
                   (dragend)="onDragEnd()"
                   [class.opacity-50]="dragKey() === key"
                   [style.border-top]="dragOverKey() === key && dragKey() !== key ? '2px solid #60a5fa' : '2px solid transparent'">
@@ -1128,12 +1129,7 @@
                 </div>
               }
               @if (dragKey()) {
-                <div class="h-3"
-                  (dragover)="onDragOverEnd($event)"
-                  (dragleave)="onDragLeaveEnd($event)"
-                  (drop)="onDropEnd($event)"
-                  [style.border-top]="dragOverEnd() ? '2px solid #60a5fa' : '2px solid transparent'">
-                </div>
+                <div class="h-3" [style.border-top]="dragOverEnd() ? '2px solid #60a5fa' : '2px solid transparent'"></div>
               }
             </div>
 
@@ -1668,7 +1664,7 @@
           <div class="border-t border-space-800 pt-3 space-y-2">
             <p class="text-xs text-slate-400">File types:</p>
             @for (type of DOWNLOAD_FILE_TYPES; track type) {
-              @if (downloadIncludeCalibration() || type === 'raw' || type === 'zdf') {
+              @if (downloadIncludeCalibration() || !DOWNLOAD_CALIB_TYPES.has(type)) {
               <label class="flex items-center gap-2.5 cursor-pointer select-none" (click)="toggleDownloadFileType(type)">
                 <div class="w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors"
                   [class.bg-accent-600]="downloadFileTypes().has(type)"

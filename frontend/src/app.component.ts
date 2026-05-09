@@ -69,7 +69,8 @@ export class AppComponent implements OnInit {
   downloadForCurrentUser = signal(true);
   downloadCustomUsername = signal('');
   downloadIncludeCalibration = signal(false);
-  readonly DOWNLOAD_FILE_TYPES = ['raw', 'zdf', 'master_f', 'master_d', 'master_z'] as const;
+  readonly DOWNLOAD_FILE_TYPES = ['zdf', 'raw', 'flat', 'zero', 'dark', 'master'] as const;
+  readonly DOWNLOAD_CALIB_TYPES = new Set(['flat', 'zero', 'dark', 'master']);
   downloadFileTypes = signal<Set<string>>(new Set(this.DOWNLOAD_FILE_TYPES));
   expandedLogEntry = signal<number | null>(null);
   editingPage = signal(false);
@@ -628,8 +629,11 @@ export class AppComponent implements OnInit {
       : this.downloadCustomUsername().trim() || undefined;
     this.scriptLoading.set(true);
     this.showDownloadDialog.set(false);
-    const allTypes = this.downloadFileTypes().size === this.DOWNLOAD_FILE_TYPES.length;
-    await this.ocadbService.downloadScript(ids, username, this.downloadIncludeCalibration(), allTypes ? undefined : [...this.downloadFileTypes()]);
+    const includeCalib = this.downloadIncludeCalibration();
+    const selectedTypes = [...this.downloadFileTypes()].filter(t => includeCalib || !this.DOWNLOAD_CALIB_TYPES.has(t));
+    const visibleTypes = this.DOWNLOAD_FILE_TYPES.filter(t => includeCalib || !this.DOWNLOAD_CALIB_TYPES.has(t));
+    const allTypes = selectedTypes.length === visibleTypes.length;
+    await this.ocadbService.downloadScript(ids, username, includeCalib, allTypes ? undefined : selectedTypes);
     this.scriptLoading.set(false);
   }
 
@@ -691,6 +695,8 @@ export class AppComponent implements OnInit {
   dragOverKey = signal<string | null>(null);
   dragOverEnd = signal(false);
   dragHandleActive = signal(false);
+  private _globalDragOverHandler: ((e: DragEvent) => void) | null = null;
+  private _globalDropHandler: ((e: DragEvent) => void) | null = null;
 
   togglePin(key: string) {
     const canonical = this.FIELD_ALIASES[key] ?? key;
@@ -718,70 +724,87 @@ export class AppComponent implements OnInit {
     document.body.appendChild(ghost);
     event.dataTransfer?.setDragImage(ghost, event.offsetX, event.offsetY);
     setTimeout(() => document.body.removeChild(ghost), 0);
+
+    this._globalDragOverHandler = (e: DragEvent) => {
+      e.preventDefault();
+      this._updateDragIndicator(e.clientY);
+    };
+    this._globalDropHandler = (e: DragEvent) => {
+      e.preventDefault();
+      this._executeDrop();
+    };
+    document.addEventListener('dragover', this._globalDragOverHandler);
+    document.addEventListener('drop', this._globalDropHandler);
   }
 
-  onDragOver(event: DragEvent, key: string) {
-    event.preventDefault();
-    this.dragOverKey.set(key);
-    this.dragOverEnd.set(false);
+  private _updateDragIndicator(clientY: number) {
+    const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-drag-key]'));
+    if (!rows.length) return;
+    if (clientY > rows[rows.length - 1].getBoundingClientRect().bottom) {
+      this.dragOverKey.set(null);
+      this.dragOverEnd.set(true);
+      return;
+    }
+    for (const row of rows) {
+      if (clientY <= row.getBoundingClientRect().bottom) {
+        this.dragOverKey.set(row.dataset['dragKey'] ?? null);
+        this.dragOverEnd.set(false);
+        return;
+      }
+    }
   }
 
-  onDragOverEnd(event: DragEvent) {
-    event.preventDefault();
-    this.dragOverKey.set(null);
-    this.dragOverEnd.set(true);
-  }
-
-  onDragLeaveEnd(event: DragEvent) {
-    const target = event.currentTarget as HTMLElement;
-    if (target.contains(event.relatedTarget as Node)) return;
-    this.dragOverEnd.set(false);
-  }
-
-  onDropEnd(event: DragEvent) {
-    event.preventDefault();
+  private _executeDrop() {
     const sourceKey = this.dragKey();
+    const targetKey = this.dragOverKey();
+    const isEnd = this.dragOverEnd();
     this.dragKey.set(null);
+    this.dragOverKey.set(null);
     this.dragOverEnd.set(false);
     if (!sourceKey) return;
     const conf = this.ocadbService.viewerConf();
-    const pinned = new Set(conf.pinnedFields);
     const order = [...conf.fieldOrder];
     const fromIdx = order.indexOf(sourceKey);
     if (fromIdx === -1) return;
     order.splice(fromIdx, 1);
-    let lastPinnedIdx = -1;
-    for (let i = order.length - 1; i >= 0; i--) {
-      if (pinned.has(order[i])) { lastPinnedIdx = i; break; }
+    if (isEnd) {
+      const pinned = new Set(conf.pinnedFields);
+      let lastPinnedIdx = -1;
+      for (let i = order.length - 1; i >= 0; i--) {
+        if (pinned.has(order[i])) { lastPinnedIdx = i; break; }
+      }
+      order.splice(lastPinnedIdx + 1, 0, sourceKey);
+    } else if (targetKey && targetKey !== sourceKey) {
+      const toIdx = order.indexOf(targetKey);
+      if (toIdx === -1) return;
+      order.splice(toIdx, 0, sourceKey);
+    } else {
+      return;
     }
-    order.splice(lastPinnedIdx + 1, 0, sourceKey);
     this.ocadbService.saveViewerConf({ ...conf, fieldOrder: order });
   }
 
-  onDragLeave(event: DragEvent, key: string) {
-    const target = event.currentTarget as HTMLElement;
-    if (target.contains(event.relatedTarget as Node)) return;
-    if (this.dragOverKey() === key) this.dragOverKey.set(null);
-  }
-
-  onDrop(event: DragEvent, targetKey: string) {
+  onContainerDragOver(event: DragEvent) {
     event.preventDefault();
-    const sourceKey = this.dragKey();
-    this.dragKey.set(null);
-    this.dragOverKey.set(null);
-    if (!sourceKey || sourceKey === targetKey) return;
-    const conf = this.ocadbService.viewerConf();
-    const order = [...conf.fieldOrder];
-    const fromIdx = order.indexOf(sourceKey);
-    if (fromIdx === -1) return;
-    order.splice(fromIdx, 1);
-    const toIdx = order.indexOf(targetKey);
-    if (toIdx === -1) return;
-    order.splice(toIdx, 0, sourceKey);
-    this.ocadbService.saveViewerConf({ ...conf, fieldOrder: order });
+  }
+
+  onContainerDragLeave(_event: DragEvent) {}
+
+  onContainerDrop(event: DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    this._executeDrop();
   }
 
   onDragEnd() {
+    if (this._globalDragOverHandler) {
+      document.removeEventListener('dragover', this._globalDragOverHandler);
+      this._globalDragOverHandler = null;
+    }
+    if (this._globalDropHandler) {
+      document.removeEventListener('drop', this._globalDropHandler);
+      this._globalDropHandler = null;
+    }
     this.dragKey.set(null);
     this.dragOverKey.set(null);
     this.dragOverEnd.set(false);
