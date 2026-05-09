@@ -787,13 +787,11 @@
                       <div class="flex flex-wrap gap-1">
                         @if (obs.files.length > 0 && obs.files[0].filename) {
                           @for (file of sortedFiles(obs.files); track $index) {
-                            <button
-                              (click)="selectedFile.set(file); $event.stopPropagation()"
-                              class="px-1.5 py-0.5 rounded text-[10px] font-medium border cursor-pointer hover:brightness-125 transition-all"
+                            <span class="px-1.5 py-0.5 rounded text-[10px] font-medium border"
                               [class]="getFileBadgeClass(file)"
                               [title]="file.filename">
                               {{ getFileLabel(file) }}
-                            </button>
+                            </span>
                           }
                         } @else {
                           @for (ft of sortedFileTypes(obs.filetypes ?? []); track ft) {
@@ -807,12 +805,9 @@
                           }
                         }
                         @if (hasMetadata(obs)) {
-                          <button
-                            (click)="openMetadata(obs); $event.stopPropagation()"
-                            class="px-1.5 py-0.5 rounded border text-[10px] font-medium bg-violet-900/30 text-violet-300 border-violet-600/50 hover:brightness-125 transition-all"
-                            title="View metadata">
+                          <span class="px-1.5 py-0.5 rounded border text-[10px] font-medium bg-violet-900/30 text-violet-300 border-violet-600/50">
                             meta
-                          </button>
+                          </span>
                         }
                       </div>
                     </td>
@@ -1013,20 +1008,20 @@
 
           <!-- Header -->
           <div class="flex items-start justify-between p-4 border-b border-space-800 shrink-0">
-            <div class="flex items-center gap-3 min-w-0">
-              <div class="min-w-0">
-                <div class="text-[10px] uppercase tracking-widest text-slate-400 mb-0.5">Observation</div>
-                <div class="font-mono text-sm text-slate-200 truncate">{{ selectedObservation()!.obs_name }}</div>
-                <div class="text-xs text-slate-500 mt-0.5">{{ selectedObservation()!.fits_header['OBJECT'] ?? '—' }}</div>
+            <div class="min-w-0">
+              <div class="text-[10px] uppercase tracking-widest text-slate-400 mb-0.5">Observation</div>
+              <div class="flex items-center gap-3">
+                <div class="font-mono text-base text-slate-200 truncate">{{ selectedObservation()!.obs_name }}</div>
+                @if (hasMetadata(selectedObservation()!)) {
+                  <button
+                    (click)="selectedMetadata.set({ obs_name: selectedObservation()!.obs_name, metadata: selectedObservation()!.metadata })"
+                    class="px-2.5 py-1 rounded border text-xs font-medium bg-violet-900/30 text-violet-300 border-violet-600/50 hover:brightness-125 transition-all shrink-0"
+                    title="View metadata">
+                    View metadata
+                  </button>
+                }
               </div>
-              @if (hasMetadata(selectedObservation()!)) {
-                <button
-                  (click)="selectedMetadata.set({ obs_name: selectedObservation()!.obs_name, metadata: selectedObservation()!.metadata })"
-                  class="px-2.5 py-1 rounded border text-xs font-medium bg-violet-900/30 text-violet-300 border-violet-600/50 hover:brightness-125 transition-all shrink-0 cursor-pointer"
-                  title="View metadata">
-                  View metadata
-                </button>
-              }
+              <div class="text-xs text-slate-500 mt-0.5">{{ selectedObservation()!.fits_header['OBJECT'] ?? '—' }}</div>
             </div>
             <div class="flex flex-col items-end gap-1 shrink-0 ml-3">
               <div class="flex items-center gap-2">
@@ -1266,8 +1261,8 @@
                 </button>
                 <span class="text-slate-700 shrink-0">|</span>
               }
-              <span class="px-2 py-0.5 rounded border text-xs font-bold bg-violet-900/30 text-violet-300 border-violet-600/50 shrink-0">METADATA</span>
-              <span class="font-mono text-sm text-slate-200 truncate">{{ selectedMetadata()!.obs_name }}</span>
+              <span class="px-2 py-0.5 rounded border text-xs font-bold bg-violet-900/30 text-violet-300 border-violet-600/50 shrink-0">metadata</span>
+              <span class="font-mono text-base text-slate-200 truncate">{{ selectedMetadata()!.obs_name }}</span>
             </div>
             <button (click)="selectedMetadata.set(null)"
               class="text-slate-500 hover:text-white transition-colors shrink-0 ml-3">

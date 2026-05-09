@@ -709,6 +709,15 @@ export class AppComponent implements OnInit {
   onDragStart(event: DragEvent, key: string) {
     this.dragKey.set(key);
     event.dataTransfer?.setData('text/plain', key);
+    const el = event.currentTarget as HTMLElement;
+    const ghost = el.cloneNode(true) as HTMLElement;
+    ghost.style.opacity = '0.5';
+    ghost.style.position = 'fixed';
+    ghost.style.top = '-1000px';
+    ghost.style.width = el.offsetWidth + 'px';
+    document.body.appendChild(ghost);
+    event.dataTransfer?.setDragImage(ghost, event.offsetX, event.offsetY);
+    setTimeout(() => document.body.removeChild(ghost), 0);
   }
 
   onDragOver(event: DragEvent, key: string) {
