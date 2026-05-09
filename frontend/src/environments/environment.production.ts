@@ -1,5 +1,5 @@
 export const environment = {
   production: true,
-  apiBaseUrl: '/api/v1',
-  apiV2BaseUrl: '/api/v2',
+  apiBaseUrl: 'https://api.ocadb.space/api/v1',
+  apiV2BaseUrl: 'https://api.ocadb.space/api/v2',
 };
