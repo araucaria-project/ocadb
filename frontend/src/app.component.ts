@@ -2,7 +2,7 @@ import { Component, signal, computed, inject, OnInit, ElementRef, ViewChild, eff
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { OcadbService, Observation, SearchFilters, FitsFile, StorageStatusType } from './services/ocadb.service';
+import { OcadbService, Observation, SearchFilters, FitsFile, StorageStatusType, ViewerConf, DEFAULT_VIEWER_CONF } from './services/ocadb.service';
 import { ApiLogService, ApiLogEntry } from './services/api-log.service';
 
 @Component({
@@ -30,8 +30,10 @@ export class AppComponent implements OnInit {
   filesLoading = signal(false);
   calibrationFiles = signal<FitsFile[]>([]);
   calibrationMissingFiles = signal<string[]>([]);
+  calibrationFilesLoading = signal(false);
   sourceFiles = signal<FitsFile[]>([]);
   sourceMissingFiles = signal<string[]>([]);
+  sourceFilesLoading = signal(false);
   fileHistory = signal<FitsFile[]>([]);
   hasSearched = signal(false);
   selectedFile = signal<FitsFile | null>(null);
@@ -134,21 +136,28 @@ export class AppComponent implements OnInit {
       if (!names.length) {
         this.calibrationFiles.set([]);
         this.calibrationMissingFiles.set([]);
+        if (!(obs?.source_files?.length)) this.calibrationFilesLoading.set(false);
         return;
       }
 
       const fetchKey = key;
-      const doFetch = () => {
+      const doFetch = (showLoading: boolean) => {
+        if (showLoading) {
+          this.calibrationFilesLoading.set(true);
+          this.calibrationFiles.set([]);
+          this.calibrationMissingFiles.set([]);
+        }
         Promise.all(names.map(n => this.ocadbService.fetchFileByFilename(n).then(f => ({ name: n, file: f }))))
           .then(results => {
             if (this._lastCalibrationKey !== fetchKey) return;
             this.calibrationFiles.set(results.filter(r => r.file !== null).map(r => r.file!));
             this.calibrationMissingFiles.set(results.filter(r => r.file === null).map(r => r.name));
+            this.calibrationFilesLoading.set(false);
           });
       };
 
-      if (keyChanged) doFetch();
-      const intervalId = setInterval(doFetch, 10000);
+      if (keyChanged) doFetch(true);
+      const intervalId = setInterval(() => doFetch(false), 10000);
       onCleanup(() => clearInterval(intervalId));
     });
 
@@ -183,21 +192,24 @@ export class AppComponent implements OnInit {
       if (!names.length) {
         this.sourceFiles.set([]);
         this.sourceMissingFiles.set([]);
+        this.sourceFilesLoading.set(false);
         return;
       }
 
       const fetchKey = key;
-      const doFetch = () => {
+      const doFetch = (showLoading: boolean) => {
+        if (showLoading) this.sourceFilesLoading.set(true);
         Promise.all(names.map(n => this.ocadbService.fetchFileByFilename(n).then(f => ({ name: n, file: f }))))
           .then(results => {
             if (this._lastSourceKey !== fetchKey) return;
             this.sourceFiles.set(results.filter(r => r.file !== null).map(r => r.file!));
             this.sourceMissingFiles.set(results.filter(r => r.file === null).map(r => r.name));
+            this.sourceFilesLoading.set(false);
           });
       };
 
-      if (keyChanged) doFetch();
-      const intervalId = setInterval(doFetch, 10000);
+      if (keyChanged) doFetch(true);
+      const intervalId = setInterval(() => doFetch(false), 10000);
       onCleanup(() => clearInterval(intervalId));
     });
 
@@ -323,6 +335,7 @@ export class AppComponent implements OnInit {
   async openObservation(obs: Observation) {
     this.selectedObservation.set(obs);
     this.filesLoading.set(true);
+    this.calibrationFilesLoading.set(true);
     if (!obs._id) return;
     const full = await this.ocadbService.fetchObservationById(obs._id);
     if (!full || this.selectedObservation()?._id !== obs._id) return;
@@ -642,6 +655,128 @@ export class AppComponent implements OnInit {
   expandedLogSections = signal<Record<string, boolean>>({});
   coordMode = signal<'DEG' | 'SX'>('DEG');
 
+  readonly FIELD_DEFS: Record<string, { label: string }> = {
+    'TELESCOP':  { label: 'Telescope' },
+    'DATE-OBS':  { label: 'Date-Obs' },
+    'FILTER':    { label: 'Filter' },
+    'EXPTIME':   { label: 'Exp Time' },
+    'AIRMASS':   { label: 'Airmass' },
+    'PI':        { label: 'PI' },
+    'SCIPROG':   { label: 'Sci Prog' },
+    'INSTRUME':  { label: 'Instrument' },
+    'RA':        { label: 'RA / Dec' },
+    'RA_TEL':    { label: 'Telescope RA / Dec' },
+    'OBSTYPE':   { label: 'Obs Type' },
+    'IMAGETYP':  { label: 'Image Type' },
+  };
+
+  private readonly FIELD_ALIASES: Record<string, string> = {
+    'DEC': 'RA',
+    'DEC_TEL': 'RA_TEL',
+  };
+
+  pinnedFields = computed(() => {
+    const pinned = new Set(this.ocadbService.viewerConf().pinnedFields);
+    if (pinned.has('RA')) pinned.add('DEC');
+    if (pinned.has('RA_TEL')) pinned.add('DEC_TEL');
+    return pinned;
+  });
+  fieldOrder = computed(() => this.ocadbService.viewerConf().fieldOrder);
+  visibleFields = computed(() => {
+    const pinned = this.pinnedFields();
+    return this.fieldOrder().filter(k => pinned.has(k) && !this.FIELD_ALIASES[k]);
+  });
+
+  dragKey = signal<string | null>(null);
+  dragOverKey = signal<string | null>(null);
+  dragOverEnd = signal(false);
+
+  togglePin(key: string) {
+    const canonical = this.FIELD_ALIASES[key] ?? key;
+    const conf = this.ocadbService.viewerConf();
+    const pinned = new Set(conf.pinnedFields);
+    const fieldOrder = [...conf.fieldOrder];
+    if (pinned.has(canonical)) {
+      pinned.delete(canonical);
+    } else {
+      pinned.add(canonical);
+      if (!fieldOrder.includes(canonical)) fieldOrder.push(canonical);
+    }
+    this.ocadbService.saveViewerConf({ ...conf, pinnedFields: [...pinned], fieldOrder });
+  }
+
+  onDragStart(event: DragEvent, key: string) {
+    this.dragKey.set(key);
+    event.dataTransfer?.setData('text/plain', key);
+  }
+
+  onDragOver(event: DragEvent, key: string) {
+    event.preventDefault();
+    this.dragOverKey.set(key);
+    this.dragOverEnd.set(false);
+  }
+
+  onDragOverEnd(event: DragEvent) {
+    event.preventDefault();
+    this.dragOverKey.set(null);
+    this.dragOverEnd.set(true);
+  }
+
+  onDragLeaveEnd(event: DragEvent) {
+    const target = event.currentTarget as HTMLElement;
+    if (target.contains(event.relatedTarget as Node)) return;
+    this.dragOverEnd.set(false);
+  }
+
+  onDropEnd(event: DragEvent) {
+    event.preventDefault();
+    const sourceKey = this.dragKey();
+    this.dragKey.set(null);
+    this.dragOverEnd.set(false);
+    if (!sourceKey) return;
+    const conf = this.ocadbService.viewerConf();
+    const pinned = new Set(conf.pinnedFields);
+    const order = [...conf.fieldOrder];
+    const fromIdx = order.indexOf(sourceKey);
+    if (fromIdx === -1) return;
+    order.splice(fromIdx, 1);
+    let lastPinnedIdx = -1;
+    for (let i = order.length - 1; i >= 0; i--) {
+      if (pinned.has(order[i])) { lastPinnedIdx = i; break; }
+    }
+    order.splice(lastPinnedIdx + 1, 0, sourceKey);
+    this.ocadbService.saveViewerConf({ ...conf, fieldOrder: order });
+  }
+
+  onDragLeave(event: DragEvent, key: string) {
+    const target = event.currentTarget as HTMLElement;
+    if (target.contains(event.relatedTarget as Node)) return;
+    if (this.dragOverKey() === key) this.dragOverKey.set(null);
+  }
+
+  onDrop(event: DragEvent, targetKey: string) {
+    event.preventDefault();
+    const sourceKey = this.dragKey();
+    this.dragKey.set(null);
+    this.dragOverKey.set(null);
+    if (!sourceKey || sourceKey === targetKey) return;
+    const conf = this.ocadbService.viewerConf();
+    const order = [...conf.fieldOrder];
+    const fromIdx = order.indexOf(sourceKey);
+    if (fromIdx === -1) return;
+    order.splice(fromIdx, 1);
+    const toIdx = order.indexOf(targetKey);
+    if (toIdx === -1) return;
+    order.splice(toIdx, 0, sourceKey);
+    this.ocadbService.saveViewerConf({ ...conf, fieldOrder: order });
+  }
+
+  onDragEnd() {
+    this.dragKey.set(null);
+    this.dragOverKey.set(null);
+    this.dragOverEnd.set(false);
+  }
+
   toggleLogEntry(id: number) {
     this.expandedLogEntry.update(current => current === id ? null : id);
     this.expandedLogSections.set({});
@@ -760,6 +895,10 @@ export class AppComponent implements OnInit {
     if (['storing', 'queued', 'scheduled', 'requested'].includes(status)) return 'text-amber-400';
     if (status === 'corrupted') return 'text-red-400';
     return 'text-slate-600';
+  }
+
+  calibrationSkeletonNames(obs: Observation): string[] {
+    return obs.source_files ?? [];
   }
 
   private formatSexagesimal(value: number, isRA: boolean): string {

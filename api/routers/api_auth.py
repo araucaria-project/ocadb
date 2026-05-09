@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Body
 from fastapi.responses import PlainTextResponse
 from fastapi.security import OAuth2PasswordRequestFormStrict
 from pydantic import BaseModel
+from starlette.responses import JSONResponse
 
 from api.services.auth_service import AuthService
 from api.schemas import Token, TokenPair, RefreshRequest
@@ -153,6 +154,44 @@ async def read_users_username(token: Annotated[str, Depends(AuthService.validate
     else:
         raise HTTPException(status_code=403, detail="Insufficient permissions to read user")
 
+@router.get("/user/viewer_conf", response_class=JSONResponse)
+async def get_viewer_conf(
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    # Extract username from token
+    from jose import jwt
+    payload = jwt.decode(token, AuthService._SECRET_KEY, algorithms=[AuthService._ALGORITHM])
+    username = payload.get("sub")
+
+    user = await DatabaseConnection.get_user(username)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return user.viewer_conf
+
+@router.put("/user/viewer_conf", status_code=200, response_class=JSONResponse)
+async def put_viewer_conf(
+        viewer_conf: dict,
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    # Extract username from token
+    from jose import jwt
+    payload = jwt.decode(token, AuthService._SECRET_KEY, algorithms=[AuthService._ALGORITHM])
+    username = payload.get("sub")
+
+    user = await DatabaseConnection.get_user(username)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.viewer_conf = viewer_conf
+    fields = {
+        "viewer_conf": str,
+    }
+    fields["viewer_conf"] = viewer_conf
+
+    await user.update({"$set": fields})
+
+    return viewer_conf
 
 @router.put("/user/{username}/", response_model=User)
 async def update_users_username(token: Annotated[str, Depends(AuthService.validate_token)],

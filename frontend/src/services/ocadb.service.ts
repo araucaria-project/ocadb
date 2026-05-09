@@ -57,6 +57,16 @@ export interface FitsHeader {
   [key: string]: any;
 }
 
+export interface ViewerConf {
+  pinnedFields: string[];
+  fieldOrder: string[];
+}
+
+export const DEFAULT_VIEWER_CONF: ViewerConf = {
+  pinnedFields: ['TELESCOP', 'DATE-OBS', 'FILTER', 'EXPTIME', 'AIRMASS', 'PI', 'SCIPROG', 'INSTRUME', 'RA', 'RA_TEL', 'OBSTYPE', 'IMAGETYP'],
+  fieldOrder:   ['TELESCOP', 'DATE-OBS', 'FILTER', 'EXPTIME', 'AIRMASS', 'PI', 'SCIPROG', 'INSTRUME', 'RA', 'RA_TEL', 'OBSTYPE', 'IMAGETYP'],
+};
+
 export interface Observation {
   _id: string | null;
   obs_name: string;
@@ -64,6 +74,7 @@ export interface Observation {
   object_id?: string | null;
   files: FitsFile[];
   filetypes?: string[];
+  source_files?: string[];
   fits_header: FitsHeader;
   metadata: Record<string, any>;
   created_at?: string | null;
@@ -123,6 +134,8 @@ export class OcadbService {
 
   pagination = signal<PaginationState>({ page: 1, pageSize: 30, total: 0 });
 
+  viewerConf = signal<ViewerConf>(DEFAULT_VIEWER_CONF);
+
   constructor() {
     const savedToken = localStorage.getItem('ocadb_token');
     const savedRefresh = localStorage.getItem('ocadb_refresh_token');
@@ -132,6 +145,10 @@ export class OcadbService {
       this.refreshToken.set(savedRefresh);
       this.currentUser.set(savedUser);
       this.lastRequestInfo.set('Session restored from local storage');
+    }
+    const savedConf = localStorage.getItem('ocadb_viewer_conf');
+    if (savedConf) {
+      try { this.viewerConf.set({ ...DEFAULT_VIEWER_CONF, ...JSON.parse(savedConf) }); } catch {}
     }
   }
 
@@ -181,6 +198,7 @@ export class OcadbService {
       localStorage.setItem('ocadb_user', username);
       this.lastRequestInfo.set('Login successful.');
       this.loading.set(false);
+      this.fetchViewerConf();
       return true;
     } catch (e: any) {
       this.handleFetchError(e, 'Login');
@@ -195,6 +213,8 @@ export class OcadbService {
     localStorage.removeItem('ocadb_token');
     localStorage.removeItem('ocadb_refresh_token');
     localStorage.removeItem('ocadb_user');
+    localStorage.removeItem('ocadb_viewer_conf');
+    this.viewerConf.set(DEFAULT_VIEWER_CONF);
     this.error.set(null);
     this.lastRequestInfo.set('User logged out');
   }
@@ -381,6 +401,28 @@ export class OcadbService {
     } catch {
       return null;
     }
+  }
+
+  async fetchViewerConf(): Promise<void> {
+    try {
+      const response = await this.authenticatedFetch(`${this.baseUrl}/auth/user/viewer_conf`);
+      if (!response.ok) return;
+      const conf: ViewerConf = { ...DEFAULT_VIEWER_CONF, ...await response.json() };
+      this.viewerConf.set(conf);
+      localStorage.setItem('ocadb_viewer_conf', JSON.stringify(conf));
+    } catch {}
+  }
+
+  async saveViewerConf(conf: ViewerConf): Promise<void> {
+    this.viewerConf.set(conf);
+    localStorage.setItem('ocadb_viewer_conf', JSON.stringify(conf));
+    try {
+      await this.authenticatedFetch(`${this.baseUrl}/auth/user/viewer_conf`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(conf),
+      });
+    } catch {}
   }
 
   async fetchFileByFilename(filename: string): Promise<FitsFile | null> {
