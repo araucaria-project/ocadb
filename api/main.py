@@ -69,7 +69,7 @@ app = FastAPI(lifespan=lifespan,
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https?://192\.168\.\d+\.\d+(:\d+)?$|^https?://10\.\d+\.\d+\.\d+(:\d+)?$|^https://([a-z0-9-]+\.)*ocadb\.space$|^https://.*\.app\.github\.dev$",
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https?://192\.168\.\d+\.\d+(:\d+)?$|^https?://10\.\d+\.\d+\.\d+(:\d+)?$|^https://([a-z0-9-]+\.)*ocadb\.space$|^https://.*\.app\.github\.dev$|^https://.*\.workers\.dev$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
