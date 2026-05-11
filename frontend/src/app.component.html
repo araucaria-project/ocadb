@@ -132,17 +132,21 @@
                   [placeholder]="objectDropdownOpen() ? 'start typing object name..' : 'All'"
                   class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm placeholder-slate-600 focus:border-accent-500 focus:outline-none pr-7"
                   [class.border-accent-500]="filters().object">
-                @if (filters().object) {
+                @if (!objectDropdownOpen() && filters().object) {
                   <button type="button" tabindex="-1"
                     (click)="clearObjectFilter(); search()"
                     class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
                     <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                   </button>
                 } @else {
-                  <svg class="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500 pointer-events-none"
-                    fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                  </svg>
+                  <button type="button" tabindex="-1"
+                    (click)="objectDropdownOpen.set(!objectDropdownOpen())"
+                    class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
+                    <svg class="w-3 h-3 transition-transform" [class.rotate-180]="objectDropdownOpen()"
+                      fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                  </button>
                 }
               </div>
               @if (objectDropdownOpen()) {
@@ -368,17 +372,21 @@
                     [placeholder]="filterDropdownOpen() ? 'start typing filter name..' : 'All'"
                     class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm placeholder-slate-600 focus:border-accent-500 focus:outline-none pr-7"
                     [class.border-accent-500]="filters().filter?.length">
-                  @if (filters().filter?.length) {
+                  @if (!filterDropdownOpen() && filters().filter?.length) {
                     <button type="button" tabindex="-1"
                       (click)="filterQuery.set(''); filters.update(f => ({ ...f, filter: null })); filterDropdownOpen.set(false); search()"
                       class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
                       <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                     </button>
                   } @else {
-                    <svg class="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500 pointer-events-none"
-                      fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                    </svg>
+                    <button type="button" tabindex="-1"
+                      (click)="filterDropdownOpen.set(!filterDropdownOpen())"
+                      class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
+                      <svg class="w-3 h-3 transition-transform" [class.rotate-180]="filterDropdownOpen()"
+                        fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                      </svg>
+                    </button>
                   }
                 </div>
                 @if (filterDropdownOpen()) {
@@ -624,17 +632,21 @@
                       [placeholder]="piDropdownOpen() ? 'start typing PI name..' : 'All'"
                       class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm placeholder-slate-600 focus:border-accent-500 focus:outline-none pr-7"
                       [class.border-accent-500]="filters().pi">
-                    @if (filters().pi) {
+                    @if (!piDropdownOpen() && filters().pi) {
                       <button type="button" tabindex="-1"
                         (click)="piQuery.set(''); updateFilter('pi', ''); piDropdownOpen.set(false); search()"
                         class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
                         <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                       </button>
                     } @else {
-                      <svg class="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500 pointer-events-none"
-                        fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                      </svg>
+                      <button type="button" tabindex="-1"
+                        (click)="piDropdownOpen.set(!piDropdownOpen())"
+                        class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
+                        <svg class="w-3 h-3 transition-transform" [class.rotate-180]="piDropdownOpen()"
+                          fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                      </button>
                     }
                   </div>
                   @if (piDropdownOpen()) {
@@ -678,17 +690,21 @@
                       [placeholder]="sciprogDropdownOpen() ? 'start typing program..' : 'All'"
                       class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm placeholder-slate-600 focus:border-accent-500 focus:outline-none pr-7"
                       [class.border-accent-500]="filters().sciprog">
-                    @if (filters().sciprog) {
+                    @if (!sciprogDropdownOpen() && filters().sciprog) {
                       <button type="button" tabindex="-1"
                         (click)="sciprogQuery.set(''); updateFilter('sciprog', ''); sciprogDropdownOpen.set(false); search()"
                         class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
                         <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                       </button>
                     } @else {
-                      <svg class="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500 pointer-events-none"
-                        fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                      </svg>
+                      <button type="button" tabindex="-1"
+                        (click)="sciprogDropdownOpen.set(!sciprogDropdownOpen())"
+                        class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
+                        <svg class="w-3 h-3 transition-transform" [class.rotate-180]="sciprogDropdownOpen()"
+                          fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                      </button>
                     }
                   </div>
                   @if (sciprogDropdownOpen()) {
