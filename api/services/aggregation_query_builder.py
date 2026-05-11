@@ -5,12 +5,9 @@ from typing import List
 
 class AggregationQueryBuilder:
     @staticmethod
-    def aggregate(match_query, access_tags, page, page_size, sort_expr):
+    def aggregate(access_tags, page, page_size, sort_expr):
         if not sort_expr:
             return [
-                {
-                    "$match": match_query
-                },
                 {
                     "$redact": {
                         "$cond": {"if": {"$gt": [{"$size": {"$setIntersection": ["$access_tags", access_tags]}}, 0]},

@@ -268,7 +268,7 @@ async def search_multi(
         OcaWithin(Observation.telescope_coordinates.lon_lat, (search_form.cone_search.get_ref_lon(), search_form.cone_search.get_ref_lat()),
                   search_form.cone_search.rad_distance()))
 
-    pipeline = AggregationQueryBuilder.aggregate(match_query={}, access_tags=user.access_tags, page=page, page_size=page_size, sort_expr=search_form.sort_expr)
+    pipeline = AggregationQueryBuilder.aggregate(access_tags=user.access_tags, page=page, page_size=page_size, sort_expr=search_form.sort_expr)
     pipeline[-1]['$facet']['data'].append({"$addFields": {"files": []}})
     observations = await observations.find(fetch_links=False).aggregate(pipeline).to_list()
 
