@@ -158,6 +158,37 @@ span.flatpickr-weekday {
   border-color: transparent;
 }
 
+/* Flatpickr time picker */
+.flatpickr-time {
+  background: #15192b;
+  border-top: 1px solid #2d3552;
+  height: 40px !important;
+}
+.flatpickr-time input,
+.flatpickr-time .flatpickr-time-separator,
+.flatpickr-time .flatpickr-second {
+  background: #15192b;
+  color: #e2e8f0;
+}
+.flatpickr-time input:hover,
+.flatpickr-time input:focus {
+  background: #1f253d;
+  color: #e2e8f0;
+}
+.flatpickr-time .numInputWrapper:hover {
+  background: #1f253d;
+}
+.flatpickr-time .numInputWrapper span.arrowUp,
+.flatpickr-time .numInputWrapper span.arrowDown {
+  border-color: #2d3552;
+}
+.flatpickr-time .numInputWrapper span.arrowUp::after {
+  border-bottom-color: #94a3b8;
+}
+.flatpickr-time .numInputWrapper span.arrowDown::after {
+  border-top-color: #94a3b8;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

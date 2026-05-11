@@ -16,7 +16,7 @@ from pyaraucaria.lookup_objects import name_canonizator
 
 from ocadb.models.file import FitsHeader, FITSFile, FileClassification
 from ocadb.models.geo import SkyCoord, Point2D
-from ocadb.models.search_object import SearchObjectAlias, SearchObject
+from ocadb.models.search_object import SearchObject
 
 
 class Observation(Document):
@@ -88,7 +88,11 @@ class Observation(Document):
         # workaround - pydantic bug?? similar to https://github.com/google/adk-python/issues/3633
         if isinstance(self.fits_header, dict):
             self.fits_header = FitsHeader.model_validate(self.fits_header)
-        self.telescope_coordinates = SkyCoord(radec=(self.fits_header.RA_TEL, self.fits_header.DEC_TEL))
+        if not self.fits_header.RA or not self.fits_header.DEC:
+            self.telescope_coordinates = SkyCoord(radec=(self.fits_header.RA_TEL, self.fits_header.DEC_TEL))
+        else:
+            self.telescope_coordinates = SkyCoord(radec=(self.fits_header.RA, self.fits_header.DEC))
+
         return self
 
     @model_validator(mode='after')

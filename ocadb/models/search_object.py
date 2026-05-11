@@ -21,24 +21,6 @@ class SearchObject(Document):
             IndexModel([("canonized_name", pymongo.ASCENDING)], unique=True),
         ]
 
-class SearchObjectShort(BaseModel):
-    alias: str
-    canonized: Link[SearchObject]
-
-
-class SearchObjectAlias(Document):
-    search_object: Link[SearchObject]
-    alias: Optional[str] = None
-
-    def __init__(self, *args: Any, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.alias = kwargs.get("alias")
-
-    class Settings:
-        name = "search_object_aliases"
-        indexes = [
-            IndexModel([("alias", pymongo.ASCENDING)], unique=False),
-        ]
 
 # Document models for Beanie registration
-document_models = [SearchObject, SearchObjectAlias]
+document_models = [SearchObject]

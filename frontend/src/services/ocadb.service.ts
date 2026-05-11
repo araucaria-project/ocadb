@@ -263,7 +263,7 @@ export class OcadbService {
     }
   }
 
-  async searchObservations(filters: SearchFilters, page?: number): Promise<Observation[]> {
+  async searchObservations(filters: SearchFilters, page?: number, sortExpr?: Record<string, 1 | -1> | null): Promise<Observation[]> {
     if (!this.token()) {
       this.error.set('You must be logged in to search.');
       return [];
@@ -296,6 +296,7 @@ export class OcadbService {
       if (filters.oca_jd_from) body.oca_jd_from = Number(filters.oca_jd_from);
       if (filters.oca_jd_to) body.oca_jd_to = Number(filters.oca_jd_to);
       if (filters.cone_search) body.cone_search = filters.cone_search;
+      if (sortExpr) body.sort_expr = sortExpr;
 
       const url = `${this.v2BaseUrl}/observations/search?page=${currentPage}&page_size=${pag.pageSize}`;
       this.lastRequestInfo.set(`POST /api/v2/observations/search (page ${currentPage})`);

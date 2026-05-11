@@ -20,6 +20,7 @@ from api.services.oca_geospatial_query import OcaWithin
 from api.services.query_builder import MultiSearchForm
 from ocadb.models import Observation, FitsHeader, SkyCoord
 from ocadb.models.file import FITSFile
+from ocadb.models.search_object import SearchObject
 from ocadb.models.geo import ArchDistance
 from ocadb.models.s3_presigned_url import S3PresignedUrl, S3PresignedUrlBatchList
 from api.services.auth_service import AuthService
@@ -31,7 +32,7 @@ from api.schemas import DownloadScriptRequest
 
 import logging
 
-from ocadb.models.search_object import SearchObjectAlias, SearchObject
+from ocadb.models.search_object import SearchObject
 
 log = logging.getLogger(__name__)
 
@@ -356,43 +357,41 @@ _migration_job: Dict[str, Any] = {"status": "idle"}
 
 async def _run_migration() -> None:
     global _migration_job
-    _migration_job = {"status": "running", "started_at": datetime.utcnow().isoformat(), "updated": 0, "errors": 0, "total": 0}
+    _migration_job = {
+        "status": "running",
+        "started_at": datetime.utcnow().isoformat(),
+        "search_objects_created": 0,
+        "search_objects_errors": 0,
+        "total": 0,
+    }
     try:
-        total = await Observation.count()
+        total = await Observation.find(Observation.canonized_object_name != None).count()
         _migration_job["total"] = total
-        log.warning(f"Migrating {total} observations (using $set — existing fields untouched)...")
+        log.warning(f"Populating search_objects from {total} observations with a canonized name...")
 
-        updated = 0
-        errors = 0
+        so_created = 0
+        so_errors = 0
 
-        async for obs in Observation.find_all(fetch_links=True):
+        async for obs in Observation.find(Observation.canonized_object_name != None):
             try:
-                filetypes = set()
-                source_files = set()
-                for f in obs.files:
-                    if isinstance(f, FITSFile):
-                        filetypes.add(f.file_class)
-                        source_files.update(f.source_filenames)
-
-                fields = {
-                    "filetypes": list(filetypes),
-                    "source_files": list(source_files),
-                }
-                if obs.oca_jd is not None:
-                    fields["oca_jd"] = obs.oca_jd
-
-                await obs.update({"$set": fields})
-                updated += 1
-                _migration_job["updated"] = updated
-                if updated % 100 == 0:
-                    log.info(f"  {updated}/{total}")
+                canonized = obs.canonized_object_name
+                first_alias = obs.fits_header.OBJECT if obs.fits_header else None
+                existing = await SearchObject.find_one(SearchObject.canonized_name == canonized)
+                if existing is None:
+                    await SearchObject(canonized_name=canonized, first_alias=first_alias).insert()
+                    so_created += 1
+                    _migration_job["search_objects_created"] = so_created
+                    if so_created % 50 == 0:
+                        log.info(f"  search_objects created: {so_created}")
+            except DuplicateKeyError:
+                pass  # pre-existing unique entry — safe to ignore
             except Exception as e:
-                log.error(f"Failed on obs {obs.id} ({getattr(obs, 'obs_name', '?')}): {e}")
-                errors += 1
-                _migration_job["errors"] = errors
+                log.error(f"SearchObject error for obs {obs.id}: {e}")
+                so_errors += 1
+                _migration_job["search_objects_errors"] = so_errors
 
         _migration_job.update({"status": "done", "finished_at": datetime.utcnow().isoformat()})
-        log.warning(f"Done. Updated: {updated}, Errors: {errors}")
+        log.warning(f"Done. SearchObjects created: {so_created}, Errors: {so_errors}")
     except Exception as e:
         _migration_job.update({"status": "failed", "error": str(e), "finished_at": datetime.utcnow().isoformat()})
         log.error(f"Migration failed: {e}")

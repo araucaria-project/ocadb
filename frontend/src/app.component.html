@@ -134,7 +134,7 @@
                   [class.border-accent-500]="filters().object">
                 @if (filters().object) {
                   <button type="button" tabindex="-1"
-                    (click)="objectQuery.set(''); updateFilter('object', ''); objectDropdownOpen.set(false); search()"
+                    (click)="clearObjectFilter(); search()"
                     class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
                     <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                   </button>
@@ -150,7 +150,7 @@
                 <div class="absolute z-20 w-full mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden max-h-48 overflow-y-auto">
                   @if (!objectQuery()) {
                     <button type="button"
-                      (click)="objectQuery.set(''); updateFilter('object', ''); objectDropdownOpen.set(false); otherFieldsFocused.set(false); search()"
+                      (click)="clearObjectFilter(); otherFieldsFocused.set(false); search()"
                       class="w-full px-3 py-1.5 text-sm text-slate-400 hover:bg-space-800 transition-colors text-left"
                       [class.bg-space-800]="objectHighlightedIndex() === 0">
                       All
@@ -158,7 +158,7 @@
                   }
                   @for (o of filteredObjects(); track o.canonized_name; let i = $index) {
                     <button type="button"
-                      (click)="objectQuery.set(o.first_alias ?? o.canonized_name ?? ''); updateFilter('object', o.first_alias ?? o.canonized_name ?? ''); objectDropdownOpen.set(false); search()"
+                      (click)="objectQuery.set(o.first_alias ?? o.canonized_name ?? ''); updateFilter('object', o.first_alias ?? o.canonized_name ?? ''); onObjectSelected(); objectDropdownOpen.set(false); search()"
                       class="w-full px-3 py-1.5 text-sm hover:bg-space-800 transition-colors text-left"
                       [class.bg-space-800]="objectHighlightedIndex() === i + (!objectQuery() ? 1 : 0)"
                       [class.text-slate-200]="filters().object === (o.first_alias ?? o.canonized_name)"
@@ -516,9 +516,10 @@
               <div class="flex gap-2">
                 @if (dateRangeMode() === 'date') {
                   <div class="relative flex-1 min-w-0">
-                    <input type="text" placeholder="YYYY-MM-DD"
+                    <input type="text" placeholder="YYYY-MM-DD HH:MM:SS"
                       [value]="filters().date_obs_from ?? ''"
                       (input)="formatDateInput($event, 'date_obs_from')"
+                      (click)="dateFromPicker.open()"
                       (keyup.enter)="search()"
                       (focus)="otherFieldsFocused.set(true)"
                       (blur)="otherFieldsFocused.set(false)"
@@ -527,17 +528,21 @@
                     <input fpickr #dateFromPicker="fpickr"
                       class="absolute opacity-0 pointer-events-none inset-0 w-full h-full"
                       [fpValue]="filters().date_obs_from"
+                      [fpDefaultHour]="0" [fpDefaultMinute]="0" [fpDefaultSecond]="0"
                       (fpChange)="updateFilter('date_obs_from', $event); search()">
-                    <button type="button" tabindex="-1"
-                      (click)="dateFromPicker.open()"
-                      class="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
-                      <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                    </button>
+                    @if (filters().date_obs_from) {
+                      <button type="button" tabindex="-1"
+                        (click)="updateFilter('date_obs_from', null); search()"
+                        class="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
+                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                      </button>
+                    }
                   </div>
                   <div class="relative flex-1 min-w-0">
-                    <input type="text" placeholder="YYYY-MM-DD"
+                    <input type="text" placeholder="YYYY-MM-DD HH:MM:SS"
                       [value]="filters().date_obs_to ?? ''"
                       (input)="formatDateInput($event, 'date_obs_to')"
+                      (click)="dateToPicker.open()"
                       (keyup.enter)="search()"
                       (focus)="otherFieldsFocused.set(true)"
                       (blur)="otherFieldsFocused.set(false)"
@@ -546,12 +551,15 @@
                     <input fpickr #dateToPicker="fpickr"
                       class="absolute opacity-0 pointer-events-none inset-0 w-full h-full"
                       [fpValue]="filters().date_obs_to"
+                      [fpDefaultHour]="23" [fpDefaultMinute]="59" [fpDefaultSecond]="59"
                       (fpChange)="updateFilter('date_obs_to', $event); search()">
-                    <button type="button" tabindex="-1"
-                      (click)="dateToPicker.open()"
-                      class="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
-                      <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                    </button>
+                    @if (filters().date_obs_to) {
+                      <button type="button" tabindex="-1"
+                        (click)="updateFilter('date_obs_to', null); search()"
+                        class="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
+                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                      </button>
+                    }
                   </div>
                 } @else {
                   <div class="relative flex-1 min-w-0">
@@ -872,11 +880,50 @@
                   </th>
                   <th class="px-4 py-2 border-b border-space-800">Object</th>
                   <th class="px-4 py-2 border-b border-space-800 font-mono">obs-name</th>
-                  <th class="px-4 py-2 border-b border-space-800">Date-Obs</th>
+                  <th class="px-4 py-2 border-b border-space-800">
+                    <button type="button" (click)="toggleSort('date_obs')"
+                      class="flex items-center gap-1 uppercase hover:text-slate-300 transition-colors focus:outline-none"
+                      [class.text-accent-500]="sortExpr()?.col === 'date_obs'">
+                      Date-Obs
+                      @if (sortExpr()?.col === 'date_obs' && sortExpr()?.dir === 1) {
+                        <svg class="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7"/></svg>
+                      } @else if (sortExpr()?.col === 'date_obs' && sortExpr()?.dir === -1) {
+                        <svg class="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                      } @else {
+                        <svg class="w-3 h-3 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4M16 15l-4 4-4-4"/></svg>
+                      }
+                    </button>
+                  </th>
                   <th class="px-4 py-2 border-b border-space-800">Telescope</th>
                   <th class="px-4 py-2 border-b border-space-800">Filter</th>
-                  <th class="px-4 py-2 border-b border-space-800 text-right">Airmass</th>
-                  <th class="px-4 py-2 border-b border-space-800 text-right">Exp</th>
+                  <th class="px-4 py-2 border-b border-space-800 text-right">
+                    <button type="button" (click)="toggleSort('fits_header.AIRMASS')"
+                      class="flex items-center gap-1 ml-auto uppercase hover:text-slate-300 transition-colors focus:outline-none"
+                      [class.text-accent-500]="sortExpr()?.col === 'fits_header.AIRMASS'">
+                      Airmass
+                      @if (sortExpr()?.col === 'fits_header.AIRMASS' && sortExpr()?.dir === 1) {
+                        <svg class="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7"/></svg>
+                      } @else if (sortExpr()?.col === 'fits_header.AIRMASS' && sortExpr()?.dir === -1) {
+                        <svg class="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                      } @else {
+                        <svg class="w-3 h-3 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4M16 15l-4 4-4-4"/></svg>
+                      }
+                    </button>
+                  </th>
+                  <th class="px-4 py-2 border-b border-space-800 text-right">
+                    <button type="button" (click)="toggleSort('fits_header.EXPTIME')"
+                      class="flex items-center gap-1 ml-auto uppercase hover:text-slate-300 transition-colors focus:outline-none"
+                      [class.text-accent-500]="sortExpr()?.col === 'fits_header.EXPTIME'">
+                      Exp
+                      @if (sortExpr()?.col === 'fits_header.EXPTIME' && sortExpr()?.dir === 1) {
+                        <svg class="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7"/></svg>
+                      } @else if (sortExpr()?.col === 'fits_header.EXPTIME' && sortExpr()?.dir === -1) {
+                        <svg class="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                      } @else {
+                        <svg class="w-3 h-3 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4M16 15l-4 4-4-4"/></svg>
+                      }
+                    </button>
+                  </th>
                   <th class="px-4 py-2 border-b border-space-800">Type</th>
                   <th class="px-4 py-2 border-b border-space-800 text-right">
                     RA / Dec

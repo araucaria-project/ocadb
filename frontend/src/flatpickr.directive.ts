@@ -9,6 +9,9 @@ import { Instance } from 'flatpickr/dist/types/instance';
 })
 export class FlatpickrDirective implements OnInit, OnDestroy, OnChanges {
   @Input() fpValue: string | null = null;
+  @Input() fpDefaultHour = 0;
+  @Input() fpDefaultMinute = 0;
+  @Input() fpDefaultSecond = 0;
   @Output() fpChange = new EventEmitter<string>();
 
   private fp: Instance | null = null;
@@ -16,10 +19,17 @@ export class FlatpickrDirective implements OnInit, OnDestroy, OnChanges {
   constructor(private el: ElementRef<HTMLInputElement>) {}
 
   ngOnInit() {
-    this.fp = flatpickr(this.el.nativeElement, {
-      dateFormat: 'Y-m-d',
+    this.fp = flatpickr(this.el.nativeElement as Node, {
+      dateFormat: 'Y-m-d H:i:S',
       defaultDate: this.fpValue || undefined,
+      enableTime: true,
+      enableSeconds: true,
+      time_24hr: true,
+      defaultHour: this.fpDefaultHour,
+      defaultMinute: this.fpDefaultMinute,
+      defaultSeconds: this.fpDefaultSecond,
       disableMobile: true,
+      appendTo: document.body,
       onChange: (_dates: Date[], dateStr: string) => {
         this.fpChange.emit(dateStr);
       },

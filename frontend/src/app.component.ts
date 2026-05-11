@@ -17,6 +17,7 @@ export class AppComponent implements OnInit {
   apiLog = inject(ApiLogService);
   private _lastCalibrationKey: string | null = null;
   private _lastSourceKey: string | null = null;
+  private _coneObjectKey: string | null = null;
 
   private static readonly LOGIN_BACKGROUNDS = Array.from({length: 23}, (_, i) => `/${i + 1}b.JPG`);
   loginBackground = signal(
@@ -67,6 +68,7 @@ export class AppComponent implements OnInit {
   });
   scriptLoading = signal(false);
   showDownloadDialog = signal(false);
+  sortExpr = signal<{ col: string; dir: 1 | -1 } | null>(null);
   downloadForCurrentUser = signal(true);
   downloadCustomUsername = signal('');
   downloadIncludeCalibration = signal(false);
@@ -422,7 +424,12 @@ export class AppComponent implements OnInit {
     }
     input.setSelectionRange(newCursor, newCursor);
 
-    this.updateFilter(key, formatted.length === 10 ? formatted : null);
+    if (formatted.length === 10) {
+      const time = key === 'date_obs_from' ? ' 00:00:00' : ' 23:59:59';
+      this.updateFilter(key, formatted + time);
+    } else {
+      this.updateFilter(key, null);
+    }
   }
 
   updateFilterArray(key: keyof SearchFilters, value: string) {
@@ -451,6 +458,10 @@ export class AppComponent implements OnInit {
 
   switchDateRangeMode(mode: 'date' | 'oca_jd') {
     if (this.dateRangeMode() === mode) return;
+    const f = this.filters();
+    const wasActive = mode === 'date'
+      ? (f.oca_jd_from != null || f.oca_jd_to != null)
+      : !!(f.date_obs_from || f.date_obs_to);
     this.dateRangeMode.set(mode);
     if (mode === 'date') {
       this.updateFilter('oca_jd_from', null);
@@ -459,7 +470,7 @@ export class AppComponent implements OnInit {
       this.updateFilter('date_obs_from', '');
       this.updateFilter('date_obs_to', '');
     }
-    this.search();
+    if (wasActive) this.search();
   }
 
   get obsNameMode(): boolean {
@@ -511,7 +522,7 @@ export class AppComponent implements OnInit {
 
     this.ocadbService.pagination.update(p => ({ ...p, page: 1 }));
     const baseFilters = this.coneSearchExpanded() ? { ...this.filters(), object: null } : this.filters();
-    const results = await this.ocadbService.searchObservations({ ...baseFilters, cone_search }, 1);
+    const results = await this.ocadbService.searchObservations({ ...baseFilters, cone_search }, 1, this.getSortExpr());
     this.displayedObservations.set(results);
     this.loadDropdowns();
   }
@@ -539,7 +550,7 @@ export class AppComponent implements OnInit {
 
   async goToPage(page: number) {
     if (page < 1 || page > this.totalPages) return;
-    const results = await this.ocadbService.searchObservations(this.filters(), page);
+    const results = await this.ocadbService.searchObservations(this.filters(), page, this.getSortExpr());
     this.displayedObservations.set(results);
   }
 
@@ -745,18 +756,24 @@ export class AppComponent implements OnInit {
 
   async toggleConeSearch() {
     if (this.coneSearchExpanded()) {
+      const wasActive = this.coneRa() != null || this.coneDec() != null || !!this.filters().object;
       this.coneSearchExpanded.set(false);
-      this.search();
+      if (wasActive) this.search();
     } else {
+      const currentObject = this.filters().object ?? null;
+      const alreadyHasCoords = this.coneRa() != null || this.coneDec() != null;
+      const objectChanged = currentObject !== this._coneObjectKey;
       this.coneSearchExpanded.set(true);
-      if (this.filters().object && this.coneRa() == null && this.coneDec() == null) {
-        const coords = await this.ocadbService.fetchObjectCoordinates(this.filters().object!);
+      if (currentObject && (!alreadyHasCoords || objectChanged)) {
+        if (objectChanged) { this.coneRa.set(null); this.coneDec.set(null); }
+        const coords = await this.ocadbService.fetchObjectCoordinates(currentObject);
         if (coords) {
           this.coneRa.set(coords.ra);
           this.coneDec.set(coords.dec);
+          this._coneObjectKey = currentObject;
         }
       }
-      this.search();
+      if (currentObject || alreadyHasCoords) this.search();
     }
   }
 
@@ -880,8 +897,42 @@ export class AppComponent implements OnInit {
     }
   }
 
+  onObjectSelected() {
+    this.coneRa.set(null);
+    this.coneDec.set(null);
+    this._coneObjectKey = null;
+  }
+
+  clearObjectFilter() {
+    this.objectQuery.set('');
+    this.updateFilter('object', '');
+    this.objectDropdownOpen.set(false);
+    this.coneRa.set(null);
+    this.coneDec.set(null);
+    this._coneObjectKey = null;
+  }
+
+  toggleSort(col: string) {
+    const current = this.sortExpr();
+    if (current?.col !== col) {
+      this.sortExpr.set({ col, dir: 1 });
+    } else if (current.dir === 1) {
+      this.sortExpr.set({ col, dir: -1 });
+    } else {
+      this.sortExpr.set(null);
+    }
+    this.search();
+  }
+
+  private getSortExpr(): Record<string, 1 | -1> | null {
+    const s = this.sortExpr();
+    return s ? { [s.col]: s.dir } : null;
+  }
+
   clearFilters() {
     this.filters.set({});
+    this.sortExpr.set(null);
+    this._coneObjectKey = null;
     this.availableFilters.set([]);
     this.objectQuery.set('');
     this.piQuery.set('');
