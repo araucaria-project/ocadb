@@ -85,6 +85,8 @@ export interface Observation {
 export interface SearchObject {
   canonized_name: string | null;
   first_alias: string | null;
+  ra: number | null;
+  dec: number | null;
 }
 
 export interface SearchFilters {

@@ -359,6 +359,7 @@ async def _run_migration() -> None:
         "status": "running",
         "started_at": datetime.utcnow().isoformat(),
         "search_objects_created": 0,
+        "search_objects_updated": 0,
         "search_objects_errors": 0,
         "total": 0,
     }
@@ -368,19 +369,29 @@ async def _run_migration() -> None:
         log.warning(f"Populating search_objects from {total} observations with a canonized name...")
 
         so_created = 0
+        so_updated = 0
         so_errors = 0
 
         async for obs in Observation.find(Observation.canonized_object_name != None):
             try:
                 canonized = obs.canonized_object_name
                 first_alias = obs.fits_header.OBJECT if obs.fits_header else None
+                ra = getattr(obs.fits_header, 'RA', None) if obs.fits_header else None
+                dec = getattr(obs.fits_header, 'DEC', None) if obs.fits_header else None
+                ra = float(ra) if ra is not None else None
+                dec = float(dec) if dec is not None else None
+
                 existing = await SearchObject.find_one(SearchObject.canonized_name == canonized)
                 if existing is None:
-                    await SearchObject(canonized_name=canonized, first_alias=first_alias).insert()
+                    await SearchObject(canonized_name=canonized, first_alias=first_alias, ra=ra, dec=dec).insert()
                     so_created += 1
                     _migration_job["search_objects_created"] = so_created
                     if so_created % 50 == 0:
                         log.info(f"  search_objects created: {so_created}")
+                elif (existing.ra is None or existing.ra == 0.0) and ra is not None:
+                    await existing.update({"$set": {"ra": ra, "dec": dec}})
+                    so_updated += 1
+                    _migration_job["search_objects_updated"] = so_updated
             except DuplicateKeyError:
                 pass  # pre-existing unique entry — safe to ignore
             except Exception as e:
@@ -389,7 +400,7 @@ async def _run_migration() -> None:
                 _migration_job["search_objects_errors"] = so_errors
 
         _migration_job.update({"status": "done", "finished_at": datetime.utcnow().isoformat()})
-        log.warning(f"Done. SearchObjects created: {so_created}, Errors: {so_errors}")
+        log.warning(f"Done. SearchObjects created: {so_created}, updated: {so_updated}, Errors: {so_errors}")
     except Exception as e:
         _migration_job.update({"status": "failed", "error": str(e), "finished_at": datetime.utcnow().isoformat()})
         log.error(f"Migration failed: {e}")

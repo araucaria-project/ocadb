@@ -147,7 +147,7 @@
               </div>
               @if (objectDropdownOpen()) {
                 <div class="fixed inset-0 z-10" (click)="objectDropdownOpen.set(false)"></div>
-                <div class="absolute z-20 w-full mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden max-h-48 overflow-y-auto">
+                <div data-dropdown="object" class="absolute z-20 w-full mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden max-h-48 overflow-y-auto">
                   @if (!objectQuery()) {
                     <button type="button"
                       (click)="clearObjectFilter(); otherFieldsFocused.set(false); search()"
@@ -314,7 +314,8 @@
               <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Telescope</label>
               <div class="relative">
                 <button type="button"
-                  (click)="telescopeDropdownOpen.set(!telescopeDropdownOpen())"
+                  (click)="telescopeDropdownOpen.set(!telescopeDropdownOpen()); telescopeHighlightedIndex.set(-1)"
+                  (keydown)="onTelescopeKeydown($event)"
                   (focus)="otherFieldsFocused.set(true)"
                   (blur)="otherFieldsFocused.set(false)"
                   class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm text-left flex items-center gap-2 focus:outline-none"
@@ -329,17 +330,19 @@
                 </button>
                 @if (telescopeDropdownOpen()) {
                   <div class="fixed inset-0 z-10" (click)="telescopeDropdownOpen.set(false)"></div>
-                  <div class="absolute z-20 w-full mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden">
+                  <div data-dropdown="telescope" class="absolute z-20 w-full mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden max-h-48 overflow-y-auto">
                     <button type="button"
                       (click)="onTelescopeChange(''); telescopeDropdownOpen.set(false); otherFieldsFocused.set(false); search()"
-                      class="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-slate-400 hover:bg-space-800 transition-colors text-left">
+                      class="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-slate-400 hover:bg-space-800 transition-colors text-left"
+                      [class.bg-space-800]="telescopeHighlightedIndex() === 0">
                       <span class="inline-block w-2 h-2 rounded-full bg-slate-600 shrink-0"></span>
                       All
                     </button>
-                    @for (t of telescopes(); track t) {
+                    @for (t of telescopes(); track t; let i = $index) {
                       <button type="button"
                         (click)="onTelescopeChange(t); telescopeDropdownOpen.set(false); search()"
                         class="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-space-800 transition-colors text-left"
+                        [class.bg-space-800]="telescopeHighlightedIndex() === i + 1"
                         [class.text-slate-200]="filters().telescop === t"
                         [class.text-slate-400]="filters().telescop !== t">
                         <span class="inline-block w-2 h-2 rounded-full shrink-0"
@@ -380,7 +383,7 @@
                 </div>
                 @if (filterDropdownOpen()) {
                   <div class="fixed inset-0 z-10" (click)="filterDropdownOpen.set(false)"></div>
-                  <div class="absolute z-20 w-full mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden max-h-48 overflow-y-auto">
+                  <div data-dropdown="filter" class="absolute z-20 w-full mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden max-h-48 overflow-y-auto">
                     @if (!filterQuery()) {
                       <button type="button"
                         (click)="filterQuery.set(''); filters.update(f => ({ ...f, filter: null })); filterDropdownOpen.set(false); otherFieldsFocused.set(false); search()"
@@ -414,7 +417,8 @@
                 <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Obs Type</label>
                 <div class="relative">
                   <button type="button"
-                    (click)="obsTypeDropdownOpen.set(!obsTypeDropdownOpen())"
+                    (click)="obsTypeDropdownOpen.set(!obsTypeDropdownOpen()); obsTypeHighlightedIndex.set(-1)"
+                    (keydown)="onObsTypeKeydown($event)"
                     (focus)="otherFieldsFocused.set(true)"
                     (blur)="otherFieldsFocused.set(false)"
                     class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm text-left flex items-center gap-2 focus:outline-none"
@@ -427,16 +431,18 @@
                   </button>
                   @if (obsTypeDropdownOpen()) {
                     <div class="fixed inset-0 z-10" (click)="obsTypeDropdownOpen.set(false)"></div>
-                    <div class="absolute z-20 w-full mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden max-h-48 overflow-y-auto">
+                    <div data-dropdown="obstype" class="absolute z-20 w-full mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden max-h-48 overflow-y-auto">
                       <button type="button"
                         (click)="updateFilter('obstype', ''); updateFilter('imagetyp', ''); obsTypeDropdownOpen.set(false); otherFieldsFocused.set(false); search()"
-                        class="w-full px-3 py-1.5 text-sm text-slate-400 hover:bg-space-800 transition-colors text-left">
+                        class="w-full px-3 py-1.5 text-sm text-slate-400 hover:bg-space-800 transition-colors text-left"
+                        [class.bg-space-800]="obsTypeHighlightedIndex() === 0">
                         All
                       </button>
-                      @for (t of obsTypes(); track t) {
+                      @for (t of obsTypes(); track t; let i = $index) {
                         <button type="button"
                           (click)="updateFilter('obstype', t); t !== 'calib' && updateFilter('imagetyp', ''); obsTypeDropdownOpen.set(false); search()"
                           class="w-full px-3 py-1.5 text-sm hover:bg-space-800 transition-colors text-left"
+                          [class.bg-space-800]="obsTypeHighlightedIndex() === i + 1"
                           [class.text-slate-200]="filters().obstype === t"
                           [class.text-slate-400]="filters().obstype !== t">
                           {{ t }}
@@ -451,7 +457,8 @@
                   <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Calib Type</label>
                   <div class="relative">
                     <button type="button"
-                      (click)="imageTypDropdownOpen.set(!imageTypDropdownOpen())"
+                      (click)="imageTypDropdownOpen.set(!imageTypDropdownOpen()); imageTypHighlightedIndex.set(-1)"
+                      (keydown)="onImageTypKeydown($event)"
                       (focus)="otherFieldsFocused.set(true)"
                       (blur)="otherFieldsFocused.set(false)"
                       class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm text-left flex items-center gap-2 focus:outline-none"
@@ -464,22 +471,22 @@
                     </button>
                     @if (imageTypDropdownOpen()) {
                       <div class="fixed inset-0 z-10" (click)="imageTypDropdownOpen.set(false)"></div>
-                      <div class="absolute z-20 w-full mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden max-h-48 overflow-y-auto">
+                      <div data-dropdown="imagetyp" class="absolute z-20 w-full mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden max-h-48 overflow-y-auto">
                         <button type="button"
                           (click)="updateFilter('imagetyp', ''); imageTypDropdownOpen.set(false); otherFieldsFocused.set(false); search()"
-                          class="w-full px-3 py-1.5 text-sm text-slate-400 hover:bg-space-800 transition-colors text-left">
+                          class="w-full px-3 py-1.5 text-sm text-slate-400 hover:bg-space-800 transition-colors text-left"
+                          [class.bg-space-800]="imageTypHighlightedIndex() === 0">
                           All
                         </button>
-                        @for (t of imageTypes(); track t) {
-                          @if (t.toLowerCase() !== 'science') {
-                            <button type="button"
-                              (click)="updateFilter('imagetyp', t); imageTypDropdownOpen.set(false); search()"
-                              class="w-full px-3 py-1.5 text-sm hover:bg-space-800 transition-colors text-left"
-                              [class.text-slate-200]="filters().imagetyp === t"
-                              [class.text-slate-400]="filters().imagetyp !== t">
-                              {{ t }}
-                            </button>
-                          }
+                        @for (t of filteredImageTypes(); track t; let i = $index) {
+                          <button type="button"
+                            (click)="updateFilter('imagetyp', t); imageTypDropdownOpen.set(false); search()"
+                            class="w-full px-3 py-1.5 text-sm hover:bg-space-800 transition-colors text-left"
+                            [class.bg-space-800]="imageTypHighlightedIndex() === i + 1"
+                            [class.text-slate-200]="filters().imagetyp === t"
+                            [class.text-slate-400]="filters().imagetyp !== t">
+                            {{ t }}
+                          </button>
                         }
                       </div>
                     }
@@ -632,7 +639,7 @@
                   </div>
                   @if (piDropdownOpen()) {
                     <div class="fixed inset-0 z-10" (click)="piDropdownOpen.set(false)"></div>
-                    <div class="absolute z-20 w-full mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden max-h-48 overflow-y-auto">
+                    <div data-dropdown="pi" class="absolute z-20 w-full mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden max-h-48 overflow-y-auto">
                       @if (!piQuery()) {
                         <button type="button"
                           (click)="piQuery.set(''); updateFilter('pi', ''); piDropdownOpen.set(false); otherFieldsFocused.set(false); search()"
@@ -686,7 +693,7 @@
                   </div>
                   @if (sciprogDropdownOpen()) {
                     <div class="fixed inset-0 z-10" (click)="sciprogDropdownOpen.set(false)"></div>
-                    <div class="absolute z-20 w-full mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden max-h-48 overflow-y-auto">
+                    <div data-dropdown="sciprog" class="absolute z-20 w-full mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden max-h-48 overflow-y-auto">
                       @if (!sciprogQuery()) {
                         <button type="button"
                           (click)="sciprogQuery.set(''); updateFilter('sciprog', ''); sciprogDropdownOpen.set(false); otherFieldsFocused.set(false); search()"

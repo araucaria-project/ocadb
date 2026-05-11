@@ -9,11 +9,15 @@ from pymongo import IndexModel
 class SearchObject(Document):
     canonized_name: Optional[str] = None
     first_alias: Optional[str] = None
+    ra: Optional[float] = 0.0
+    dec: Optional[float] = 0.0
 
     def __init__(self, *args: Any, **kwargs):
         super().__init__(*args, **kwargs)
         self.canonized_name = kwargs.get("canonized_name")
         self.first_alias = kwargs.get("first_alias")
+        self.ra = kwargs.get("ra")
+        self.dec = kwargs.get("dec")
 
     class Settings:
         name = "search_objects"

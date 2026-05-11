@@ -86,8 +86,11 @@ export class AppComponent implements OnInit {
 
   filters = signal<SearchFilters>({});
   telescopeDropdownOpen = signal(false);
+  telescopeHighlightedIndex = signal(-1);
   obsTypeDropdownOpen = signal(false);
+  obsTypeHighlightedIndex = signal(-1);
   imageTypDropdownOpen = signal(false);
+  imageTypHighlightedIndex = signal(-1);
   objectDropdownOpen = signal(false);
   objectQuery = signal('');
   objectHighlightedIndex = signal(-1);
@@ -116,6 +119,7 @@ export class AppComponent implements OnInit {
   imageTypes = signal<string[]>([]);
   obsTypes = signal<string[]>([]);
   availableFilters = signal<string[]>([]);
+  filteredImageTypes = computed(() => this.imageTypes().filter(t => t.toLowerCase() !== 'science'));
   filteredAvailableFilters = computed(() => {
     const q = this.filterQuery().toLowerCase();
     const nonEmpty = this.availableFilters().filter(f => f.trim());
@@ -704,6 +708,129 @@ export class AppComponent implements OnInit {
     this.scriptLoading.set(false);
   }
 
+  private scrollDropdownItem(key: string, index: number) {
+    queueMicrotask(() => {
+      const container = document.querySelector(`[data-dropdown="${key}"]`);
+      if (!container) return;
+      const items = container.querySelectorAll<HTMLElement>('button');
+      items[index]?.scrollIntoView({ block: 'nearest' });
+    });
+  }
+
+  onTelescopeKeydown(event: KeyboardEvent) {
+    const list = this.telescopes();
+    const total = list.length + 1; // +1 for "All"
+    const idx = this.telescopeHighlightedIndex();
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      this.telescopeDropdownOpen.set(true);
+      const newIdx = idx < total - 1 ? idx + 1 : 0;
+      this.telescopeHighlightedIndex.set(newIdx);
+      this.scrollDropdownItem('telescope', newIdx);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      this.telescopeDropdownOpen.set(true);
+      const newIdx = idx > 0 ? idx - 1 : total - 1;
+      this.telescopeHighlightedIndex.set(newIdx);
+      this.scrollDropdownItem('telescope', newIdx);
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      if (this.telescopeDropdownOpen() && idx >= 0) {
+        if (idx === 0) {
+          this.onTelescopeChange('');
+        } else {
+          this.onTelescopeChange(list[idx - 1]);
+        }
+        this.telescopeDropdownOpen.set(false);
+        this.search();
+      } else {
+        this.telescopeDropdownOpen.set(!this.telescopeDropdownOpen());
+      }
+      this.telescopeHighlightedIndex.set(-1);
+    } else if (event.key === 'Escape') {
+      this.telescopeDropdownOpen.set(false);
+      this.telescopeHighlightedIndex.set(-1);
+    }
+  }
+
+  onObsTypeKeydown(event: KeyboardEvent) {
+    const list = this.obsTypes();
+    const total = list.length + 1; // +1 for "All"
+    const idx = this.obsTypeHighlightedIndex();
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      this.obsTypeDropdownOpen.set(true);
+      const newIdx = idx < total - 1 ? idx + 1 : 0;
+      this.obsTypeHighlightedIndex.set(newIdx);
+      this.scrollDropdownItem('obstype', newIdx);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      this.obsTypeDropdownOpen.set(true);
+      const newIdx = idx > 0 ? idx - 1 : total - 1;
+      this.obsTypeHighlightedIndex.set(newIdx);
+      this.scrollDropdownItem('obstype', newIdx);
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      if (this.obsTypeDropdownOpen() && idx >= 0) {
+        if (idx === 0) {
+          this.updateFilter('obstype', '');
+          this.updateFilter('imagetyp', '');
+        } else {
+          const t = list[idx - 1];
+          this.updateFilter('obstype', t);
+          if (t !== 'calib') this.updateFilter('imagetyp', '');
+        }
+        this.obsTypeDropdownOpen.set(false);
+        this.search();
+      } else {
+        this.obsTypeDropdownOpen.set(!this.obsTypeDropdownOpen());
+      }
+      this.obsTypeHighlightedIndex.set(-1);
+    } else if (event.key === 'Escape') {
+      this.obsTypeDropdownOpen.set(false);
+      this.obsTypeHighlightedIndex.set(-1);
+    }
+  }
+
+  onImageTypKeydown(event: KeyboardEvent) {
+    const list = this.filteredImageTypes();
+    const total = list.length + 1; // +1 for "All"
+    const idx = this.imageTypHighlightedIndex();
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      this.imageTypDropdownOpen.set(true);
+      const newIdx = idx < total - 1 ? idx + 1 : 0;
+      this.imageTypHighlightedIndex.set(newIdx);
+      this.scrollDropdownItem('imagetyp', newIdx);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      this.imageTypDropdownOpen.set(true);
+      const newIdx = idx > 0 ? idx - 1 : total - 1;
+      this.imageTypHighlightedIndex.set(newIdx);
+      this.scrollDropdownItem('imagetyp', newIdx);
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      if (this.imageTypDropdownOpen() && idx >= 0) {
+        if (idx === 0) {
+          this.updateFilter('imagetyp', '');
+        } else {
+          this.updateFilter('imagetyp', list[idx - 1]);
+        }
+        this.imageTypDropdownOpen.set(false);
+        this.search();
+      } else {
+        this.imageTypDropdownOpen.set(!this.imageTypDropdownOpen());
+      }
+      this.imageTypHighlightedIndex.set(-1);
+    } else if (event.key === 'Escape') {
+      this.imageTypDropdownOpen.set(false);
+      this.imageTypHighlightedIndex.set(-1);
+    }
+  }
+
   onObjectKeydown(event: KeyboardEvent) {
     const list = this.filteredObjects();
     const hasAll = !this.objectQuery();
@@ -713,11 +840,15 @@ export class AppComponent implements OnInit {
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       this.objectDropdownOpen.set(true);
-      this.objectHighlightedIndex.set(idx < total - 1 ? idx + 1 : 0);
+      const newIdx = idx < total - 1 ? idx + 1 : 0;
+      this.objectHighlightedIndex.set(newIdx);
+      this.scrollDropdownItem('object', newIdx);
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
       this.objectDropdownOpen.set(true);
-      this.objectHighlightedIndex.set(idx > 0 ? idx - 1 : total - 1);
+      const newIdx = idx > 0 ? idx - 1 : total - 1;
+      this.objectHighlightedIndex.set(newIdx);
+      this.scrollDropdownItem('object', newIdx);
     } else if (event.key === 'Enter') {
       event.preventDefault();
       if (this.objectDropdownOpen() && idx >= 0) {
@@ -766,10 +897,12 @@ export class AppComponent implements OnInit {
       this.coneSearchExpanded.set(true);
       if (currentObject && (!alreadyHasCoords || objectChanged)) {
         if (objectChanged) { this.coneRa.set(null); this.coneDec.set(null); }
-        const coords = await this.ocadbService.fetchObjectCoordinates(currentObject);
-        if (coords) {
-          this.coneRa.set(coords.ra);
-          this.coneDec.set(coords.dec);
+        const match = this.objects().find(
+          o => (o.first_alias ?? o.canonized_name) === currentObject || o.canonized_name === currentObject
+        );
+        if (match?.ra != null && match?.dec != null) {
+          this.coneRa.set(match.ra);
+          this.coneDec.set(match.dec);
           this._coneObjectKey = currentObject;
         }
       }
@@ -786,11 +919,15 @@ export class AppComponent implements OnInit {
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       this.piDropdownOpen.set(true);
-      this.piHighlightedIndex.set(idx < total - 1 ? idx + 1 : 0);
+      const newIdx = idx < total - 1 ? idx + 1 : 0;
+      this.piHighlightedIndex.set(newIdx);
+      this.scrollDropdownItem('pi', newIdx);
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
       this.piDropdownOpen.set(true);
-      this.piHighlightedIndex.set(idx > 0 ? idx - 1 : total - 1);
+      const newIdx = idx > 0 ? idx - 1 : total - 1;
+      this.piHighlightedIndex.set(newIdx);
+      this.scrollDropdownItem('pi', newIdx);
     } else if (event.key === 'Enter') {
       event.preventDefault();
       if (this.piDropdownOpen() && idx >= 0) {
@@ -826,11 +963,15 @@ export class AppComponent implements OnInit {
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       this.sciprogDropdownOpen.set(true);
-      this.sciprogHighlightedIndex.set(idx < total - 1 ? idx + 1 : 0);
+      const newIdx = idx < total - 1 ? idx + 1 : 0;
+      this.sciprogHighlightedIndex.set(newIdx);
+      this.scrollDropdownItem('sciprog', newIdx);
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
       this.sciprogDropdownOpen.set(true);
-      this.sciprogHighlightedIndex.set(idx > 0 ? idx - 1 : total - 1);
+      const newIdx = idx > 0 ? idx - 1 : total - 1;
+      this.sciprogHighlightedIndex.set(newIdx);
+      this.scrollDropdownItem('sciprog', newIdx);
     } else if (event.key === 'Enter') {
       event.preventDefault();
       if (this.sciprogDropdownOpen() && idx >= 0) {
@@ -866,11 +1007,15 @@ export class AppComponent implements OnInit {
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       this.filterDropdownOpen.set(true);
-      this.filterHighlightedIndex.set(idx < total - 1 ? idx + 1 : 0);
+      const newIdx = idx < total - 1 ? idx + 1 : 0;
+      this.filterHighlightedIndex.set(newIdx);
+      this.scrollDropdownItem('filter', newIdx);
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
       this.filterDropdownOpen.set(true);
-      this.filterHighlightedIndex.set(idx > 0 ? idx - 1 : total - 1);
+      const newIdx = idx > 0 ? idx - 1 : total - 1;
+      this.filterHighlightedIndex.set(newIdx);
+      this.scrollDropdownItem('filter', newIdx);
     } else if (event.key === 'Enter') {
       event.preventDefault();
       if (this.filterDropdownOpen() && idx >= 0) {

@@ -155,7 +155,7 @@ class Observation(Document):
                                                         projection_model=SearchObject)
 
             if search_object is None:
-                search_object = SearchObject(canonized_name=self.canonized_object_name, first_alias=self.fits_header.OBJECT)
+                search_object = SearchObject(canonized_name=self.canonized_object_name, first_alias=self.fits_header.OBJECT, ra=self.fits_header.RA, dec=self.fits_header.DEC)
                 await search_object.insert()
 
         # if self.canonized_object_name:
