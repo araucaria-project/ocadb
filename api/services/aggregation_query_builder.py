@@ -23,9 +23,6 @@ class AggregationQueryBuilder:
         else:
             return [
                 {
-                    "$match": match_query
-                },
-                {
                     "$sort": sort_expr
                 },
                 {
