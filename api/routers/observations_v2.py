@@ -284,14 +284,14 @@ async def get_values_telescop(
 ):
     user = await read_users_me(token)
     values = await Observation.distinct("fits_header.TELESCOP")
-    return values
+    return sorted(v for v in values if v is not None)
 
 @router.get("/values/imagetyp", response_description="Unique values for IMAGETYP header field", response_model=List[str])
 async def get_values_imagetyp(
         token: Annotated[str, Depends(AuthService.validate_token)]
 ):
     values = await Observation.distinct("fits_header.IMAGETYP")
-    return values
+    return sorted(v for v in values if v is not None)
 
 # /api/v1/observations/values/OBSTYPE
 @router.get("/values/obstype", response_description="Unique values for OBSTYPE header field", response_model=List[str])
@@ -299,7 +299,7 @@ async def get_values_obstype(
         token: Annotated[str, Depends(AuthService.validate_token)]
 ):
     values = await Observation.distinct("fits_header.OBSTYPE")
-    return values
+    return sorted(v for v in values if v is not None)
 
 # /api/v1/observations/values/PI
 @router.get("/values/pi", response_description="Unique values for PI header field", response_model=List[str])
@@ -307,7 +307,7 @@ async def get_values_pi(
         token: Annotated[str, Depends(AuthService.validate_token)]
 ):
     values = await Observation.distinct("fits_header.PI")
-    return values
+    return sorted(v for v in values if v is not None)
 
 @router.get('/values/search_object', response_description="Unique, sorted list of object following a pattern", response_model=List[SearchObject])
 async def get_search_object(
@@ -323,7 +323,7 @@ async def get_values_object(
         token: Annotated[str, Depends(AuthService.validate_token)]
 ):
     values = await Observation.distinct("fits_header.SCIPROG")
-    values.sort()
+    values = sorted(v for v in values if v is not None)
     return values
 
 
@@ -333,8 +333,7 @@ async def get_values_object(
         token: Annotated[str, Depends(AuthService.validate_token)]
 ):
     values = await Observation.distinct("canonized_object_name")
-    values.sort()
-    return values
+    return sorted(v for v in values if v is not None)
 
 # /api/v1/observations/values/FILTER  per TELESCOP
 @router.get("/values/{telescope}/filter", response_description="Unique values for FILTER of TELESCOP header field", response_model=List[str])
@@ -344,11 +343,10 @@ async def get_values_telescope_filter(
 ):
     if telescope == "all":
         values = await Observation.distinct("fits_header.FILTER")
-        return values
     else:
         collection = Observation.get_motor_collection()
         values = await collection.distinct("fits_header.FILTER", {"fits_header.TELESCOP": telescope})
-        return [v for v in values if v is not None]
+    return sorted(v for v in values if v is not None)
 
 
 
