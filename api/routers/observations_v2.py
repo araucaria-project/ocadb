@@ -31,6 +31,8 @@ from api.schemas import DownloadScriptRequest
 
 import logging
 
+from ocadb.models.search_object import SearchObjectAlias, SearchObject
+
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/observations",
@@ -49,7 +51,7 @@ async def list_observations(
     """List all observations"""
     user = await read_users_me(token)
 
-    observations = await Observation.find_all().aggregate(AggregationQueryBuilder.aggregate(match_query={}, access_tags=user.access_tags, page=page, page_size=page_size)).to_list()
+    observations = await Observation.find_all().aggregate(AggregationQueryBuilder.aggregate(match_query={}, access_tags=user.access_tags, page=page, page_size=page_size, sort_expr={})).to_list()
     if len(observations) == 0:
         raise HTTPException(status_code=404, detail="No observations found")
 
@@ -180,7 +182,7 @@ async def list_observations_by_object(
 ):
     """List observations of a specific object"""
     user = await read_users_me(token)
-    observations = await Observation.find(Observation.canonized_object_name == name_canonizator(object_name)).aggregate(AggregationQueryBuilder.aggregate(match_query={}, access_tags=user.access_tags, page=page, page_size=page_size)).to_list()
+    observations = await Observation.find(Observation.canonized_object_name == name_canonizator(object_name)).aggregate(AggregationQueryBuilder.aggregate(match_query={}, access_tags=user.access_tags, page=page, page_size=page_size, sort_expr={})).to_list()
 
     if not observations:
         raise HTTPException(status_code=404, detail=f"Observation for object {object_name} not found")
@@ -198,7 +200,7 @@ async def list_observations_by_filter(
     """List observations using a specific filter"""
     user = await read_users_me(token)
 
-    observations = await Observation.find(Observation.fits_header.FILTER == filter_name).aggregate(AggregationQueryBuilder.aggregate(match_query={}, access_tags=user.access_tags, page=page, page_size=page_size)).to_list()
+    observations = await Observation.find(Observation.fits_header.FILTER == filter_name).aggregate(AggregationQueryBuilder.aggregate(match_query={}, access_tags=user.access_tags, page=page, page_size=page_size, sort_expr={})).to_list()
 
     if not observations:
         raise HTTPException(status_code=404, detail=f"No observations found")
@@ -265,7 +267,7 @@ async def search_multi(
         OcaWithin(Observation.telescope_coordinates.lon_lat, (search_form.cone_search.get_ref_lon(), search_form.cone_search.get_ref_lat()),
                   search_form.cone_search.rad_distance()))
 
-    pipeline = AggregationQueryBuilder.aggregate(match_query={}, access_tags=user.access_tags, page=page, page_size=page_size)
+    pipeline = AggregationQueryBuilder.aggregate(match_query={}, access_tags=user.access_tags, page=page, page_size=page_size, sort_expr=search_form.sort_expr)
     pipeline[-1]['$facet']['data'].append({"$addFields": {"files": []}})
     observations = await observations.find(fetch_links=False).aggregate(pipeline).to_list()
 
@@ -306,12 +308,31 @@ async def get_values_pi(
     values = await Observation.distinct("fits_header.PI")
     return values
 
+@router.get('/values/search_object', response_description="Unique, sorted list of object following a pattern", response_model=List[SearchObject])
+async def get_search_object(
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    # results = await SearchObjectAlias.aggregate([{"$match": {"alias": {"$regex": "^" + search_query, "$options": "i"}}}, {"$sort" : {"alias": 1}}]).to_list()
+    results = await SearchObject.find_all().sort(+SearchObject.canonized_name).to_list()
+
+    return results
+
+@router.get("/values/sciprog", response_description="Unique values for OBJECT field", response_model=List[str])
+async def get_values_object(
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    values = await Observation.distinct("fits_header.SCIPROG")
+    values.sort()
+    return values
+
+
 # /api/v1/observations/values/OBJECT
 @router.get("/values/object", response_description="Unique values for OBJECT field", response_model=List[str])
 async def get_values_object(
         token: Annotated[str, Depends(AuthService.validate_token)]
 ):
     values = await Observation.distinct("canonized_object_name")
+    values.sort()
     return values
 
 # /api/v1/observations/values/FILTER  per TELESCOP
@@ -320,12 +341,18 @@ async def get_values_telescope_filter(
         telescope: str,
         token: Annotated[str, Depends(AuthService.validate_token)]
 ):
-    collection = Observation.get_motor_collection()
-    values = await collection.distinct("fits_header.FILTER", {"fits_header.TELESCOP": telescope})
-    return [v for v in values if v is not None]
+    if telescope == "all":
+        values = await Observation.distinct("fits_header.FILTER")
+        return values
+    else:
+        collection = Observation.get_motor_collection()
+        values = await collection.distinct("fits_header.FILTER", {"fits_header.TELESCOP": telescope})
+        return [v for v in values if v is not None]
+
+
+
 
 _migration_job: Dict[str, Any] = {"status": "idle"}
-
 
 async def _run_migration() -> None:
     global _migration_job

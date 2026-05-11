@@ -121,23 +121,162 @@
           <!-- Object -->
           <div [class.opacity-40]="obsNameMode" [class.pointer-events-none]="obsNameMode">
             <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Object</label>
-            <div class="relative">
-              <input type="text"
-                [ngModel]="filters().object ?? ''"
-                (ngModelChange)="updateFilter('object', $event)"
-                (focus)="otherFieldsFocused.set(true)"
-                (blur)="otherFieldsFocused.set(false)"
-                (keyup.enter)="search()"
-                placeholder="e.g. V404 Cyg"
-                class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm placeholder-slate-600 focus:border-accent-500 focus:outline-none"
-                [class.pr-7]="filters().object"
-                [class.border-accent-500]="filters().object">
-              @if (filters().object) {
-                <button type="button" tabindex="-1"
-                  (click)="updateFilter('object', '')"
-                  class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
-                  <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+            <div class="relative" [class.opacity-40]="coneSearchExpanded()">
+              <div class="relative flex items-center">
+                <input type="text"
+                  [ngModel]="objectQuery()"
+                  (ngModelChange)="objectQuery.set($event); objectHighlightedIndex.set(-1); updateFilter('object', $event)"
+                  (focus)="onObjectFocus()"
+                  (blur)="otherFieldsFocused.set(false)"
+                  (keydown)="onObjectKeydown($event)"
+                  [placeholder]="objectDropdownOpen() ? 'start typing object name..' : 'All'"
+                  class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm placeholder-slate-600 focus:border-accent-500 focus:outline-none pr-7"
+                  [class.border-accent-500]="filters().object">
+                @if (filters().object) {
+                  <button type="button" tabindex="-1"
+                    (click)="objectQuery.set(''); updateFilter('object', ''); objectDropdownOpen.set(false); search()"
+                    class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
+                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                  </button>
+                } @else {
+                  <svg class="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500 pointer-events-none"
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                  </svg>
+                }
+              </div>
+              @if (objectDropdownOpen()) {
+                <div class="fixed inset-0 z-10" (click)="objectDropdownOpen.set(false)"></div>
+                <div class="absolute z-20 w-full mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden max-h-48 overflow-y-auto">
+                  @if (!objectQuery()) {
+                    <button type="button"
+                      (click)="objectQuery.set(''); updateFilter('object', ''); objectDropdownOpen.set(false); otherFieldsFocused.set(false); search()"
+                      class="w-full px-3 py-1.5 text-sm text-slate-400 hover:bg-space-800 transition-colors text-left"
+                      [class.bg-space-800]="objectHighlightedIndex() === 0">
+                      All
+                    </button>
+                  }
+                  @for (o of filteredObjects(); track o.canonized_name; let i = $index) {
+                    <button type="button"
+                      (click)="objectQuery.set(o.first_alias ?? o.canonized_name ?? ''); updateFilter('object', o.first_alias ?? o.canonized_name ?? ''); objectDropdownOpen.set(false); search()"
+                      class="w-full px-3 py-1.5 text-sm hover:bg-space-800 transition-colors text-left"
+                      [class.bg-space-800]="objectHighlightedIndex() === i + (!objectQuery() ? 1 : 0)"
+                      [class.text-slate-200]="filters().object === (o.first_alias ?? o.canonized_name)"
+                      [class.text-slate-400]="filters().object !== (o.first_alias ?? o.canonized_name)">
+                      {{ o.first_alias ?? o.canonized_name }}
+                    </button>
+                  }
+                  @if (filteredObjects().length === 0) {
+                    <div class="px-3 py-1.5 text-sm text-slate-600">No matches</div>
+                  }
+                </div>
+              }
+            </div>
+
+            <!-- Around Object (inline cone search) -->
+            <div class="mt-1.5">
+              <div class="flex justify-end">
+                <button type="button"
+                  (click)="toggleConeSearch()"
+                  class="flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-medium border transition-colors focus:outline-none"
+                  [class.bg-accent-600]="coneSearchExpanded()"
+                  [class.border-accent-500]="coneSearchExpanded()"
+                  [class.text-white]="coneSearchExpanded()"
+                  [class.bg-space-800]="!coneSearchExpanded()"
+                  [class.border-space-700]="!coneSearchExpanded()"
+                  [class.text-slate-400]="!coneSearchExpanded()"
+                  [class.hover:border-accent-500]="!coneSearchExpanded()"
+                  [class.hover:text-slate-200]="!coneSearchExpanded()">
+                  <svg class="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+                  </svg>
+                  search around object
+                  <svg class="w-3 h-3 transition-transform shrink-0" [class.rotate-180]="coneSearchExpanded()"
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                  </svg>
                 </button>
+              </div>
+              @if (coneSearchExpanded()) {
+                <div class="mt-2 space-y-2">
+                  <div class="flex gap-2">
+                    <div class="flex-1">
+                      <label class="block text-[10px] text-slate-500 mb-1">RA (deg)</label>
+                      <div class="relative">
+                        <input type="number" step="any"
+                          [ngModel]="coneRa()"
+                          (ngModelChange)="coneRa.set($event); coneSearchError.set(null)"
+                          (focus)="otherFieldsFocused.set(true)"
+                          (blur)="otherFieldsFocused.set(false)"
+                          (keyup.enter)="search()"
+                          placeholder="0.0"
+                          class="w-full bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs text-slate-300 focus:border-accent-500 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          [class.pr-6]="coneRa() != null"
+                          [class.border-red-500]="coneSearchError() && coneDec() != null && coneRa() == null"
+                          [class.border-accent-500]="coneRa() != null">
+                        @if (coneRa() != null) {
+                          <button type="button" tabindex="-1"
+                            (click)="coneRa.set(null); coneSearchError.set(null)"
+                            class="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
+                            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                          </button>
+                        }
+                      </div>
+                    </div>
+                    <div class="flex-1">
+                      <label class="block text-[10px] text-slate-500 mb-1">Dec (deg)</label>
+                      <div class="relative">
+                        <input type="number" step="any"
+                          [ngModel]="coneDec()"
+                          (ngModelChange)="coneDec.set($event); coneSearchError.set(null)"
+                          (focus)="otherFieldsFocused.set(true)"
+                          (blur)="otherFieldsFocused.set(false)"
+                          (keyup.enter)="search()"
+                          placeholder="0.0"
+                          class="w-full bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs text-slate-300 focus:border-accent-500 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          [class.pr-6]="coneDec() != null"
+                          [class.border-red-500]="coneSearchError() && coneRa() != null && coneDec() == null"
+                          [class.border-accent-500]="coneDec() != null">
+                        @if (coneDec() != null) {
+                          <button type="button" tabindex="-1"
+                            (click)="coneDec.set(null); coneSearchError.set(null)"
+                            class="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
+                            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                          </button>
+                        }
+                      </div>
+                    </div>
+                  </div>
+                  @if (coneSearchError()) {
+                    <p class="text-[10px] text-red-400">{{ coneSearchError() }}</p>
+                  }
+                  <div class="flex gap-2">
+                    <div class="flex-1">
+                      <label class="block text-[10px] text-slate-500 mb-1">Radius (arcsec)</label>
+                      <input type="number" step="any" min="0"
+                        [ngModel]="coneRadius()"
+                        (ngModelChange)="coneRadius.set($event)"
+                        (focus)="otherFieldsFocused.set(true)"
+                        (blur)="otherFieldsFocused.set(false)"
+                        (keyup.enter)="search()"
+                        placeholder="60"
+                        class="w-full min-w-0 bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs text-slate-300 focus:border-accent-500 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        [class.border-accent-500]="coneRadius() !== 60">
+                    </div>
+                    <div class="flex-1">
+                      <label class="block text-[10px] text-slate-500 mb-1">Epoch</label>
+                      <input type="text"
+                        [ngModel]="coneEpoch()"
+                        (ngModelChange)="coneEpoch.set($event)"
+                        (focus)="otherFieldsFocused.set(true)"
+                        (blur)="otherFieldsFocused.set(false)"
+                        (keyup.enter)="search()"
+                        placeholder="2000.0"
+                        class="w-full min-w-0 bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs text-slate-300 focus:border-accent-500 focus:outline-none"
+                        [class.border-accent-500]="coneEpoch() !== '2000.0'">
+                    </div>
+                  </div>
+                </div>
               }
             </div>
           </div>
@@ -158,7 +297,7 @@
                 [class.border-accent-500]="filters().obs_name">
               @if (filters().obs_name) {
                 <button type="button" tabindex="-1"
-                  (click)="updateFilter('obs_name', '')"
+                  (click)="updateFilter('obs_name', ''); search()"
                   class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
                   <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
@@ -169,8 +308,9 @@
           <!-- All other filters — disabled when obs name mode is active -->
           <div class="space-y-3" [class.opacity-40]="obsNameMode" [class.pointer-events-none]="obsNameMode">
 
-            <!-- Telescope (custom dropdown with colored dots) -->
-            <div>
+            <!-- Telescope + Filter -->
+            <div class="flex gap-2">
+              <div class="flex-1">
               <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Telescope</label>
               <div class="relative">
                 <button type="button"
@@ -181,7 +321,7 @@
                   [class.border-accent-500]="filters().telescop">
                   <span class="inline-block w-2 h-2 rounded-full shrink-0"
                     [style.background-color]="getTelescopeColor(filters().telescop)"></span>
-                  <span class="flex-1">{{ filters().telescop || 'All' }}</span>
+                  <span class="flex-1" [class.text-slate-500]="!filters().telescop" [class.text-slate-200]="filters().telescop">{{ filters().telescop || 'All' }}</span>
                   <svg class="w-3 h-3 text-slate-500 shrink-0 transition-transform" [class.rotate-180]="telescopeDropdownOpen()"
                     fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -210,29 +350,61 @@
                   </div>
                 }
               </div>
-            </div>
+              </div>
 
-            <!-- Optical Filter -->
-            <div>
+              <div class="flex-1">
               <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Filter</label>
               <div class="relative">
-                <input type="text"
-                  [ngModel]="(filters().filter ?? []).join(', ')"
-                  (ngModelChange)="updateFilterArray('filter', $event)"
-                  (focus)="otherFieldsFocused.set(true)"
-                  (blur)="otherFieldsFocused.set(false)"
-                  (keyup.enter)="search()"
-                  placeholder="e.g. V, B, I"
-                  class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm placeholder-slate-600 focus:border-accent-500 focus:outline-none"
-                  [class.pr-7]="filters().filter?.length"
-                  [class.border-accent-500]="filters().filter?.length">
-                @if (filters().filter?.length) {
-                  <button type="button" tabindex="-1"
-                    (click)="updateFilterArray('filter', '')"
-                    class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
-                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                  </button>
+                <div class="relative flex items-center">
+                  <input type="text"
+                    [ngModel]="filterQuery()"
+                    (ngModelChange)="filterQuery.set($event); filterHighlightedIndex.set(-1); filters.update(f => ({ ...f, filter: $event ? [($event)] : null }))"
+                    (focus)="otherFieldsFocused.set(true); filterDropdownOpen.set(true)"
+                    (blur)="otherFieldsFocused.set(false)"
+                    (keydown)="onFilterKeydown($event)"
+                    [placeholder]="filterDropdownOpen() ? 'start typing filter name..' : 'All'"
+                    class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm placeholder-slate-600 focus:border-accent-500 focus:outline-none pr-7"
+                    [class.border-accent-500]="filters().filter?.length">
+                  @if (filters().filter?.length) {
+                    <button type="button" tabindex="-1"
+                      (click)="filterQuery.set(''); filters.update(f => ({ ...f, filter: null })); filterDropdownOpen.set(false); search()"
+                      class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
+                      <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                  } @else {
+                    <svg class="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500 pointer-events-none"
+                      fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                  }
+                </div>
+                @if (filterDropdownOpen()) {
+                  <div class="fixed inset-0 z-10" (click)="filterDropdownOpen.set(false)"></div>
+                  <div class="absolute z-20 w-full mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden max-h-48 overflow-y-auto">
+                    @if (!filterQuery()) {
+                      <button type="button"
+                        (click)="filterQuery.set(''); filters.update(f => ({ ...f, filter: null })); filterDropdownOpen.set(false); otherFieldsFocused.set(false); search()"
+                        class="w-full px-3 py-1.5 text-sm text-slate-400 hover:bg-space-800 transition-colors text-left"
+                        [class.bg-space-800]="filterHighlightedIndex() === 0">
+                        All
+                      </button>
+                    }
+                    @for (f of filteredAvailableFilters(); track f; let i = $index) {
+                      <button type="button"
+                        (click)="filterQuery.set(f); filters.update(fs => ({ ...fs, filter: [f] })); filterDropdownOpen.set(false); search()"
+                        class="w-full px-3 py-1.5 text-sm hover:bg-space-800 transition-colors text-left"
+                        [class.bg-space-800]="filterHighlightedIndex() === i + (!filterQuery() ? 1 : 0)"
+                        [class.text-slate-200]="(filters().filter?.[0]) === f"
+                        [class.text-slate-400]="(filters().filter?.[0]) !== f">
+                        {{ f }}
+                      </button>
+                    }
+                    @if (filteredAvailableFilters().length === 0) {
+                      <div class="px-3 py-1.5 text-sm text-slate-600">No filters found</div>
+                    }
+                  </div>
                 }
+              </div>
               </div>
             </div>
 
@@ -247,7 +419,7 @@
                     (blur)="otherFieldsFocused.set(false)"
                     class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm text-left flex items-center gap-2 focus:outline-none"
                     [class.border-accent-500]="filters().obstype">
-                    <span class="flex-1 truncate">{{ filters().obstype || 'All' }}</span>
+                    <span class="flex-1 truncate" [class.text-slate-500]="!filters().obstype" [class.text-slate-200]="filters().obstype">{{ filters().obstype || 'All' }}</span>
                     <svg class="w-3 h-3 text-slate-500 shrink-0 transition-transform" [class.rotate-180]="obsTypeDropdownOpen()"
                       fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -257,13 +429,13 @@
                     <div class="fixed inset-0 z-10" (click)="obsTypeDropdownOpen.set(false)"></div>
                     <div class="absolute z-20 w-full mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden max-h-48 overflow-y-auto">
                       <button type="button"
-                        (click)="updateFilter('obstype', ''); obsTypeDropdownOpen.set(false); otherFieldsFocused.set(false); search()"
+                        (click)="updateFilter('obstype', ''); updateFilter('imagetyp', ''); obsTypeDropdownOpen.set(false); otherFieldsFocused.set(false); search()"
                         class="w-full px-3 py-1.5 text-sm text-slate-400 hover:bg-space-800 transition-colors text-left">
                         All
                       </button>
                       @for (t of obsTypes(); track t) {
                         <button type="button"
-                          (click)="updateFilter('obstype', t); obsTypeDropdownOpen.set(false); search()"
+                          (click)="updateFilter('obstype', t); t !== 'calib' && updateFilter('imagetyp', ''); obsTypeDropdownOpen.set(false); search()"
                           class="w-full px-3 py-1.5 text-sm hover:bg-space-800 transition-colors text-left"
                           [class.text-slate-200]="filters().obstype === t"
                           [class.text-slate-400]="filters().obstype !== t">
@@ -274,127 +446,151 @@
                   }
                 </div>
               </div>
-              <div class="flex-1">
-                <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Image Type</label>
-                <div class="relative">
-                  <button type="button"
-                    (click)="imageTypDropdownOpen.set(!imageTypDropdownOpen())"
-                    (focus)="otherFieldsFocused.set(true)"
-                    (blur)="otherFieldsFocused.set(false)"
-                    class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm text-left flex items-center gap-2 focus:outline-none"
-                    [class.border-accent-500]="filters().imagetyp">
-                    <span class="flex-1 truncate">{{ filters().imagetyp || 'All' }}</span>
-                    <svg class="w-3 h-3 text-slate-500 shrink-0 transition-transform" [class.rotate-180]="imageTypDropdownOpen()"
-                      fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                    </svg>
-                  </button>
-                  @if (imageTypDropdownOpen()) {
-                    <div class="fixed inset-0 z-10" (click)="imageTypDropdownOpen.set(false)"></div>
-                    <div class="absolute z-20 w-full mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden max-h-48 overflow-y-auto">
-                      <button type="button"
-                        (click)="updateFilter('imagetyp', ''); imageTypDropdownOpen.set(false); otherFieldsFocused.set(false); search()"
-                        class="w-full px-3 py-1.5 text-sm text-slate-400 hover:bg-space-800 transition-colors text-left">
-                        All
-                      </button>
-                      @for (t of imageTypes(); track t) {
+              @if (filters().obstype === 'calib') {
+                <div class="flex-1">
+                  <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Calib Type</label>
+                  <div class="relative">
+                    <button type="button"
+                      (click)="imageTypDropdownOpen.set(!imageTypDropdownOpen())"
+                      (focus)="otherFieldsFocused.set(true)"
+                      (blur)="otherFieldsFocused.set(false)"
+                      class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm text-left flex items-center gap-2 focus:outline-none"
+                      [class.border-accent-500]="filters().imagetyp">
+                      <span class="flex-1 truncate" [class.text-slate-500]="!filters().imagetyp" [class.text-slate-200]="filters().imagetyp">{{ filters().imagetyp || 'All' }}</span>
+                      <svg class="w-3 h-3 text-slate-500 shrink-0 transition-transform" [class.rotate-180]="imageTypDropdownOpen()"
+                        fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                      </svg>
+                    </button>
+                    @if (imageTypDropdownOpen()) {
+                      <div class="fixed inset-0 z-10" (click)="imageTypDropdownOpen.set(false)"></div>
+                      <div class="absolute z-20 w-full mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden max-h-48 overflow-y-auto">
                         <button type="button"
-                          (click)="updateFilter('imagetyp', t); imageTypDropdownOpen.set(false); search()"
-                          class="w-full px-3 py-1.5 text-sm hover:bg-space-800 transition-colors text-left"
-                          [class.text-slate-200]="filters().imagetyp === t"
-                          [class.text-slate-400]="filters().imagetyp !== t">
-                          {{ t }}
+                          (click)="updateFilter('imagetyp', ''); imageTypDropdownOpen.set(false); otherFieldsFocused.set(false); search()"
+                          class="w-full px-3 py-1.5 text-sm text-slate-400 hover:bg-space-800 transition-colors text-left">
+                          All
                         </button>
-                      }
-                    </div>
-                  }
+                        @for (t of imageTypes(); track t) {
+                          @if (t.toLowerCase() !== 'science') {
+                            <button type="button"
+                              (click)="updateFilter('imagetyp', t); imageTypDropdownOpen.set(false); search()"
+                              class="w-full px-3 py-1.5 text-sm hover:bg-space-800 transition-colors text-left"
+                              [class.text-slate-200]="filters().imagetyp === t"
+                              [class.text-slate-400]="filters().imagetyp !== t">
+                              {{ t }}
+                            </button>
+                          }
+                        }
+                      </div>
+                    }
+                  </div>
                 </div>
-              </div>
+              } @else {
+                <div class="flex-1"></div>
+              }
             </div>
 
-            <!-- Date Range -->
+            <!-- Date / OCA-JD Range -->
             <div>
-              <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Date Range</label>
-              <div class="flex gap-2">
-                <div class="relative flex-1 min-w-0">
-                  <input type="text" placeholder="YYYY-MM-DD"
-                    [value]="filters().date_obs_from ?? ''"
-                    (input)="formatDateInput($event, 'date_obs_from')"
-                    (focus)="otherFieldsFocused.set(true)"
-                    (blur)="otherFieldsFocused.set(false)"
-                    (keyup.enter)="search()"
-                    class="w-full bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs text-slate-300 placeholder-slate-600 focus:border-accent-500 focus:outline-none"
-                    [class.pr-6]="filters().date_obs_from"
-                    [class.border-accent-500]="filters().date_obs_from">
-                  @if (filters().date_obs_from) {
-                    <button type="button" tabindex="-1"
-                      (click)="updateFilter('date_obs_from', '')"
-                      class="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
-                      <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                    </button>
-                  }
-                </div>
-                <div class="relative flex-1 min-w-0">
-                  <input type="text" placeholder="YYYY-MM-DD"
-                    [value]="filters().date_obs_to ?? ''"
-                    (input)="formatDateInput($event, 'date_obs_to')"
-                    (focus)="otherFieldsFocused.set(true)"
-                    (blur)="otherFieldsFocused.set(false)"
-                    (keyup.enter)="search()"
-                    class="w-full bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs text-slate-300 placeholder-slate-600 focus:border-accent-500 focus:outline-none"
-                    [class.pr-6]="filters().date_obs_to"
-                    [class.border-accent-500]="filters().date_obs_to">
-                  @if (filters().date_obs_to) {
-                    <button type="button" tabindex="-1"
-                      (click)="updateFilter('date_obs_to', '')"
-                      class="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
-                      <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                    </button>
-                  }
+              <div class="flex items-center gap-2 mb-1">
+                <label class="text-[10px] text-slate-400 uppercase tracking-wider">Range</label>
+                <div class="flex rounded overflow-hidden border border-space-700 text-[10px]">
+                  <button type="button"
+                    (click)="switchDateRangeMode('date')"
+                    class="px-2 py-0.5 transition-colors"
+                    [class.bg-space-700]="dateRangeMode() === 'date'"
+                    [class.text-slate-200]="dateRangeMode() === 'date'"
+                    [class.text-slate-500]="dateRangeMode() !== 'date'">
+                    Date
+                  </button>
+                  <button type="button"
+                    (click)="switchDateRangeMode('oca_jd')"
+                    class="px-2 py-0.5 transition-colors border-l border-space-700"
+                    [class.bg-space-700]="dateRangeMode() === 'oca_jd'"
+                    [class.text-slate-200]="dateRangeMode() === 'oca_jd'"
+                    [class.text-slate-500]="dateRangeMode() !== 'oca_jd'">
+                    OCA-JD
+                  </button>
                 </div>
               </div>
-            </div>
-
-            <!-- OCA-JD Range -->
-            <div>
-              <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">OCA-JD Range</label>
               <div class="flex gap-2">
-                <div class="relative flex-1 min-w-0">
-                  <input type="text" placeholder="from"
-                    [ngModel]="filters().oca_jd_from ?? null"
-                    (ngModelChange)="updateFilter('oca_jd_from', $event || null)"
-                    (focus)="otherFieldsFocused.set(true)"
-                    (blur)="otherFieldsFocused.set(false)"
-                    (keyup.enter)="search()"
-                    class="w-full bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs text-slate-300 placeholder-slate-600 focus:border-accent-500 focus:outline-none"
-                    [class.pr-6]="filters().oca_jd_from != null"
-                    [class.border-accent-500]="filters().oca_jd_from != null">
-                  @if (filters().oca_jd_from != null) {
+                @if (dateRangeMode() === 'date') {
+                  <div class="relative flex-1 min-w-0">
+                    <input type="text" placeholder="YYYY-MM-DD"
+                      [value]="filters().date_obs_from ?? ''"
+                      (input)="formatDateInput($event, 'date_obs_from')"
+                      (keyup.enter)="search()"
+                      (focus)="otherFieldsFocused.set(true)"
+                      (blur)="otherFieldsFocused.set(false)"
+                      class="w-full bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs text-slate-300 placeholder-slate-600 focus:border-accent-500 focus:outline-none pr-6"
+                      [class.border-accent-500]="filters().date_obs_from">
+                    <input fpickr #dateFromPicker="fpickr"
+                      class="absolute opacity-0 pointer-events-none inset-0 w-full h-full"
+                      [fpValue]="filters().date_obs_from"
+                      (fpChange)="updateFilter('date_obs_from', $event); search()">
                     <button type="button" tabindex="-1"
-                      (click)="updateFilter('oca_jd_from', null)"
+                      (click)="dateFromPicker.open()"
                       class="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
-                      <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                      <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                     </button>
-                  }
-                </div>
-                <div class="relative flex-1 min-w-0">
-                  <input type="text" placeholder="to"
-                    [ngModel]="filters().oca_jd_to ?? null"
-                    (ngModelChange)="updateFilter('oca_jd_to', $event || null)"
-                    (focus)="otherFieldsFocused.set(true)"
-                    (blur)="otherFieldsFocused.set(false)"
-                    (keyup.enter)="search()"
-                    class="w-full bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs text-slate-300 placeholder-slate-600 focus:border-accent-500 focus:outline-none"
-                    [class.pr-6]="filters().oca_jd_to != null"
-                    [class.border-accent-500]="filters().oca_jd_to != null">
-                  @if (filters().oca_jd_to != null) {
+                  </div>
+                  <div class="relative flex-1 min-w-0">
+                    <input type="text" placeholder="YYYY-MM-DD"
+                      [value]="filters().date_obs_to ?? ''"
+                      (input)="formatDateInput($event, 'date_obs_to')"
+                      (keyup.enter)="search()"
+                      (focus)="otherFieldsFocused.set(true)"
+                      (blur)="otherFieldsFocused.set(false)"
+                      class="w-full bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs text-slate-300 placeholder-slate-600 focus:border-accent-500 focus:outline-none pr-6"
+                      [class.border-accent-500]="filters().date_obs_to">
+                    <input fpickr #dateToPicker="fpickr"
+                      class="absolute opacity-0 pointer-events-none inset-0 w-full h-full"
+                      [fpValue]="filters().date_obs_to"
+                      (fpChange)="updateFilter('date_obs_to', $event); search()">
                     <button type="button" tabindex="-1"
-                      (click)="updateFilter('oca_jd_to', null)"
+                      (click)="dateToPicker.open()"
                       class="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
-                      <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                      <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                     </button>
-                  }
-                </div>
+                  </div>
+                } @else {
+                  <div class="relative flex-1 min-w-0">
+                    <input type="text" placeholder="from"
+                      [ngModel]="filters().oca_jd_from ?? null"
+                      (ngModelChange)="updateFilter('oca_jd_from', $event || null)"
+                      (focus)="otherFieldsFocused.set(true)"
+                      (blur)="otherFieldsFocused.set(false)"
+                      (keyup.enter)="search()"
+                      class="w-full bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs text-slate-300 placeholder-slate-600 focus:border-accent-500 focus:outline-none"
+                      [class.pr-6]="filters().oca_jd_from != null"
+                      [class.border-accent-500]="filters().oca_jd_from != null">
+                    @if (filters().oca_jd_from != null) {
+                      <button type="button" tabindex="-1"
+                        (click)="updateFilter('oca_jd_from', null); search()"
+                        class="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
+                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                      </button>
+                    }
+                  </div>
+                  <div class="relative flex-1 min-w-0">
+                    <input type="text" placeholder="to"
+                      [ngModel]="filters().oca_jd_to ?? null"
+                      (ngModelChange)="updateFilter('oca_jd_to', $event || null)"
+                      (focus)="otherFieldsFocused.set(true)"
+                      (blur)="otherFieldsFocused.set(false)"
+                      (keyup.enter)="search()"
+                      class="w-full bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs text-slate-300 placeholder-slate-600 focus:border-accent-500 focus:outline-none"
+                      [class.pr-6]="filters().oca_jd_to != null"
+                      [class.border-accent-500]="filters().oca_jd_to != null">
+                    @if (filters().oca_jd_to != null) {
+                      <button type="button" tabindex="-1"
+                        (click)="updateFilter('oca_jd_to', null); search()"
+                        class="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
+                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                      </button>
+                    }
+                  </div>
+                }
               </div>
             </div>
 
@@ -403,44 +599,108 @@
               <div class="flex-1">
                 <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">PI</label>
                 <div class="relative">
-                  <input type="text"
-                    [ngModel]="filters().pi ?? ''"
-                    (ngModelChange)="updateFilter('pi', $event)"
-                    (focus)="otherFieldsFocused.set(true)"
-                    (blur)="otherFieldsFocused.set(false)"
-                    (keyup.enter)="search()"
-                    placeholder="e.g. apigulski"
-                    class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm placeholder-slate-600 focus:border-accent-500 focus:outline-none"
-                    [class.pr-7]="filters().pi"
-                    [class.border-accent-500]="filters().pi">
-                  @if (filters().pi) {
-                    <button type="button" tabindex="-1"
-                      (click)="updateFilter('pi', '')"
-                      class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
-                      <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                    </button>
+                  <div class="relative flex items-center">
+                    <input type="text"
+                      [ngModel]="piQuery()"
+                      (ngModelChange)="piQuery.set($event); piHighlightedIndex.set(-1); updateFilter('pi', $event)"
+                      (focus)="otherFieldsFocused.set(true); piDropdownOpen.set(true)"
+                      (blur)="otherFieldsFocused.set(false)"
+                      (keydown)="onPiKeydown($event)"
+                      [placeholder]="piDropdownOpen() ? 'start typing PI name..' : 'All'"
+                      class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm placeholder-slate-600 focus:border-accent-500 focus:outline-none pr-7"
+                      [class.border-accent-500]="filters().pi">
+                    @if (filters().pi) {
+                      <button type="button" tabindex="-1"
+                        (click)="piQuery.set(''); updateFilter('pi', ''); piDropdownOpen.set(false); search()"
+                        class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
+                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                      </button>
+                    } @else {
+                      <svg class="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500 pointer-events-none"
+                        fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                      </svg>
+                    }
+                  </div>
+                  @if (piDropdownOpen()) {
+                    <div class="fixed inset-0 z-10" (click)="piDropdownOpen.set(false)"></div>
+                    <div class="absolute z-20 w-full mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden max-h-48 overflow-y-auto">
+                      @if (!piQuery()) {
+                        <button type="button"
+                          (click)="piQuery.set(''); updateFilter('pi', ''); piDropdownOpen.set(false); otherFieldsFocused.set(false); search()"
+                          class="w-full px-3 py-1.5 text-sm text-slate-400 hover:bg-space-800 transition-colors text-left"
+                          [class.bg-space-800]="piHighlightedIndex() === 0">
+                          All
+                        </button>
+                      }
+                      @for (p of filteredPis(); track p; let i = $index) {
+                        <button type="button"
+                          (click)="piQuery.set(p); updateFilter('pi', p); piDropdownOpen.set(false); search()"
+                          class="w-full px-3 py-1.5 text-sm hover:bg-space-800 transition-colors text-left"
+                          [class.bg-space-800]="piHighlightedIndex() === i + (!piQuery() ? 1 : 0)"
+                          [class.text-slate-200]="filters().pi === p"
+                          [class.text-slate-400]="filters().pi !== p">
+                          {{ p }}
+                        </button>
+                      }
+                      @if (filteredPis().length === 0) {
+                        <div class="px-3 py-1.5 text-sm text-slate-600">No matches</div>
+                      }
+                    </div>
                   }
                 </div>
               </div>
               <div class="flex-1">
                 <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Program</label>
                 <div class="relative">
-                  <input type="text"
-                    [ngModel]="filters().sciprog ?? ''"
-                    (ngModelChange)="updateFilter('sciprog', $event)"
-                    (focus)="otherFieldsFocused.set(true)"
-                    (blur)="otherFieldsFocused.set(false)"
-                    (keyup.enter)="search()"
-                    placeholder="e.g. oclu_young"
-                    class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm placeholder-slate-600 focus:border-accent-500 focus:outline-none"
-                    [class.pr-7]="filters().sciprog"
-                    [class.border-accent-500]="filters().sciprog">
-                  @if (filters().sciprog) {
-                    <button type="button" tabindex="-1"
-                      (click)="updateFilter('sciprog', '')"
-                      class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
-                      <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                    </button>
+                  <div class="relative flex items-center">
+                    <input type="text"
+                      [ngModel]="sciprogQuery()"
+                      (ngModelChange)="sciprogQuery.set($event); sciprogHighlightedIndex.set(-1); updateFilter('sciprog', $event)"
+                      (focus)="otherFieldsFocused.set(true); sciprogDropdownOpen.set(true)"
+                      (blur)="otherFieldsFocused.set(false)"
+                      (keydown)="onSciprogKeydown($event)"
+                      [placeholder]="sciprogDropdownOpen() ? 'start typing program..' : 'All'"
+                      class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm placeholder-slate-600 focus:border-accent-500 focus:outline-none pr-7"
+                      [class.border-accent-500]="filters().sciprog">
+                    @if (filters().sciprog) {
+                      <button type="button" tabindex="-1"
+                        (click)="sciprogQuery.set(''); updateFilter('sciprog', ''); sciprogDropdownOpen.set(false); search()"
+                        class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
+                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                      </button>
+                    } @else {
+                      <svg class="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500 pointer-events-none"
+                        fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                      </svg>
+                    }
+                  </div>
+                  @if (sciprogDropdownOpen()) {
+                    <div class="fixed inset-0 z-10" (click)="sciprogDropdownOpen.set(false)"></div>
+                    <div class="absolute z-20 w-full mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden max-h-48 overflow-y-auto">
+                      @if (!sciprogQuery()) {
+                        <button type="button"
+                          (click)="sciprogQuery.set(''); updateFilter('sciprog', ''); sciprogDropdownOpen.set(false); otherFieldsFocused.set(false); search()"
+                          class="w-full px-3 py-1.5 text-sm text-slate-400 hover:bg-space-800 transition-colors text-left"
+                          [class.bg-space-800]="sciprogHighlightedIndex() === 0">
+                          All
+                        </button>
+                      }
+                      @for (s of filteredSciprogs(); track s; let i = $index) {
+                        <button type="button"
+                          (click)="sciprogQuery.set(s); updateFilter('sciprog', s); sciprogDropdownOpen.set(false); search()"
+                          class="w-full px-3 py-1.5 text-sm hover:bg-space-800 transition-colors text-left"
+                          [class.bg-space-800]="sciprogHighlightedIndex() === i + (!sciprogQuery() ? 1 : 0)"
+                          [class.text-slate-200]="filters().sciprog === s"
+                          [class.text-slate-400]="filters().sciprog !== s">
+                          {{ s }}
+                        </button>
+                      }
+                      @if (filteredSciprogs().length === 0) {
+                        <div class="px-3 py-1.5 text-sm text-slate-600">No matches</div>
+                      }
+                    </div>
                   }
                 </div>
               </div>
@@ -448,89 +708,6 @@
 
           </div>
 
-          <!-- Cone Search -->
-          <div [class.opacity-40]="obsNameMode" [class.pointer-events-none]="obsNameMode">
-            <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Cone Search</label>
-            <div class="space-y-2">
-              <div class="flex gap-2">
-                <div class="flex-1">
-                  <label class="block text-[10px] text-slate-500 mb-1">RA (deg)</label>
-                  <div class="relative">
-                    <input type="number" step="any"
-                      [ngModel]="coneRa()"
-                      (ngModelChange)="coneRa.set($event); coneSearchError.set(null)"
-                      (focus)="otherFieldsFocused.set(true)"
-                      (blur)="otherFieldsFocused.set(false)"
-                      (keyup.enter)="search()"
-                      placeholder="0.0"
-                      class="w-full bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs text-slate-300 focus:border-accent-500 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      [class.pr-6]="coneRa() != null"
-                      [class.border-red-500]="coneSearchError() && coneDec() != null && coneRa() == null"
-                      [class.border-accent-500]="coneRa() != null">
-                    @if (coneRa() != null) {
-                      <button type="button" tabindex="-1"
-                        (click)="coneRa.set(null); coneSearchError.set(null)"
-                        class="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
-                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                      </button>
-                    }
-                  </div>
-                </div>
-                <div class="flex-1">
-                  <label class="block text-[10px] text-slate-500 mb-1">Dec (deg)</label>
-                  <div class="relative">
-                    <input type="number" step="any"
-                      [ngModel]="coneDec()"
-                      (ngModelChange)="coneDec.set($event); coneSearchError.set(null)"
-                      (focus)="otherFieldsFocused.set(true)"
-                      (blur)="otherFieldsFocused.set(false)"
-                      (keyup.enter)="search()"
-                      placeholder="0.0"
-                      class="w-full bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs text-slate-300 focus:border-accent-500 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      [class.pr-6]="coneDec() != null"
-                      [class.border-red-500]="coneSearchError() && coneRa() != null && coneDec() == null"
-                      [class.border-accent-500]="coneDec() != null">
-                    @if (coneDec() != null) {
-                      <button type="button" tabindex="-1"
-                        (click)="coneDec.set(null); coneSearchError.set(null)"
-                        class="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
-                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                      </button>
-                    }
-                  </div>
-                </div>
-              </div>
-              @if (coneSearchError()) {
-                <p class="text-[10px] text-red-400">{{ coneSearchError() }}</p>
-              }
-              <div class="flex gap-2">
-                <div class="flex-1">
-                  <label class="block text-[10px] text-slate-500 mb-1">Radius (arcsec)</label>
-                  <input type="number" step="any" min="0"
-                    [ngModel]="coneRadius()"
-                    (ngModelChange)="coneRadius.set($event)"
-                    (focus)="otherFieldsFocused.set(true)"
-                    (blur)="otherFieldsFocused.set(false)"
-                    (keyup.enter)="search()"
-                    placeholder="60"
-                    class="w-full min-w-0 bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs text-slate-300 focus:border-accent-500 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    [class.border-accent-500]="coneRadius() !== 60">
-                </div>
-                <div class="flex-1">
-                  <label class="block text-[10px] text-slate-500 mb-1">Epoch</label>
-                  <input type="text"
-                    [ngModel]="coneEpoch()"
-                    (ngModelChange)="coneEpoch.set($event)"
-                    (focus)="otherFieldsFocused.set(true)"
-                    (blur)="otherFieldsFocused.set(false)"
-                    (keyup.enter)="search()"
-                    placeholder="2000.0"
-                    class="w-full min-w-0 bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs text-slate-300 focus:border-accent-500 focus:outline-none"
-                    [class.border-accent-500]="coneEpoch() !== '2000.0'">
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
 
         <!-- Search Actions -->
@@ -724,7 +901,7 @@
               </thead>
               <tbody class="divide-y divide-space-800/50">
                 @for (obs of displayedObservations(); track obs._id ?? $index) {
-                  <tr class="hover:bg-space-800/30 transition-colors cursor-pointer"
+                  <tr class="hover:bg-space-800/30 transition-colors cursor-pointer h-10"
                     [class.bg-space-800/40]="selectedObsIds().has(obs._id!)"
                     (click)="openObservation(obs)">
                     <td class="px-3 py-2 w-10 cursor-pointer select-none"
@@ -1182,7 +1359,7 @@
                   @for (file of calibrationFiles(); track file.filename) {
                     <div class="flex items-center gap-2 bg-space-950 rounded px-3 py-2 cursor-pointer hover:bg-space-800/60 transition-colors"
                       (click)="selectedFile.set(file)">
-                      <span class="px-1.5 py-0.5 rounded border text-[10px] font-medium shrink-0 bg-space-800 text-slate-400 border-slate-600/50">
+                      <span class="px-1.5 py-0.5 rounded border text-[10px] font-medium shrink-0 min-w-[2.5rem] text-center bg-space-800 text-slate-400 border-slate-600/50">
                         {{ getCalibDisplayLabel(file) }}
                       </span>
                       <span class="font-mono text-[11px] text-slate-400 truncate flex-1">{{ file.filename }}</span>
@@ -1193,7 +1370,7 @@
                   }
                   @for (filename of calibrationMissingFiles(); track filename) {
                     <div class="flex items-center gap-2 bg-space-950 rounded px-3 py-2 opacity-60">
-                      <span class="px-1.5 py-0.5 rounded border text-[10px] font-medium shrink-0 bg-space-800 text-slate-500 border-slate-700/50">
+                      <span class="px-1.5 py-0.5 rounded border text-[10px] font-medium shrink-0 min-w-[2.5rem] text-center bg-space-800 text-slate-500 border-slate-700/50">
                         {{ getCalibFileLabel(filename) }}
                       </span>
                       <span class="font-mono text-[11px] text-slate-500 truncate flex-1">{{ filename }}</span>
@@ -1412,7 +1589,7 @@
                     @if (file.filename !== selectedFile()?.filename) {
                     <div class="flex items-center gap-2 bg-space-950 rounded px-3 py-2 cursor-pointer hover:bg-space-800/60 transition-colors"
                       (click)="openSourceFile(file)">
-                      <span class="px-1.5 py-0.5 rounded border text-[10px] font-medium shrink-0 bg-space-800 text-slate-400 border-slate-600/50">
+                      <span class="px-1.5 py-0.5 rounded border text-[10px] font-medium shrink-0 min-w-[2.5rem] text-center bg-space-800 text-slate-400 border-slate-600/50">
                         {{ getCalibDisplayLabel(file) }}
                       </span>
                       <span class="font-mono text-[11px] text-slate-400 truncate flex-1">{{ file.filename }}</span>
@@ -1424,7 +1601,7 @@
                   }
                   @for (filename of sourceMissingFiles(); track filename) {
                     <div class="flex items-center gap-2 bg-space-950 rounded px-3 py-2 opacity-60">
-                      <span class="px-1.5 py-0.5 rounded border text-[10px] font-medium shrink-0 bg-space-800 text-slate-500 border-slate-700/50">
+                      <span class="px-1.5 py-0.5 rounded border text-[10px] font-medium shrink-0 min-w-[2.5rem] text-center bg-space-800 text-slate-500 border-slate-700/50">
                         {{ getCalibFileLabel(filename) }}
                       </span>
                       <span class="font-mono text-[11px] text-slate-500 truncate flex-1">{{ filename }}</span>
@@ -1633,17 +1810,8 @@
             }
           </div>
 
-          <!-- Include files (obs / calibration) -->
-          <div class="border-t border-space-800 pt-3 space-y-2">
-            <p class="text-xs text-slate-400">Include files:</p>
-            <label class="flex items-center gap-2.5 cursor-not-allowed opacity-60">
-              <div class="w-4 h-4 rounded border border-accent-500 bg-accent-600 flex items-center justify-center shrink-0">
-                <svg class="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                  <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-                </svg>
-              </div>
-              <span class="text-xs text-slate-300">Observation files</span>
-            </label>
+          <!-- Calibration files checkbox -->
+          <div class="border-t border-space-800 pt-3">
             <label class="flex items-center gap-2.5 cursor-pointer" (click)="downloadIncludeCalibration.set(!downloadIncludeCalibration())">
               <div class="w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors"
                 [class.bg-accent-600]="downloadIncludeCalibration()"
@@ -1656,13 +1824,13 @@
                   </svg>
                 }
               </div>
-              <span class="text-xs text-slate-300">Calibration files</span>
+              <span class="text-xs text-slate-300">Search and add instrumental calibration files</span>
             </label>
           </div>
 
           <!-- File type filter -->
           <div class="border-t border-space-800 pt-3 space-y-2">
-            <p class="text-xs text-slate-400">File types:</p>
+            <p class="text-xs text-slate-400">Files (processing) stage:</p>
             @for (type of DOWNLOAD_FILE_TYPES; track type) {
               @if (downloadIncludeCalibration() || !DOWNLOAD_CALIB_TYPES.has(type)) {
               <label class="flex items-center gap-2.5 cursor-pointer select-none" (click)="toggleDownloadFileType(type)">
@@ -1677,7 +1845,7 @@
                     </svg>
                   }
                 </div>
-                <span class="font-mono text-xs text-slate-300">{{ type }}</span>
+                <span class="font-mono text-xs text-slate-300">{{ type }}{{ type === 'zdf' ? ' (zero/dark/flat calibrated)' : '' }}</span>
               </label>
               }
             }

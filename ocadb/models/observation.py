@@ -16,6 +16,7 @@ from pyaraucaria.lookup_objects import name_canonizator
 
 from ocadb.models.file import FitsHeader, FITSFile, FileClassification
 from ocadb.models.geo import SkyCoord, Point2D
+from ocadb.models.search_object import SearchObjectAlias, SearchObject
 
 
 class Observation(Document):
@@ -96,7 +97,6 @@ class Observation(Document):
             self.fits_header = FitsHeader.model_validate(self.fits_header)
         self.canonized_object_name = name_canonizator(self.fits_header.OBJECT)
 
-
         return self
 
     @model_validator(mode='after')
@@ -134,7 +134,7 @@ class Observation(Document):
         return self
 
     @after_event(Insert, Replace, Update)
-    async def propagate_access_tags(self):
+    async def propagate_values(self):
         """Propagate access_tags to all linked FITSFile documents after any write."""
         if not self.files:
             return
@@ -145,6 +145,26 @@ class Observation(Document):
         await FITSFile.find({"_id": {"$in": file_ids}}).update_many(
             {"$set": {"access_tags": self.access_tags}}
         )
+
+        if self.canonized_object_name:
+            search_object = await SearchObject.find_one(SearchObject.canonized_name == self.canonized_object_name,
+                                                        projection_model=SearchObject)
+
+            if search_object is None:
+                search_object = SearchObject(canonized_name=self.canonized_object_name, first_alias=self.fits_header.OBJECT)
+                await search_object.insert()
+
+        # if self.canonized_object_name:
+        #     alias = await SearchObjectAlias.find_one(SearchObjectAlias.alias == self.fits_header.OBJECT, projection_model=SearchObjectAlias)
+        #
+        #     if alias is None:
+        #         search_object = await SearchObject.find_one(SearchObject.canonized_name == self.canonized_object_name, projection_model=SearchObject)
+        #         if search_object is None:
+        #             search_object = SearchObject(canonized_name=self.canonized_object_name)
+        #             await search_object.insert()
+        #
+        #         alias = SearchObjectAlias(alias=self.fits_header.OBJECT, search_object=search_object)
+        #         await alias.insert()
 
     # Processing timestamps
     created_at: Optional[datetime] = Field(default_factory=datetime.utcnow, description="Record creation time")

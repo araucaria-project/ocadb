@@ -2,13 +2,14 @@ import { Component, signal, computed, inject, OnInit, ElementRef, ViewChild, eff
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { OcadbService, Observation, SearchFilters, FitsFile, StorageStatusType, ViewerConf, DEFAULT_VIEWER_CONF } from './services/ocadb.service';
+import { OcadbService, Observation, SearchFilters, SearchObject, FitsFile, StorageStatusType, ViewerConf, DEFAULT_VIEWER_CONF } from './services/ocadb.service';
 import { ApiLogService, ApiLogEntry } from './services/api-log.service';
+import { FlatpickrDirective } from './flatpickr.directive';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, FlatpickrDirective],
   templateUrl: './app.component.html'
 })
 export class AppComponent implements OnInit {
@@ -85,6 +86,20 @@ export class AppComponent implements OnInit {
   telescopeDropdownOpen = signal(false);
   obsTypeDropdownOpen = signal(false);
   imageTypDropdownOpen = signal(false);
+  objectDropdownOpen = signal(false);
+  objectQuery = signal('');
+  objectHighlightedIndex = signal(-1);
+  coneSearchExpanded = signal(false);
+  piDropdownOpen = signal(false);
+  piQuery = signal('');
+  piHighlightedIndex = signal(-1);
+  sciprogDropdownOpen = signal(false);
+  sciprogQuery = signal('');
+  sciprogHighlightedIndex = signal(-1);
+  filterDropdownOpen = signal(false);
+  filterQuery = signal('');
+  filterHighlightedIndex = signal(-1);
+  dateRangeMode = signal<'date' | 'oca_jd'>('date');
   obsNameFocused = signal(false);
   otherFieldsFocused = signal(false);
 
@@ -99,6 +114,32 @@ export class AppComponent implements OnInit {
   imageTypes = signal<string[]>([]);
   obsTypes = signal<string[]>([]);
   availableFilters = signal<string[]>([]);
+  filteredAvailableFilters = computed(() => {
+    const q = this.filterQuery().toLowerCase();
+    const nonEmpty = this.availableFilters().filter(f => f.trim());
+    if (!q) return nonEmpty;
+    return nonEmpty.filter(f => f.toLowerCase().includes(q));
+  });
+  objects = signal<SearchObject[]>([]);
+  filteredObjects = computed(() => {
+    const q = this.objectQuery().toLowerCase().replace(/[-_.\s]/g, '');
+    if (!q) return this.objects();
+    return this.objects().filter(o => (o.canonized_name ?? '').includes(q));
+  });
+  sciprogs = signal<string[]>([]);
+  filteredSciprogs = computed(() => {
+    const q = this.sciprogQuery().toLowerCase().replace(/[-_.\s]/g, '');
+    const nonEmpty = this.sciprogs().filter(s => s.trim());
+    if (!q) return nonEmpty;
+    return nonEmpty.filter(s => s.toLowerCase().replace(/[-_.\s]/g, '').includes(q));
+  });
+  pis = signal<string[]>([]);
+  filteredPis = computed(() => {
+    const q = this.piQuery().toLowerCase().replace(/[-_.\s]/g, '');
+    const nonEmpty = this.pis().filter(p => p.trim());
+    if (!q) return nonEmpty;
+    return nonEmpty.filter(p => p.toLowerCase().replace(/[-_.\s]/g, '').includes(q));
+  });
 
   constructor() {
     effect(() => {
@@ -399,12 +440,26 @@ export class AppComponent implements OnInit {
 
   async onTelescopeChange(telescope: string) {
     this.updateFilter('telescop', telescope);
-    if (telescope) {
-      const filters = await this.ocadbService.fetchTelescopeFilters(telescope);
-      this.availableFilters.set(filters);
-    } else {
-      this.availableFilters.set([]);
+    const filterList = await this.ocadbService.fetchTelescopeFilters(telescope || 'all');
+    this.availableFilters.set(filterList);
+    const currentFilter = this.filters().filter?.[0];
+    if (currentFilter && !filterList.includes(currentFilter)) {
+      this.filters.update(f => ({ ...f, filter: null }));
+      this.filterQuery.set('');
     }
+  }
+
+  switchDateRangeMode(mode: 'date' | 'oca_jd') {
+    if (this.dateRangeMode() === mode) return;
+    this.dateRangeMode.set(mode);
+    if (mode === 'date') {
+      this.updateFilter('oca_jd_from', null);
+      this.updateFilter('oca_jd_to', null);
+    } else {
+      this.updateFilter('date_obs_from', '');
+      this.updateFilter('date_obs_to', '');
+    }
+    this.search();
   }
 
   get obsNameMode(): boolean {
@@ -418,7 +473,7 @@ export class AppComponent implements OnInit {
       f.filter?.length || f.date_obs_from || f.date_obs_to ||
       f.pi || f.sciprog || f.jd_from != null || f.jd_to != null ||
       f.oca_jd_from != null || f.oca_jd_to != null ||
-      f.file_types?.length || this.coneRa() != null);
+      f.file_types?.length || this.coneRa() != null || this.coneSearchExpanded());
   }
 
 
@@ -441,13 +496,13 @@ export class AppComponent implements OnInit {
 
     const hasRa = this.coneRa() != null;
     const hasDec = this.coneDec() != null;
-    if (hasRa !== hasDec) {
+    if (this.coneSearchExpanded() && hasRa !== hasDec) {
       this.coneSearchError.set('Both RA and Dec are required for cone search.');
       return;
     }
     this.coneSearchError.set(null);
 
-    const cone_search = (hasRa && hasDec) ? {
+    const cone_search = (this.coneSearchExpanded() && hasRa && hasDec) ? {
       ra: this.coneRa()!,
       dec: this.coneDec()!,
       arc_seconds: this.coneRadius(),
@@ -455,7 +510,8 @@ export class AppComponent implements OnInit {
     } : null;
 
     this.ocadbService.pagination.update(p => ({ ...p, page: 1 }));
-    const results = await this.ocadbService.searchObservations({ ...this.filters(), cone_search }, 1);
+    const baseFilters = this.coneSearchExpanded() ? { ...this.filters(), object: null } : this.filters();
+    const results = await this.ocadbService.searchObservations({ ...baseFilters, cone_search }, 1);
     this.displayedObservations.set(results);
     this.loadDropdowns();
   }
@@ -637,9 +693,202 @@ export class AppComponent implements OnInit {
     this.scriptLoading.set(false);
   }
 
+  onObjectKeydown(event: KeyboardEvent) {
+    const list = this.filteredObjects();
+    const hasAll = !this.objectQuery();
+    const total = list.length + (hasAll ? 1 : 0);
+    const idx = this.objectHighlightedIndex();
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      this.objectDropdownOpen.set(true);
+      this.objectHighlightedIndex.set(idx < total - 1 ? idx + 1 : 0);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      this.objectDropdownOpen.set(true);
+      this.objectHighlightedIndex.set(idx > 0 ? idx - 1 : total - 1);
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      if (this.objectDropdownOpen() && idx >= 0) {
+        const allOffset = hasAll ? 1 : 0;
+        if (hasAll && idx === 0) {
+          this.objectQuery.set('');
+          this.updateFilter('object', '');
+        } else {
+          const selected = list[idx - allOffset];
+          const label = selected.first_alias ?? selected.canonized_name ?? '';
+          this.objectQuery.set(label);
+          this.updateFilter('object', label);
+        }
+      } else if (list.length === 1) {
+        const label = list[0].first_alias ?? list[0].canonized_name ?? '';
+        this.objectQuery.set(label);
+        this.updateFilter('object', label);
+      }
+      this.objectHighlightedIndex.set(-1);
+      this.objectDropdownOpen.set(false);
+      (event.target as HTMLElement).blur();
+      this.search();
+    } else if (event.key === 'Escape') {
+      this.objectDropdownOpen.set(false);
+      this.objectHighlightedIndex.set(-1);
+    }
+  }
+
+  onObjectFocus() {
+    if (this.coneSearchExpanded()) {
+      this.coneSearchExpanded.set(false);
+    }
+    this.otherFieldsFocused.set(true);
+    this.objectDropdownOpen.set(true);
+  }
+
+  async toggleConeSearch() {
+    if (this.coneSearchExpanded()) {
+      this.coneSearchExpanded.set(false);
+      this.search();
+    } else {
+      this.coneSearchExpanded.set(true);
+      if (this.filters().object && this.coneRa() == null && this.coneDec() == null) {
+        const coords = await this.ocadbService.fetchObjectCoordinates(this.filters().object!);
+        if (coords) {
+          this.coneRa.set(coords.ra);
+          this.coneDec.set(coords.dec);
+        }
+      }
+      this.search();
+    }
+  }
+
+  onPiKeydown(event: KeyboardEvent) {
+    const list = this.filteredPis();
+    const hasAll = !this.piQuery();
+    const total = list.length + (hasAll ? 1 : 0);
+    const idx = this.piHighlightedIndex();
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      this.piDropdownOpen.set(true);
+      this.piHighlightedIndex.set(idx < total - 1 ? idx + 1 : 0);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      this.piDropdownOpen.set(true);
+      this.piHighlightedIndex.set(idx > 0 ? idx - 1 : total - 1);
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      if (this.piDropdownOpen() && idx >= 0) {
+        const allOffset = hasAll ? 1 : 0;
+        if (hasAll && idx === 0) {
+          this.piQuery.set('');
+          this.updateFilter('pi', '');
+        } else {
+          const selected = list[idx - allOffset];
+          this.piQuery.set(selected);
+          this.updateFilter('pi', selected);
+        }
+      } else if (list.length === 1) {
+        this.piQuery.set(list[0]);
+        this.updateFilter('pi', list[0]);
+      }
+      this.piHighlightedIndex.set(-1);
+      this.piDropdownOpen.set(false);
+      (event.target as HTMLElement).blur();
+      this.search();
+    } else if (event.key === 'Escape') {
+      this.piDropdownOpen.set(false);
+      this.piHighlightedIndex.set(-1);
+    }
+  }
+
+  onSciprogKeydown(event: KeyboardEvent) {
+    const list = this.filteredSciprogs();
+    const hasAll = !this.sciprogQuery();
+    const total = list.length + (hasAll ? 1 : 0);
+    const idx = this.sciprogHighlightedIndex();
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      this.sciprogDropdownOpen.set(true);
+      this.sciprogHighlightedIndex.set(idx < total - 1 ? idx + 1 : 0);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      this.sciprogDropdownOpen.set(true);
+      this.sciprogHighlightedIndex.set(idx > 0 ? idx - 1 : total - 1);
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      if (this.sciprogDropdownOpen() && idx >= 0) {
+        const allOffset = hasAll ? 1 : 0;
+        if (hasAll && idx === 0) {
+          this.sciprogQuery.set('');
+          this.updateFilter('sciprog', '');
+        } else {
+          const selected = list[idx - allOffset];
+          this.sciprogQuery.set(selected);
+          this.updateFilter('sciprog', selected);
+        }
+      } else if (list.length === 1) {
+        this.sciprogQuery.set(list[0]);
+        this.updateFilter('sciprog', list[0]);
+      }
+      this.sciprogHighlightedIndex.set(-1);
+      this.sciprogDropdownOpen.set(false);
+      (event.target as HTMLElement).blur();
+      this.search();
+    } else if (event.key === 'Escape') {
+      this.sciprogDropdownOpen.set(false);
+      this.sciprogHighlightedIndex.set(-1);
+    }
+  }
+
+  onFilterKeydown(event: KeyboardEvent) {
+    const list = this.filteredAvailableFilters();
+    const hasAll = !this.filterQuery();
+    const total = list.length + (hasAll ? 1 : 0);
+    const idx = this.filterHighlightedIndex();
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      this.filterDropdownOpen.set(true);
+      this.filterHighlightedIndex.set(idx < total - 1 ? idx + 1 : 0);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      this.filterDropdownOpen.set(true);
+      this.filterHighlightedIndex.set(idx > 0 ? idx - 1 : total - 1);
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      if (this.filterDropdownOpen() && idx >= 0) {
+        const allOffset = hasAll ? 1 : 0;
+        if (hasAll && idx === 0) {
+          this.filterQuery.set('');
+          this.filters.update(f => ({ ...f, filter: null }));
+        } else {
+          const selected = list[idx - allOffset];
+          this.filterQuery.set(selected);
+          this.filters.update(f => ({ ...f, filter: [selected] }));
+        }
+      } else if (list.length === 1) {
+        this.filterQuery.set(list[0]);
+        this.filters.update(f => ({ ...f, filter: [list[0]] }));
+      }
+      this.filterHighlightedIndex.set(-1);
+      this.filterDropdownOpen.set(false);
+      (event.target as HTMLElement).blur();
+      this.search();
+    } else if (event.key === 'Escape') {
+      this.filterDropdownOpen.set(false);
+      this.filterHighlightedIndex.set(-1);
+    }
+  }
+
   clearFilters() {
     this.filters.set({});
     this.availableFilters.set([]);
+    this.objectQuery.set('');
+    this.piQuery.set('');
+    this.sciprogQuery.set('');
+    this.filterQuery.set('');
+    this.coneSearchExpanded.set(false);
+    this.dateRangeMode.set('date');
     this.coneRa.set(null);
     this.coneDec.set(null);
     this.coneRadius.set(60);
@@ -1012,14 +1261,23 @@ export class AppComponent implements OnInit {
   }
 
   private async loadDropdowns() {
-    const [telescopes, imageTypes, obsTypes] = await Promise.all([
+    const currentTelescope = this.filters().telescop;
+    const [telescopes, imageTypes, obsTypes, objects, pis, sciprogs, filterList] = await Promise.all([
       this.ocadbService.fetchValuesList('telescop'),
       this.ocadbService.fetchValuesList('imagetyp'),
-      this.ocadbService.fetchValuesList('obstype')
+      this.ocadbService.fetchValuesList('obstype'),
+      this.ocadbService.fetchSearchObjects(),
+      this.ocadbService.fetchValuesList('pi'),
+      this.ocadbService.fetchValuesList('sciprog'),
+      this.ocadbService.fetchTelescopeFilters(currentTelescope || 'all')
     ]);
     this.telescopes.set(telescopes);
     this.imageTypes.set(imageTypes);
     this.obsTypes.set(obsTypes);
+    this.objects.set(objects);
+    this.pis.set(pis);
+    this.sciprogs.set(sciprogs);
+    this.availableFilters.set(filterList);
   }
 
   private sanitizer = inject(DomSanitizer);

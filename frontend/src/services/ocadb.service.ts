@@ -82,6 +82,11 @@ export interface Observation {
   oca_jd?: number | null;
 }
 
+export interface SearchObject {
+  canonized_name: string | null;
+  first_alias: string | null;
+}
+
 export interface SearchFilters {
   telescop?: string | null;
   date_obs_from?: string | null;
@@ -332,10 +337,21 @@ export class OcadbService {
     }
   }
 
-  async fetchValuesList(field: 'telescop' | 'imagetyp' | 'obstype' | 'pi' | 'object'): Promise<string[]> {
+  async fetchValuesList(field: 'telescop' | 'imagetyp' | 'obstype' | 'pi' | 'object' | 'sciprog'): Promise<string[]> {
     if (!this.token()) return [];
     try {
       const response = await this.authenticatedFetch(`${this.v2BaseUrl}/observations/values/${field}`);
+      if (!response.ok) return [];
+      return await response.json();
+    } catch {
+      return [];
+    }
+  }
+
+  async fetchSearchObjects(): Promise<SearchObject[]> {
+    if (!this.token()) return [];
+    try {
+      const response = await this.authenticatedFetch(`${this.v2BaseUrl}/observations/values/search_object`);
       if (!response.ok) return [];
       return await response.json();
     } catch {
@@ -380,6 +396,24 @@ export class OcadbService {
       URL.revokeObjectURL(url);
     } catch (e: any) {
       this.handleFetchError(e, 'Download script');
+    }
+  }
+
+  async fetchObjectCoordinates(objectName: string): Promise<{ra: number, dec: number} | null> {
+    try {
+      const response = await this.authenticatedFetch(`${this.v2BaseUrl}/observations/search?page=1&page_size=1`, {
+        method: 'POST',
+        body: JSON.stringify({ object: objectName })
+      });
+      if (!response.ok) return null;
+      const result = await response.json();
+      const obs = result.data?.[0];
+      const ra = obs?.fits_header?.['RA'];
+      const dec = obs?.fits_header?.['DEC'];
+      if (ra == null || dec == null) return null;
+      return { ra: Number(ra), dec: Number(dec) };
+    } catch {
+      return null;
     }
   }
 
