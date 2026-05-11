@@ -192,6 +192,8 @@ class Observation(Document):
             "fits_header.OBSTYPE",
             "fits_header.PI",
             "fits_header.SCIPROG",
+            "fits_header.AIRMASS",
+            "fits_header.EXPTIME",
             "oca_jd",
             "access_tags",
             IndexModel([("telescope_coordinates.lon_lat", pymongo.GEOSPHERE)], name="skycoord_spatial_index"), # geospatial index
