@@ -358,15 +358,46 @@ async def _run_migration() -> None:
     _migration_job = {
         "status": "running",
         "started_at": datetime.utcnow().isoformat(),
+        "canonized_total": 0,
+        "canonized_updated": 0,
+        "canonized_errors": 0,
         "search_objects_created": 0,
         "search_objects_updated": 0,
         "search_objects_errors": 0,
         "total": 0,
     }
     try:
+        # Pass 1: backfill canonized_object_name for observations that are missing it
+        canon_total = await Observation.find(Observation.canonized_object_name == None).count()
+        _migration_job["canonized_total"] = canon_total
+        log.warning(f"Pass 1: backfilling canonized_object_name for {canon_total} observations...")
+
+        canon_updated = 0
+        canon_errors = 0
+
+        async for obs in Observation.find(Observation.canonized_object_name == None):
+            try:
+                if obs.fits_header is None:
+                    continue
+                object_name = getattr(obs.fits_header, 'OBJECT', None)
+                if not object_name:
+                    continue
+                canonized = name_canonizator(object_name)
+                if canonized:
+                    await obs.update({"$set": {"canonized_object_name": canonized}})
+                    canon_updated += 1
+                    _migration_job["canonized_updated"] = canon_updated
+            except Exception as e:
+                log.error(f"Canonize error for obs {obs.id}: {e}")
+                canon_errors += 1
+                _migration_job["canonized_errors"] = canon_errors
+
+        log.warning(f"Pass 1 done. Updated: {canon_updated}, errors: {canon_errors}")
+
+        # Pass 2: populate search_objects collection
         total = await Observation.find(Observation.canonized_object_name != None).count()
         _migration_job["total"] = total
-        log.warning(f"Populating search_objects from {total} observations with a canonized name...")
+        log.warning(f"Pass 2: populating search_objects from {total} observations with a canonized name...")
 
         so_created = 0
         so_updated = 0
