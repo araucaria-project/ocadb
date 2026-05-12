@@ -10,6 +10,7 @@
   --color-space-700: #2d3552;
   --color-accent-500: #38bdf8;
   --color-accent-600: #0ea5e9;
+  --color-amber-400: #fbbf24;
 }
 
 input[type="date"] {
