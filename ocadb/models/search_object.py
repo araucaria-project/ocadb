@@ -28,11 +28,13 @@ class SearchObject(Document):
 class SearchTag(Document):
     tag_name: Optional[str] = None
     tag_description: Optional[str] = None
+    tag_color: Optional[str] = None
 
     def __init__(self, *args: Any, **kwargs):
         super().__init__(*args, **kwargs)
         self.tag_name = kwargs.get("tag_name")
         self.tag_description = kwargs.get("tag_description")
+        self.tag_color = kwargs.get("tag_color")
 
     class Settings:
         name = "search_tags"

@@ -32,6 +32,7 @@ from pydantic import BaseModel
 class SearchTagCreate(BaseModel):
     tag_name: str
     tag_description: Optional[str] = None
+    tag_color: Optional[str] = None
 
 
 
@@ -335,7 +336,7 @@ async def create_search_tag(
         data: Annotated[SearchTagCreate, Body(...)],
         token: Annotated[str, Depends(AuthService.validate_token)]
 ):
-    tag = SearchTag(tag_name=data.tag_name, tag_description=data.tag_description)
+    tag = SearchTag(tag_name=data.tag_name, tag_description=data.tag_description, tag_color=data.tag_color)
     try:
         await tag.insert()
     except DuplicateKeyError:
@@ -501,50 +502,115 @@ async def _run_migration() -> None:
         #         so_errors += 1
         #         _migration_job["search_objects_errors"] = so_errors
 
-        # Pass 3: populate obs_tags from filetypes + metadata
-        tags_total = await Observation.count()
-        _migration_job["obs_tags_total"] = tags_total
-        log.warning(f"Pass 3: populating obs_tags for {tags_total} observations...")
+        # # Pass 3: populate obs_tags from filetypes + metadata (done)
+        # tags_total = await Observation.count()
+        # _migration_job["obs_tags_total"] = tags_total
+        # log.warning(f"Pass 3: populating obs_tags for {tags_total} observations...")
+        # tags_updated = 0
+        # tags_errors = 0
+        # async for obs in Observation.find_all():
+        #     try:
+        #         obs_tags: set[str] = {ft.value for ft in obs.filetypes}
+        #         if obs.metadata:
+        #             obs_tags.add("metadata")
+        #         if obs_tags:
+        #             await obs.update({"$set": {"obs_tags": list(obs_tags)}})
+        #             tags_updated += 1
+        #             _migration_job["obs_tags_updated"] = tags_updated
+        #     except Exception as e:
+        #         log.error(f"obs_tags error for obs {obs.id}: {e}")
+        #         tags_errors += 1
+        #         _migration_job["obs_tags_errors"] = tags_errors
+        # log.warning(f"Pass 3 done. Updated: {tags_updated}, errors: {tags_errors}")
+
+        # # Pass 4: create SearchTag documents for each known tag value (done)
+        # known_tags = ['raw', 'zdf', 'master', 'source', 'tmp', 'test', 'metadata', 'cntac']
+        # log.warning(f"Pass 4: creating SearchTag documents for {len(known_tags)} known tags...")
+        # st_created = 0
+        # st_errors = 0
+        # for tag_name in known_tags:
+        #     try:
+        #         existing = await SearchTag.find_one(SearchTag.tag_name == tag_name)
+        #         if existing is None:
+        #             await SearchTag(tag_name=tag_name).insert()
+        #             st_created += 1
+        #     except DuplicateKeyError:
+        #         pass
+        #     except Exception as e:
+        #         log.error(f"SearchTag error for tag '{tag_name}': {e}")
+        #         st_errors += 1
+        # log.warning(f"Pass 4 done. Created: {st_created}, errors: {st_errors}")
 
         tags_updated = 0
         tags_errors = 0
 
-        async for obs in Observation.find_all():
+        # Pass 5: backfill tag_color on existing SearchTag documents
+        known_colors = {
+            'zdf':      'bg-emerald-900/40 text-emerald-300 border-emerald-600/50',
+            'raw':      'bg-amber-900/30 text-amber-300 border-amber-600/50',
+            'metadata': 'bg-violet-900/30 text-violet-300 border-violet-600/50',
+            'master':   'bg-sky-900/40 text-sky-300 border-sky-600/50',
+            'source':   'bg-cyan-900/40 text-cyan-300 border-cyan-600/50',
+            'tmp':      'bg-orange-900/40 text-orange-300 border-orange-600/50',
+            'test':     'bg-yellow-900/40 text-yellow-300 border-yellow-600/50',
+        }
+        tag_palette = [
+            'bg-red-900/40 text-red-300 border-red-600/50',
+            'bg-red-950/60 text-red-200 border-red-700/50',
+            'bg-orange-900/40 text-orange-300 border-orange-600/50',
+            'bg-orange-950/60 text-orange-200 border-orange-700/50',
+            'bg-amber-900/30 text-amber-300 border-amber-600/50',
+            'bg-amber-950/60 text-amber-200 border-amber-700/50',
+            'bg-yellow-900/40 text-yellow-300 border-yellow-600/50',
+            'bg-yellow-950/60 text-yellow-200 border-yellow-700/50',
+            'bg-lime-900/40 text-lime-300 border-lime-600/50',
+            'bg-lime-950/60 text-lime-200 border-lime-700/50',
+            'bg-green-900/40 text-green-300 border-green-600/50',
+            'bg-green-950/60 text-green-200 border-green-700/50',
+            'bg-emerald-900/40 text-emerald-300 border-emerald-600/50',
+            'bg-emerald-950/60 text-emerald-200 border-emerald-700/50',
+            'bg-teal-900/40 text-teal-300 border-teal-600/50',
+            'bg-teal-950/60 text-teal-200 border-teal-700/50',
+            'bg-cyan-900/40 text-cyan-300 border-cyan-600/50',
+            'bg-cyan-950/60 text-cyan-200 border-cyan-700/50',
+            'bg-sky-900/40 text-sky-300 border-sky-600/50',
+            'bg-sky-950/60 text-sky-200 border-sky-700/50',
+            'bg-blue-900/40 text-blue-300 border-blue-600/50',
+            'bg-blue-950/60 text-blue-200 border-blue-700/50',
+            'bg-indigo-900/40 text-indigo-300 border-indigo-600/50',
+            'bg-indigo-950/60 text-indigo-200 border-indigo-700/50',
+            'bg-violet-900/30 text-violet-300 border-violet-600/50',
+            'bg-violet-950/60 text-violet-200 border-violet-700/50',
+            'bg-purple-900/40 text-purple-300 border-purple-600/50',
+            'bg-purple-950/60 text-purple-200 border-purple-700/50',
+            'bg-fuchsia-900/40 text-fuchsia-300 border-fuchsia-600/50',
+            'bg-fuchsia-950/60 text-fuchsia-200 border-fuchsia-700/50',
+            'bg-rose-900/40 text-rose-300 border-rose-600/50',
+            'bg-rose-950/60 text-rose-200 border-rose-700/50',
+        ]
+        reserved_indices = {4, 6, 12, 16, 18, 24, 2}  # indices of known_colors in palette
+        free_palette = [c for i, c in enumerate(tag_palette) if i not in reserved_indices]
+
+        def _hash_color(name: str) -> str:
+            h = 5381
+            for ch in name:
+                h = ((h * 33) ^ ord(ch)) & 0xFFFFFFFF
+            return free_palette[h % len(free_palette)]
+
+        log.warning("Pass 5: backfilling tag_color on SearchTag documents...")
+        p5_updated = 0
+        p5_errors = 0
+        async for tag in SearchTag.find_all():
+            if tag.tag_color:
+                continue
             try:
-                obs_tags: set[str] = {ft.value for ft in obs.filetypes}
-                if obs.metadata:
-                    obs_tags.add("metadata")
-                if obs_tags:
-                    await obs.update({"$set": {"obs_tags": list(obs_tags)}})
-                    tags_updated += 1
-                    _migration_job["obs_tags_updated"] = tags_updated
+                color = known_colors.get(tag.tag_name or '') or _hash_color(tag.tag_name or '')
+                await tag.update({"$set": {"tag_color": color}})
+                p5_updated += 1
             except Exception as e:
-                log.error(f"obs_tags error for obs {obs.id}: {e}")
-                tags_errors += 1
-                _migration_job["obs_tags_errors"] = tags_errors
-
-        log.warning(f"Pass 3 done. Updated: {tags_updated}, errors: {tags_errors}")
-
-        # Pass 4: create SearchTag documents for each known tag value
-        known_tags = ['raw', 'zdf', 'master', 'source', 'tmp', 'test', 'metadata', 'cntac']
-        log.warning(f"Pass 4: creating SearchTag documents for {len(known_tags)} known tags...")
-
-        st_created = 0
-        st_errors = 0
-
-        for tag_name in known_tags:
-            try:
-                existing = await SearchTag.find_one(SearchTag.tag_name == tag_name)
-                if existing is None:
-                    await SearchTag(tag_name=tag_name).insert()
-                    st_created += 1
-            except DuplicateKeyError:
-                pass
-            except Exception as e:
-                log.error(f"SearchTag error for tag '{tag_name}': {e}")
-                st_errors += 1
-
-        log.warning(f"Pass 4 done. Created: {st_created}, errors: {st_errors}")
+                log.error(f"Pass 5 error for tag '{tag.tag_name}': {e}")
+                p5_errors += 1
+        log.warning(f"Pass 5 done. Updated: {p5_updated}, errors: {p5_errors}")
 
         _migration_job.update({"status": "done", "finished_at": datetime.utcnow().isoformat()})
         log.warning(f"Done. obs_tags updated: {tags_updated}, errors: {tags_errors}")

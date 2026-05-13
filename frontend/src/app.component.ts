@@ -409,6 +409,55 @@ export class AppComponent implements OnInit {
   readonly NON_ADDABLE_TAGS = new Set(['raw', 'zdf', 'metadata']);
   isSystemTag(tag: string): boolean { return this.SYSTEM_TAGS.has(tag); }
 
+  readonly TAG_PALETTE: string[] = [
+    'bg-red-900/40 text-red-300 border-red-600/50',
+    'bg-red-950/60 text-red-200 border-red-700/50',
+    'bg-orange-900/40 text-orange-300 border-orange-600/50',
+    'bg-orange-950/60 text-orange-200 border-orange-700/50',
+    'bg-amber-900/30 text-amber-300 border-amber-600/50',
+    'bg-amber-950/60 text-amber-200 border-amber-700/50',
+    'bg-yellow-900/40 text-yellow-300 border-yellow-600/50',
+    'bg-yellow-950/60 text-yellow-200 border-yellow-700/50',
+    'bg-lime-900/40 text-lime-300 border-lime-600/50',
+    'bg-lime-950/60 text-lime-200 border-lime-700/50',
+    'bg-green-900/40 text-green-300 border-green-600/50',
+    'bg-green-950/60 text-green-200 border-green-700/50',
+    'bg-emerald-900/40 text-emerald-300 border-emerald-600/50',
+    'bg-emerald-950/60 text-emerald-200 border-emerald-700/50',
+    'bg-teal-900/40 text-teal-300 border-teal-600/50',
+    'bg-teal-950/60 text-teal-200 border-teal-700/50',
+    'bg-cyan-900/40 text-cyan-300 border-cyan-600/50',
+    'bg-cyan-950/60 text-cyan-200 border-cyan-700/50',
+    'bg-sky-900/40 text-sky-300 border-sky-600/50',
+    'bg-sky-950/60 text-sky-200 border-sky-700/50',
+    'bg-blue-900/40 text-blue-300 border-blue-600/50',
+    'bg-blue-950/60 text-blue-200 border-blue-700/50',
+    'bg-indigo-900/40 text-indigo-300 border-indigo-600/50',
+    'bg-indigo-950/60 text-indigo-200 border-indigo-700/50',
+    'bg-violet-900/30 text-violet-300 border-violet-600/50',
+    'bg-violet-950/60 text-violet-200 border-violet-700/50',
+    'bg-purple-900/40 text-purple-300 border-purple-600/50',
+    'bg-purple-950/60 text-purple-200 border-purple-700/50',
+    'bg-fuchsia-900/40 text-fuchsia-300 border-fuchsia-600/50',
+    'bg-fuchsia-950/60 text-fuchsia-200 border-fuchsia-700/50',
+    'bg-rose-900/40 text-rose-300 border-rose-600/50',
+    'bg-rose-950/60 text-rose-200 border-rose-700/50',
+  ];
+
+  private readonly TAG_COLOR_MAP: Record<string, number> = {
+    zdf: 12, raw: 4, metadata: 24, master: 18, source: 16, tmp: 2, test: 6,
+  };
+  private readonly RESERVED_PALETTE_INDICES = new Set([2, 4, 6, 12, 16, 18, 24]);
+
+  pickColorForTag(tagName: string): string {
+    if (this.TAG_COLOR_MAP[tagName] !== undefined)
+      return this.TAG_PALETTE[this.TAG_COLOR_MAP[tagName]];
+    const free = this.TAG_PALETTE.filter((_, i) => !this.RESERVED_PALETTE_INDICES.has(i));
+    let h = 5381;
+    for (let i = 0; i < tagName.length; i++) h = ((h * 33) ^ tagName.charCodeAt(i)) >>> 0;
+    return free[h % free.length];
+  }
+
   sortedObsTags(tags: string[]): string[] {
     return [...tags].sort((a, b) => {
       const pa = this.TAG_PRIORITY[a] ?? 99;
@@ -584,6 +633,7 @@ export class AppComponent implements OnInit {
   obsTagError = signal('');
   newTagName = signal('');
   newTagDescription = signal('');
+  newTagColor = signal('');
 
   filteredSearchTags = computed(() => {
     const q = this.obsTagQuery().toLowerCase();
@@ -643,8 +693,10 @@ export class AppComponent implements OnInit {
 
   openNewTagDialog() {
     this.newTagContext.set('obs');
-    this.newTagName.set(this.obsTagQuery());
+    const name = this.obsTagQuery();
+    this.newTagName.set(name);
     this.newTagDescription.set('');
+    this.newTagColor.set(this.pickColorForTag(name));
     this.obsTagDropdownOpen.set(false);
     this.obsTagDialogOpen.set(true);
   }
@@ -656,8 +708,10 @@ export class AppComponent implements OnInit {
       return;
     }
     this.newTagContext.set('batch');
-    this.newTagName.set(this.batchTagAddQuery());
+    const name = this.batchTagAddQuery();
+    this.newTagName.set(name);
     this.newTagDescription.set('');
+    this.newTagColor.set(this.pickColorForTag(name));
     this.batchTagAddDropdownOpen.set(false);
     this.obsTagDialogOpen.set(true);
   }
@@ -671,7 +725,7 @@ export class AppComponent implements OnInit {
   async submitNewTag() {
     const name = this.newTagName().trim();
     if (!name) return;
-    const created = await this.ocadbService.createSearchTag(name, this.newTagDescription().trim());
+    const created = await this.ocadbService.createSearchTag(name, this.newTagDescription().trim(), this.newTagColor());
     if (created) {
       this.searchTags.update(tags => [...tags, created]);
     }
@@ -1594,12 +1648,10 @@ export class AppComponent implements OnInit {
   }
 
   getFileBadgeClassByType(fileClass: string): string {
-    switch (fileClass) {
-      case 'zdf': return 'bg-emerald-900/40 text-emerald-300 border-emerald-600/50';
-      case 'raw': return 'bg-amber-900/30 text-amber-300 border-amber-600/50';
-      case 'metadata': return 'bg-violet-900/30 text-violet-300 border-violet-600/50';
-      default: return 'bg-space-800 text-slate-400 border-slate-600/50';
-    }
+    if (!fileClass) return 'bg-space-800 text-slate-400 border-slate-600/50';
+    const stored = this.searchTags().find(t => t.tag_name === fileClass)?.tag_color;
+    if (stored) return stored;
+    return this.pickColorForTag(fileClass);
   }
 
   getFileLabel(file: FitsFile): string {

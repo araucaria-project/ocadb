@@ -1467,7 +1467,7 @@
               <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Tag name</label>
               <input type="text"
                 [ngModel]="newTagName()"
-                (ngModelChange)="newTagName.set($event)"
+                (ngModelChange)="newTagName.set($event); newTagColor.set(pickColorForTag($event))"
                 (keyup.enter)="submitNewTag()"
                 class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:border-accent-500 focus:outline-none">
             </div>
@@ -1479,6 +1479,27 @@
                 (keyup.enter)="submitNewTag()"
                 placeholder="optional"
                 class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:border-accent-500 focus:outline-none">
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Color</label>
+              <div class="flex flex-wrap gap-1">
+                @for (color of TAG_PALETTE; track color) {
+                  <button type="button"
+                    (click)="newTagColor.set(color)"
+                    class="w-5 h-5 rounded border-2 transition-all"
+                    [class]="color"
+                    [class.border-white]="newTagColor() === color"
+                    [class.border-transparent]="newTagColor() !== color"
+                    [title]="color">
+                  </button>
+                }
+              </div>
+              <div class="mt-1.5 flex items-center gap-1.5">
+                <span class="text-[10px] text-slate-500">Preview:</span>
+                <span class="px-1.5 py-0.5 rounded text-[10px] font-medium border" [class]="newTagColor()">
+                  {{ newTagName() || 'tag' }}
+                </span>
+              </div>
             </div>
           </div>
           <button type="button"

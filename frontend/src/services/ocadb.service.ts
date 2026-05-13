@@ -93,6 +93,7 @@ export interface SearchObject {
 export interface SearchTag {
   tag_name: string | null;
   tag_description: string | null;
+  tag_color: string | null;
 }
 
 export interface SearchFilters {
@@ -381,12 +382,12 @@ export class OcadbService {
     }
   }
 
-  async createSearchTag(tagName: string, tagDescription: string): Promise<SearchTag | null> {
+  async createSearchTag(tagName: string, tagDescription: string, tagColor: string): Promise<SearchTag | null> {
     try {
       const response = await this.authenticatedFetch(`${this.v2BaseUrl}/observations/values/tags`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tag_name: tagName, tag_description: tagDescription }),
+        body: JSON.stringify({ tag_name: tagName, tag_description: tagDescription, tag_color: tagColor }),
       });
       if (!response.ok) return null;
       return await response.json();
