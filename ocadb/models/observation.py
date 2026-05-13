@@ -35,6 +35,7 @@ class Observation(Document):
     file_name: Optional[str] = Field(None, description="FITS filename", unique=True)
     object_id: Optional[str] = Field(None, description="Reference to observed Object document")
     canonized_object_name: Optional[str] = Field(str, description="Canonized astronomical object name")
+    obs_tags: Optional[Set[str]] = Field(set(), description="Set of observation tags")
 
     # files support
     files: List[Link[FITSFile]] = []
@@ -51,10 +52,17 @@ class Observation(Document):
     async def store_file(self, fits_file: FITSFile):
         self.files.append(fits_file)
         self.filetypes.add(fits_file.file_class)
+
+        self.obs_tags.add(fits_file.file_class)
+
         self.source_files.update(fits_file.source_filenames)
 
     def store_metadata(self, metadata: dict):
         self.metadata = metadata
+        if self.metadata:
+            self.obs_tags.add("metadata")
+        else:
+            self.obs_tags.remove("metadata")
 
     def get_id(self):
         return self.id
@@ -196,6 +204,7 @@ class Observation(Document):
             "fits_header.EXPTIME",
             "oca_jd",
             "access_tags",
+            "obs_tags",
             IndexModel([("telescope_coordinates.lon_lat", pymongo.GEOSPHERE)], name="skycoord_spatial_index"), # geospatial index
         ]
         validate_assignment = True

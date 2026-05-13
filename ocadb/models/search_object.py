@@ -25,6 +25,20 @@ class SearchObject(Document):
             IndexModel([("canonized_name", pymongo.ASCENDING)], unique=True),
         ]
 
+class SearchTag(Document):
+    tag_name: Optional[str] = None
+    tag_description: Optional[str] = None
+
+    def __init__(self, *args: Any, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.tag_name = kwargs.get("tag_name")
+        self.tag_description = kwargs.get("tag_description")
+
+    class Settings:
+        name = "search_tags"
+        indexes = [
+            IndexModel([("tag_name", pymongo.ASCENDING)], unique=True),
+        ]
 
 # Document models for Beanie registration
-document_models = [SearchObject]
+document_models = [SearchObject, SearchTag]

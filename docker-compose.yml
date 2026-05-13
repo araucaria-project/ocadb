@@ -19,7 +19,7 @@ services:
     volumes:
       - ./frontend:/app
     working_dir: /app
-    command: bash -c "npm install && npx ng serve --host 0.0.0.0 --port 8085 --configuration=remote"
+    command: bash -c "npm install && npx ng serve --host 0.0.0.0 --port 8085 --configuration=local"
     ports:
       - "8085:8085"
     depends_on:

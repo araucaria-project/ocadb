@@ -737,6 +737,61 @@
               </div>
             </div>
 
+            <!-- Tags filter -->
+            <div [class.opacity-40]="filters().obs_name">
+              <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Tags</label>
+
+              <!-- Selected tags list -->
+              @if (filters().tags?.length) {
+                <div class="flex flex-wrap gap-1 mb-1.5">
+                  @for (tag of filters().tags!; track tag) {
+                    <button type="button"
+                      (click)="toggleTag(tag)"
+                      class="group flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border cursor-pointer transition-colors"
+                      [class]="getFileBadgeClassByType(tag)">
+                      <span class="group-hover:hidden">{{ getFileLabelByType(tag) }}</span>
+                      <span class="hidden group-hover:inline opacity-70">remove</span>
+                    </button>
+                  }
+                </div>
+              }
+
+              <!-- Dropdown trigger -->
+              @if (availableTags().length) {
+                <div class="relative inline-block">
+                  <button type="button"
+                    (click)="tagsDropdownOpen.set(!tagsDropdownOpen())"
+                    class="flex items-center gap-1 px-2 py-1 bg-space-950 border border-space-700 rounded text-xs text-slate-400 hover:text-slate-200 hover:border-slate-500 transition-colors"
+                    [style.border-color]="tagsDropdownOpen() ? 'var(--color-accent-500)' : null">
+                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                    Search tags
+                    <svg class="w-3 h-3 transition-transform" [class.rotate-180]="tagsDropdownOpen()"
+                      fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                  </button>
+                  @if (tagsDropdownOpen()) {
+                    <div class="fixed inset-0 z-10" (click)="tagsDropdownOpen.set(false)"></div>
+                    <div class="absolute z-20 left-0 mt-1 bg-space-900 border border-space-700 rounded shadow-lg min-w-48 max-h-40 overflow-y-auto">
+                      <div class="table">
+                        @for (tag of availableTags(); track tag.tag_name) {
+                          <div (click)="toggleTag(tag.tag_name!); tagsDropdownOpen.set(false)"
+                            class="table-row hover:bg-space-800 transition-colors cursor-pointer">
+                            <span class="table-cell px-3 py-1.5 align-middle whitespace-nowrap">
+                              <span class="px-1.5 py-0.5 rounded text-[10px] font-medium border" [class]="getFileBadgeClassByType(tag.tag_name!)">
+                                {{ getFileLabelByType(tag.tag_name!) }}
+                              </span>
+                            </span>
+                            <span class="table-cell px-3 py-1.5 align-middle text-[10px] text-slate-500 whitespace-nowrap">{{ tag.tag_description ?? '' }}</span>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+
           </div>
 
         </div>
@@ -818,6 +873,14 @@
                 class="px-4 py-1.5 rounded font-medium transition-colors border text-xs bg-amber-700/40 border-amber-600/50 text-amber-300 hover:bg-amber-700/60"
               >
                 Clear selection
+              </button>
+            }
+            @if (selectedObsIds().size > 0) {
+              <button
+                (click)="openBatchTagDialog()"
+                class="px-4 py-1.5 rounded font-medium transition-colors border text-xs bg-violet-700/40 border-violet-600/50 text-violet-300 hover:bg-violet-700/60"
+              >
+                ADD OR REMOVE TAGS FOR {{ selectedObsIds().size }}
               </button>
             }
             @if (selectedObsIds().size > 0) {
@@ -1030,33 +1093,41 @@
                     <td class="px-4 py-2 whitespace-nowrap text-slate-300">
                       {{ obs.fits_header['PI'] ?? '—' }}
                     </td>
-                    <td class="px-4 py-2 whitespace-nowrap">
-                      <div class="flex flex-wrap gap-1">
-                        @if (obs.files.length > 0 && obs.files[0].filename) {
-                          @for (file of sortedFiles(obs.files); track $index) {
+                    <td class="px-4 py-2 whitespace-nowrap relative group/tags">
+                      @if (obs.obs_tags && obs.obs_tags.length > 3) {
+                        <!-- collapsed: show 2 tags + ellipsis -->
+                        <div class="flex items-center gap-1 group-hover/tags:invisible">
+                          @for (tag of sortedFileTypes(obs.obs_tags ?? []).slice(0, 2); track tag) {
                             <span class="px-1.5 py-0.5 rounded text-[10px] font-medium border"
-                              [class]="getFileBadgeClass(file)"
-                              [title]="file.filename">
-                              {{ getFileLabel(file) }}
+                              [class]="getFileBadgeClassByType(tag)">
+                              {{ getFileLabelByType(tag) }}
                             </span>
                           }
-                        } @else {
-                          @for (ft of sortedFileTypes(obs.filetypes ?? []); track ft) {
-                            <span class="px-1.5 py-0.5 rounded text-[10px] font-medium border"
-                              [class]="getFileBadgeClassByType(ft)">
-                              {{ getFileLabelByType(ft) }}
+                          <svg class="w-3.5 h-3.5 text-yellow-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14m-7-7l7 7-7 7"/></svg>
+                        </div>
+                        <!-- expanded: absolutely positioned, overlaps columns to the left -->
+                        <div class="hidden group-hover/tags:flex absolute right-0 top-0 bottom-0 z-20 items-center gap-1 px-4 bg-slate-900 border-l border-slate-700 shadow-xl">
+                          @for (tag of sortedFileTypes(obs.obs_tags ?? []); track tag) {
+                            <span class="px-1.5 py-0.5 rounded text-[10px] font-medium border whitespace-nowrap"
+                              [class]="getFileBadgeClassByType(tag)">
+                              {{ getFileLabelByType(tag) }}
                             </span>
                           }
-                          @if (!(obs.filetypes?.length) && !hasMetadata(obs)) {
+                        </div>
+                      } @else {
+                        <div class="flex flex-wrap gap-1">
+                          @if (obs.obs_tags?.length) {
+                            @for (tag of sortedFileTypes(obs.obs_tags ?? []); track tag) {
+                              <span class="px-1.5 py-0.5 rounded text-[10px] font-medium border"
+                                [class]="getFileBadgeClassByType(tag)">
+                                {{ getFileLabelByType(tag) }}
+                              </span>
+                            }
+                          } @else {
                             <span class="text-slate-600 text-[10px]">—</span>
                           }
-                        }
-                        @if (hasMetadata(obs)) {
-                          <span class="px-1.5 py-0.5 rounded border text-[10px] font-medium bg-violet-900/30 text-violet-300 border-violet-600/50">
-                            meta
-                          </span>
-                        }
-                      </div>
+                        </div>
+                      }
                     </td>
                   </tr>
                 }
@@ -1246,6 +1317,150 @@
       </main>
     </div>
 
+    <!-- Batch tag dialog -->
+    @if (batchTagDialogOpen()) {
+      <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+        <div class="bg-space-900 border border-space-700 rounded-lg shadow-2xl w-96 p-5 flex flex-col gap-4">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-medium text-slate-200">Add or remove tags for {{ selectedObsIds().size }} observations</span>
+            <button type="button" (click)="closeBatchTagDialog()"
+              class="text-slate-500 hover:text-slate-200 transition-colors">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+
+          <!-- Tags to add -->
+          <ng-container *ngTemplateOutlet="batchCombo; context: {
+            $implicit: 'Tags to add',
+            list: batchTagAddList(),
+            inputOpen: batchTagAddInputOpen(),
+            query: batchTagAddQuery(),
+            dropdownOpen: batchTagAddDropdownOpen(),
+            filtered: filteredBatchAddTags(),
+            inputRef: 'batchTagAddInput',
+            onOpen: 'openBatchTagAddInput',
+            onClose: 'closeBatchTagAddInput',
+            onAdd: 'addToBatchAddList',
+            onRemove: 'batchTagAddList.update',
+            onKeydown: 'onBatchTagAddKeydown',
+            onQueryChange: 'batchTagAddQuery'
+          }"></ng-container>
+
+          <div>
+            <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Tags to add</div>
+            <div class="flex flex-wrap items-center gap-1.5">
+              @for (tag of batchTagAddList(); track tag) {
+                <button type="button" (click)="batchTagAddList.update(l => l.filter(t => t !== tag))"
+                  class="group flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border cursor-pointer transition-colors"
+                  [class]="getFileBadgeClassByType(tag)">
+                  <span class="group-hover:hidden">{{ getFileLabelByType(tag) }}</span>
+                  <span class="hidden group-hover:inline opacity-70">remove</span>
+                </button>
+              }
+              @if (batchTagAddInputOpen()) {
+                <div class="fixed inset-0 z-10" (click)="closeBatchTagAddInput()"></div>
+                <div class="relative z-20">
+                  <div class="flex items-center gap-1.5 bg-space-950 border border-accent-500 rounded px-2.5 py-1">
+                    <input #batchTagAddInput type="text"
+                      [ngModel]="batchTagAddQuery()"
+                      (ngModelChange)="batchTagAddQuery.set($event); batchTagAddDropdownOpen.set(true)"
+                      (keydown)="onBatchTagAddKeydown($event)"
+                      placeholder="type tag name…"
+                      class="bg-transparent text-xs text-slate-200 placeholder-slate-600 outline-none w-36">
+                    <button type="button" (click)="closeBatchTagAddInput()" class="text-slate-500 hover:text-slate-300 transition-colors">
+                      <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                  </div>
+                  @if (batchTagAddDropdownOpen()) {
+                    <div class="absolute z-20 left-0 mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden min-w-40 max-h-40 overflow-y-auto">
+                      @for (tag of filteredBatchAddTags(); track tag.tag_name) {
+                        <button type="button" (mousedown)="$event.preventDefault(); addToBatchAddList(tag.tag_name!)"
+                          class="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-space-800 transition-colors text-left">
+                          <span class="px-1.5 py-0.5 rounded text-[10px] font-medium border shrink-0" [class]="getFileBadgeClassByType(tag.tag_name!)">{{ getFileLabelByType(tag.tag_name!) }}</span>
+                          @if (tag.tag_description) { <span class="text-[10px] text-slate-500 truncate">{{ tag.tag_description }}</span> }
+                        </button>
+                      }
+                      <button type="button" (mousedown)="$event.preventDefault(); addToBatchAddList(batchTagAddQuery().trim())"
+                        class="w-full px-3 py-1.5 flex items-center gap-1.5 hover:bg-space-800 transition-colors text-left text-[10px] text-accent-500 border-t border-space-700">
+                        <svg class="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                        add "{{ batchTagAddQuery() || 'new tag' }}"
+                      </button>
+                    </div>
+                  }
+                </div>
+              } @else {
+                <button type="button" (click)="openBatchTagAddInput()"
+                  class="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] border border-dashed border-space-700 text-slate-500 hover:border-slate-500 hover:text-slate-300 transition-colors">
+                  <svg class="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                  add tag
+                </button>
+              }
+            </div>
+          </div>
+
+          <!-- Tags to remove -->
+          <div>
+            <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Tags to remove</div>
+            <div class="flex flex-wrap items-center gap-1.5">
+              @for (tag of batchTagRemoveList(); track tag) {
+                <button type="button" (click)="batchTagRemoveList.update(l => l.filter(t => t !== tag))"
+                  class="group flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border cursor-pointer transition-colors bg-red-900/40 border-red-600/50 text-red-300 hover:bg-red-900/60">
+                  <span class="group-hover:hidden">{{ getFileLabelByType(tag) }}</span>
+                  <span class="hidden group-hover:inline opacity-70">remove</span>
+                </button>
+              }
+              @if (batchTagRemoveInputOpen()) {
+                <div class="fixed inset-0 z-10" (click)="closeBatchTagRemoveInput()"></div>
+                <div class="relative z-20">
+                  <div class="flex items-center gap-1.5 bg-space-950 border border-red-700 rounded px-2.5 py-1">
+                    <input #batchTagRemoveInput type="text"
+                      [ngModel]="batchTagRemoveQuery()"
+                      (ngModelChange)="batchTagRemoveQuery.set($event); batchTagRemoveDropdownOpen.set(true)"
+                      (keydown)="onBatchTagRemoveKeydown($event)"
+                      placeholder="type tag name…"
+                      class="bg-transparent text-xs text-slate-200 placeholder-slate-600 outline-none w-36">
+                    <button type="button" (click)="closeBatchTagRemoveInput()" class="text-slate-500 hover:text-slate-300 transition-colors">
+                      <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                  </div>
+                  @if (batchTagRemoveDropdownOpen()) {
+                    <div class="absolute z-20 left-0 mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden min-w-40 max-h-40 overflow-y-auto">
+                      @for (tag of filteredBatchRemoveTags(); track tag.tag_name) {
+                        <button type="button" (mousedown)="$event.preventDefault(); addToBatchRemoveList(tag.tag_name!)"
+                          class="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-space-800 transition-colors text-left">
+                          <span class="px-1.5 py-0.5 rounded text-[10px] font-medium border shrink-0" [class]="getFileBadgeClassByType(tag.tag_name!)">{{ getFileLabelByType(tag.tag_name!) }}</span>
+                          @if (tag.tag_description) { <span class="text-[10px] text-slate-500 truncate">{{ tag.tag_description }}</span> }
+                        </button>
+                      }
+                    </div>
+                  }
+                </div>
+              } @else {
+                <button type="button" (click)="openBatchTagRemoveInput()"
+                  class="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] border border-dashed border-space-700 text-slate-500 hover:border-slate-500 hover:text-slate-300 transition-colors">
+                  <svg class="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                  add tag
+                </button>
+              }
+            </div>
+          </div>
+
+          <button type="button"
+            (click)="submitBulkTag()"
+            [disabled]="(!batchTagAddList().length && !batchTagRemoveList().length) || batchTagLoading()"
+            class="w-full py-1.5 rounded bg-violet-700 text-white text-sm font-medium hover:bg-violet-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+            @if (batchTagLoading()) {
+              <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+              </svg>
+            }
+            {{ (!batchTagAddList().length && !batchTagRemoveList().length) ? 'Edit tags' : (batchTagAddList().length && batchTagRemoveList().length) ? 'Edit tags' : batchTagAddList().length ? 'Add tags' : 'Remove tags' }}
+          </button>
+        </div>
+      </div>
+    }
+
     <!-- Observation Detail Modal -->
     @if (selectedObservation()) {
       <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
@@ -1379,6 +1594,119 @@
                 <div class="h-3" [style.border-top]="dragOverEnd() ? '2px solid #60a5fa' : '2px solid transparent'"></div>
               }
             </div>
+
+            <!-- Tags -->
+            <div>
+              <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Tags</div>
+              <div class="flex flex-wrap items-center gap-1.5">
+                @for (tag of sortedObsTags(selectedObservation()!.obs_tags ?? []); track tag) {
+                  @if (isSystemTag(tag)) {
+                    <span class="px-1.5 py-0.5 rounded text-[10px] font-medium border opacity-40"
+                      [class]="getFileBadgeClassByType(tag)"
+                      title="System tag — not editable">
+                      {{ getFileLabelByType(tag) }}
+                    </span>
+                  } @else {
+                    <button type="button"
+                      (click)="removeObsTagFromObs(tag)"
+                      class="group flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border cursor-pointer transition-colors"
+                      [class]="getFileBadgeClassByType(tag)"
+                      [title]="tag">
+                      <span class="group-hover:hidden">{{ getFileLabelByType(tag) }}</span>
+                      <span class="hidden group-hover:inline opacity-70">remove</span>
+                    </button>
+                  }
+                }
+
+                <!-- Inline combo-box -->
+                @if (obsTagInputOpen()) {
+                  <div class="fixed inset-0 z-10" (click)="closeObsTagInput()"></div>
+                  <div class="relative z-20">
+                    <div class="flex items-center gap-1.5 bg-space-950 border border-accent-500 rounded px-2.5 py-1">
+                      <input #obsTagInput type="text"
+                        [ngModel]="obsTagQuery()"
+                        (ngModelChange)="obsTagQuery.set($event); obsTagDropdownOpen.set(true)"
+                        (keydown)="onObsTagKeydown($event)"
+                        placeholder="type tag name…"
+                        class="bg-transparent text-xs text-slate-200 placeholder-slate-600 outline-none w-36">
+                      <button type="button" (click)="closeObsTagInput()"
+                        class="text-slate-500 hover:text-slate-300 transition-colors">
+                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                      </button>
+                    </div>
+                    @if (obsTagDropdownOpen()) {
+                      <div class="absolute z-20 left-0 mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden min-w-40 max-h-40 overflow-y-auto">
+                        @for (tag of filteredSearchTags(); track tag.tag_name) {
+                          <button type="button"
+                            (mousedown)="$event.preventDefault(); selectObsTag(tag.tag_name!)"
+                            class="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-space-800 transition-colors text-left">
+                            <span class="px-1.5 py-0.5 rounded text-[10px] font-medium border shrink-0" [class]="getFileBadgeClassByType(tag.tag_name!)">
+                              {{ getFileLabelByType(tag.tag_name!) }}
+                            </span>
+                            @if (tag.tag_description) {
+                              <span class="text-[10px] text-slate-500 truncate">{{ tag.tag_description }}</span>
+                            }
+                          </button>
+                        }
+                        <button type="button"
+                          (mousedown)="$event.preventDefault(); openNewTagDialog()"
+                          class="w-full px-3 py-1.5 flex items-center gap-1.5 hover:bg-space-800 transition-colors text-left text-[10px] text-accent-500 border-t border-space-700">
+                          <svg class="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                          add "{{ obsTagQuery() || 'new tag' }}"
+                        </button>
+                      </div>
+                    }
+                  </div>
+                } @else {
+                  <button type="button"
+                    (click)="openObsTagInput()"
+                    class="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] border border-dashed border-space-700 text-slate-500 hover:border-slate-500 hover:text-slate-300 transition-colors">
+                    <svg class="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                    add tag
+                  </button>
+                }
+              </div>
+            </div>
+
+            <!-- New tag dialog -->
+            @if (obsTagDialogOpen()) {
+              <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+                <div class="bg-space-900 border border-space-700 rounded-lg shadow-2xl w-80 p-5 flex flex-col gap-4">
+                  <div class="flex items-center justify-between">
+                    <span class="text-sm font-medium text-slate-200">New tag</span>
+                    <button type="button" (click)="closeTagDialog()"
+                      class="text-slate-500 hover:text-slate-200 transition-colors">
+                      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                  </div>
+                  <div class="flex flex-col gap-3">
+                    <div>
+                      <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Tag name</label>
+                      <input type="text"
+                        [ngModel]="newTagName()"
+                        (ngModelChange)="newTagName.set($event)"
+                        (keyup.enter)="submitNewTag()"
+                        class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:border-accent-500 focus:outline-none">
+                    </div>
+                    <div>
+                      <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Description</label>
+                      <input type="text"
+                        [ngModel]="newTagDescription()"
+                        (ngModelChange)="newTagDescription.set($event)"
+                        (keyup.enter)="submitNewTag()"
+                        placeholder="optional"
+                        class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:border-accent-500 focus:outline-none">
+                    </div>
+                  </div>
+                  <button type="button"
+                    (click)="submitNewTag()"
+                    [disabled]="!newTagName().trim()"
+                    class="w-full py-1.5 rounded bg-accent-600 text-white text-sm font-medium hover:bg-accent-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                    Add this tag
+                  </button>
+                </div>
+              </div>
+            }
 
             <!-- Files -->
             @if (filesLoading() ? (selectedObservation()!.filetypes?.length ?? 0) > 0 : selectedObservation()!.files.length > 0) {

@@ -20,7 +20,7 @@ from api.services.oca_geospatial_query import OcaWithin
 from api.services.query_builder import MultiSearchForm
 from ocadb.models import Observation, FitsHeader, SkyCoord
 from ocadb.models.file import FITSFile
-from ocadb.models.search_object import SearchObject
+from ocadb.models.search_object import SearchObject, SearchTag
 from ocadb.models.geo import ArchDistance
 from ocadb.models.s3_presigned_url import S3PresignedUrl, S3PresignedUrlBatchList
 from api.services.auth_service import AuthService
@@ -267,6 +267,8 @@ async def search_multi(
         observations = observations.find(
         OcaWithin(Observation.telescope_coordinates.lon_lat, (search_form.cone_search.get_ref_lon(), search_form.cone_search.get_ref_lat()),
                   search_form.cone_search.rad_distance()))
+    if search_form.tags is not None:
+        observations = observations.find({"obs_tags": {"$all": list(search_form.tags)}})
 
     pipeline = AggregationQueryBuilder.aggregate(access_tags=user.access_tags, page=page, page_size=page_size, sort_expr=search_form.sort_expr)
     pipeline[-1]['$facet']['data'].append({"$addFields": {"files": []}})
@@ -313,10 +315,69 @@ async def get_values_pi(
 async def get_search_object(
         token: Annotated[str, Depends(AuthService.validate_token)]
 ):
-    # results = await SearchObjectAlias.aggregate([{"$match": {"alias": {"$regex": "^" + search_query, "$options": "i"}}}, {"$sort" : {"alias": 1}}]).to_list()
     results = await SearchObject.find_all().sort(+SearchObject.canonized_name).to_list()
-
     return results
+
+@router.get('/values/tags', response_description="List of available search tags", response_model=List[SearchTag])
+async def get_search_tags(
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    results = await SearchTag.find_all().sort(+SearchTag.tag_name).to_list()
+    return results
+
+@router.post('/values/tags', response_description="Create a new search tag", response_model=SearchTag, status_code=status.HTTP_201_CREATED)
+async def create_search_tag(
+        tag: Annotated[SearchTag, Body(...)],
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    try:
+        await tag.insert()
+    except DuplicateKeyError:
+        raise HTTPException(status_code=409, detail=f"Tag '{tag.tag_name}' already exists")
+    return tag
+
+@router.post('/{id}/obs-tags', response_description="Add a tag to an observation", status_code=200)
+async def add_obs_tag(
+        id: PydanticObjectId,
+        tag_name: Annotated[str, Body(..., embed=True)],
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    obs = await Observation.get(id)
+    if obs is None:
+        raise HTTPException(status_code=404, detail=f"Observation {id} not found")
+    await obs.update({"$addToSet": {"obs_tags": tag_name}})
+    obs = await Observation.get(id)
+    return {"obs_tags": list(obs.obs_tags or [])}
+
+@router.post('/bulk-tag', response_description="Add and/or remove tags on multiple observations", status_code=200)
+async def bulk_tag_observations(
+        obs_ids: Annotated[List[str], Body(..., embed=True)],
+        tags_to_add: Annotated[Optional[List[str]], Body(embed=True)] = None,
+        tags_to_remove: Annotated[Optional[List[str]], Body(embed=True)] = None,
+        token: Annotated[str, Depends(AuthService.validate_token)] = None
+):
+    ids = [PydanticObjectId(oid) for oid in obs_ids]
+    update: dict = {}
+    if tags_to_add:
+        update["$addToSet"] = {"obs_tags": {"$each": tags_to_add}}
+    if tags_to_add:
+        await Observation.find(In(Observation.id, ids)).update_many({"$addToSet": {"obs_tags": {"$each": tags_to_add}}})
+    if tags_to_remove:
+        await Observation.find(In(Observation.id, ids)).update_many({"$pull": {"obs_tags": {"$in": tags_to_remove}}})
+    return {"updated": len(ids), "tags_added": tags_to_add or [], "tags_removed": tags_to_remove or []}
+
+@router.delete('/{id}/obs-tags', response_description="Remove a tag from an observation", status_code=200)
+async def remove_obs_tag(
+        id: PydanticObjectId,
+        tag_name: Annotated[str, Body(..., embed=True)],
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    obs = await Observation.get(id)
+    if obs is None:
+        raise HTTPException(status_code=404, detail=f"Observation {id} not found")
+    await obs.update({"$pull": {"obs_tags": tag_name}})
+    obs = await Observation.get(id)
+    return {"obs_tags": list(obs.obs_tags or [])}
 
 @router.get("/values/sciprog", response_description="Unique values for OBJECT field", response_model=List[str])
 async def get_values_object(
@@ -334,6 +395,13 @@ async def get_values_object(
 ):
     values = await Observation.distinct("canonized_object_name")
     return sorted(v for v in values if v is not None)
+
+@router.get("/values/tags", response_description="Tags with description", response_model=List[SearchTag])
+async def get_values_tags(
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    values = await SearchTag.find_all().to_list()
+    return values
 
 # /api/v1/observations/values/FILTER  per TELESCOP
 @router.get("/values/{telescope}/filter", response_description="Unique values for FILTER of TELESCOP header field", response_model=List[str])
@@ -364,74 +432,122 @@ async def _run_migration() -> None:
         "search_objects_created": 0,
         "search_objects_updated": 0,
         "search_objects_errors": 0,
+        "obs_tags_total": 0,
+        "obs_tags_updated": 0,
+        "obs_tags_errors": 0,
         "total": 0,
     }
     try:
-        # Pass 1: backfill canonized_object_name for observations that are missing it
-        canon_total = await Observation.find(Observation.canonized_object_name == None).count()
-        _migration_job["canonized_total"] = canon_total
-        log.warning(f"Pass 1: backfilling canonized_object_name for {canon_total} observations...")
+        # # Pass 1: backfill canonized_object_name for observations that are missing it
+        # canon_total = await Observation.find(Observation.canonized_object_name == None).count()
+        # _migration_job["canonized_total"] = canon_total
+        # log.warning(f"Pass 1: backfilling canonized_object_name for {canon_total} observations...")
+        #
+        # canon_updated = 0
+        # canon_errors = 0
+        #
+        # async for obs in Observation.find(Observation.canonized_object_name == None):
+        #     try:
+        #         if obs.fits_header is None:
+        #             continue
+        #         object_name = getattr(obs.fits_header, 'OBJECT', None)
+        #         if not object_name:
+        #             continue
+        #         canonized = name_canonizator(object_name)
+        #         if canonized:
+        #             await obs.update({"$set": {"canonized_object_name": canonized}})
+        #             canon_updated += 1
+        #             _migration_job["canonized_updated"] = canon_updated
+        #     except Exception as e:
+        #         log.error(f"Canonize error for obs {obs.id}: {e}")
+        #         canon_errors += 1
+        #         _migration_job["canonized_errors"] = canon_errors
+        #
+        # log.warning(f"Pass 1 done. Updated: {canon_updated}, errors: {canon_errors}")
 
-        canon_updated = 0
-        canon_errors = 0
+        # # Pass 2: populate search_objects collection
+        # total = await Observation.find(Observation.canonized_object_name != None).count()
+        # _migration_job["total"] = total
+        # log.warning(f"Pass 2: populating search_objects from {total} observations with a canonized name...")
+        #
+        # so_created = 0
+        # so_updated = 0
+        # so_errors = 0
+        #
+        # async for obs in Observation.find(Observation.canonized_object_name != None):
+        #     try:
+        #         canonized = obs.canonized_object_name
+        #         first_alias = obs.fits_header.OBJECT if obs.fits_header else None
+        #         ra = getattr(obs.fits_header, 'RA', None) if obs.fits_header else None
+        #         dec = getattr(obs.fits_header, 'DEC', None) if obs.fits_header else None
+        #         ra = float(ra) if ra is not None else None
+        #         dec = float(dec) if dec is not None else None
+        #
+        #         existing = await SearchObject.find_one(SearchObject.canonized_name == canonized)
+        #         if existing is None:
+        #             await SearchObject(canonized_name=canonized, first_alias=first_alias, ra=ra, dec=dec).insert()
+        #             so_created += 1
+        #             _migration_job["search_objects_created"] = so_created
+        #             if so_created % 50 == 0:
+        #                 log.info(f"  search_objects created: {so_created}")
+        #         elif (existing.ra is None or existing.ra == 0.0) and ra is not None:
+        #             await existing.update({"$set": {"ra": ra, "dec": dec}})
+        #             so_updated += 1
+        #             _migration_job["search_objects_updated"] = so_updated
+        #     except DuplicateKeyError:
+        #         pass  # pre-existing unique entry — safe to ignore
+        #     except Exception as e:
+        #         log.error(f"SearchObject error for obs {obs.id}: {e}")
+        #         so_errors += 1
+        #         _migration_job["search_objects_errors"] = so_errors
 
-        async for obs in Observation.find(Observation.canonized_object_name == None):
+        # Pass 3: populate obs_tags from filetypes + metadata
+        tags_total = await Observation.count()
+        _migration_job["obs_tags_total"] = tags_total
+        log.warning(f"Pass 3: populating obs_tags for {tags_total} observations...")
+
+        tags_updated = 0
+        tags_errors = 0
+
+        async for obs in Observation.find_all():
             try:
-                if obs.fits_header is None:
-                    continue
-                object_name = getattr(obs.fits_header, 'OBJECT', None)
-                if not object_name:
-                    continue
-                canonized = name_canonizator(object_name)
-                if canonized:
-                    await obs.update({"$set": {"canonized_object_name": canonized}})
-                    canon_updated += 1
-                    _migration_job["canonized_updated"] = canon_updated
+                obs_tags: set[str] = {ft.value for ft in obs.filetypes}
+                if obs.metadata:
+                    obs_tags.add("metadata")
+                if obs_tags:
+                    await obs.update({"$set": {"obs_tags": list(obs_tags)}})
+                    tags_updated += 1
+                    _migration_job["obs_tags_updated"] = tags_updated
             except Exception as e:
-                log.error(f"Canonize error for obs {obs.id}: {e}")
-                canon_errors += 1
-                _migration_job["canonized_errors"] = canon_errors
+                log.error(f"obs_tags error for obs {obs.id}: {e}")
+                tags_errors += 1
+                _migration_job["obs_tags_errors"] = tags_errors
 
-        log.warning(f"Pass 1 done. Updated: {canon_updated}, errors: {canon_errors}")
+        log.warning(f"Pass 3 done. Updated: {tags_updated}, errors: {tags_errors}")
 
-        # Pass 2: populate search_objects collection
-        total = await Observation.find(Observation.canonized_object_name != None).count()
-        _migration_job["total"] = total
-        log.warning(f"Pass 2: populating search_objects from {total} observations with a canonized name...")
+        # Pass 4: create SearchTag documents for each known tag value
+        known_tags = ['raw', 'zdf', 'master', 'source', 'tmp', 'test', 'metadata', 'cntac']
+        log.warning(f"Pass 4: creating SearchTag documents for {len(known_tags)} known tags...")
 
-        so_created = 0
-        so_updated = 0
-        so_errors = 0
+        st_created = 0
+        st_errors = 0
 
-        async for obs in Observation.find(Observation.canonized_object_name != None):
+        for tag_name in known_tags:
             try:
-                canonized = obs.canonized_object_name
-                first_alias = obs.fits_header.OBJECT if obs.fits_header else None
-                ra = getattr(obs.fits_header, 'RA', None) if obs.fits_header else None
-                dec = getattr(obs.fits_header, 'DEC', None) if obs.fits_header else None
-                ra = float(ra) if ra is not None else None
-                dec = float(dec) if dec is not None else None
-
-                existing = await SearchObject.find_one(SearchObject.canonized_name == canonized)
+                existing = await SearchTag.find_one(SearchTag.tag_name == tag_name)
                 if existing is None:
-                    await SearchObject(canonized_name=canonized, first_alias=first_alias, ra=ra, dec=dec).insert()
-                    so_created += 1
-                    _migration_job["search_objects_created"] = so_created
-                    if so_created % 50 == 0:
-                        log.info(f"  search_objects created: {so_created}")
-                elif (existing.ra is None or existing.ra == 0.0) and ra is not None:
-                    await existing.update({"$set": {"ra": ra, "dec": dec}})
-                    so_updated += 1
-                    _migration_job["search_objects_updated"] = so_updated
+                    await SearchTag(tag_name=tag_name).insert()
+                    st_created += 1
             except DuplicateKeyError:
-                pass  # pre-existing unique entry — safe to ignore
+                pass
             except Exception as e:
-                log.error(f"SearchObject error for obs {obs.id}: {e}")
-                so_errors += 1
-                _migration_job["search_objects_errors"] = so_errors
+                log.error(f"SearchTag error for tag '{tag_name}': {e}")
+                st_errors += 1
+
+        log.warning(f"Pass 4 done. Created: {st_created}, errors: {st_errors}")
 
         _migration_job.update({"status": "done", "finished_at": datetime.utcnow().isoformat()})
-        log.warning(f"Done. SearchObjects created: {so_created}, updated: {so_updated}, Errors: {so_errors}")
+        log.warning(f"Done. obs_tags updated: {tags_updated}, errors: {tags_errors}")
     except Exception as e:
         _migration_job.update({"status": "failed", "error": str(e), "finished_at": datetime.utcnow().isoformat()})
         log.error(f"Migration failed: {e}")

@@ -2,7 +2,7 @@ import { Component, signal, computed, inject, OnInit, ElementRef, ViewChild, eff
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { OcadbService, Observation, SearchFilters, SearchObject, FitsFile, StorageStatusType, ViewerConf, DEFAULT_VIEWER_CONF } from './services/ocadb.service';
+import { OcadbService, Observation, SearchFilters, SearchObject, SearchTag, FitsFile, StorageStatusType, ViewerConf, DEFAULT_VIEWER_CONF } from './services/ocadb.service';
 import { ApiLogService, ApiLogEntry } from './services/api-log.service';
 import { FlatpickrDirective } from './flatpickr.directive';
 
@@ -80,6 +80,7 @@ export class AppComponent implements OnInit {
   pageInputValue = signal('');
   @ViewChild('pageInput') pageInputRef?: ElementRef<HTMLInputElement>;
   @ViewChild('tableScrollContainer') tableScrollContainer?: ElementRef<HTMLElement>;
+  @ViewChild('obsTagInput') obsTagInputRef?: ElementRef<HTMLInputElement>;
 
   hasSelectionAbove = signal(false);
   hasSelectionBelow = signal(false);
@@ -402,6 +403,260 @@ export class AppComponent implements OnInit {
 
   updateFilter(key: keyof SearchFilters, value: any) {
     this.filters.update(f => ({ ...f, [key]: value || null }));
+  }
+
+  readonly SYSTEM_TAGS = new Set(['raw', 'zdf', 'metadata', 'master']);
+  readonly NON_ADDABLE_TAGS = new Set(['raw', 'zdf', 'metadata']);
+  isSystemTag(tag: string): boolean { return this.SYSTEM_TAGS.has(tag); }
+
+  sortedObsTags(tags: string[]): string[] {
+    return [...tags].sort((a, b) => {
+      const pa = this.TAG_PRIORITY[a] ?? 99;
+      const pb = this.TAG_PRIORITY[b] ?? 99;
+      return pa !== pb ? pa - pb : a.localeCompare(b);
+    });
+  }
+
+  searchTags = signal<SearchTag[]>([]);
+  tagsDropdownOpen = signal(false);
+
+  private readonly TAG_PRIORITY: Record<string, number> = { zdf: 0, raw: 1, metadata: 2 };
+  availableTags = computed(() => {
+    const active = new Set(this.filters().tags ?? []);
+    return this.searchTags()
+      .filter(t => !active.has(t.tag_name ?? ''))
+      .sort((a, b) => {
+        const pa = this.TAG_PRIORITY[a.tag_name ?? ''] ?? 99;
+        const pb = this.TAG_PRIORITY[b.tag_name ?? ''] ?? 99;
+        return pa !== pb ? pa - pb : (a.tag_name ?? '').localeCompare(b.tag_name ?? '');
+      });
+  });
+
+  // Bulk tag dialog
+  batchTagDialogOpen = signal(false);
+  batchTagLoading = signal(false);
+
+  batchTagAddList = signal<string[]>([]);
+  batchTagAddInputOpen = signal(false);
+  batchTagAddQuery = signal('');
+  batchTagAddDropdownOpen = signal(false);
+  @ViewChild('batchTagAddInput') batchTagAddInputRef?: ElementRef<HTMLInputElement>;
+
+  batchTagRemoveList = signal<string[]>([]);
+  batchTagRemoveInputOpen = signal(false);
+  batchTagRemoveQuery = signal('');
+  batchTagRemoveDropdownOpen = signal(false);
+  @ViewChild('batchTagRemoveInput') batchTagRemoveInputRef?: ElementRef<HTMLInputElement>;
+
+  filteredBatchAddTags = computed(() => {
+    const q = this.batchTagAddQuery().toLowerCase();
+    const already = new Set(this.batchTagAddList());
+    return this.searchTags()
+      .filter(t => !already.has(t.tag_name ?? '') && !this.NON_ADDABLE_TAGS.has(t.tag_name ?? '') && (!q || (t.tag_name ?? '').toLowerCase().includes(q)))
+      .sort((a, b) => {
+        const pa = this.TAG_PRIORITY[a.tag_name ?? ''] ?? 99;
+        const pb = this.TAG_PRIORITY[b.tag_name ?? ''] ?? 99;
+        return pa !== pb ? pa - pb : (a.tag_name ?? '').localeCompare(b.tag_name ?? '');
+      });
+  });
+
+  filteredBatchRemoveTags = computed(() => {
+    const q = this.batchTagRemoveQuery().toLowerCase();
+    const already = new Set(this.batchTagRemoveList());
+    return this.searchTags()
+      .filter(t => !already.has(t.tag_name ?? '') && !this.SYSTEM_TAGS.has(t.tag_name ?? '') && (!q || (t.tag_name ?? '').toLowerCase().includes(q)))
+      .sort((a, b) => {
+        const pa = this.TAG_PRIORITY[a.tag_name ?? ''] ?? 99;
+        const pb = this.TAG_PRIORITY[b.tag_name ?? ''] ?? 99;
+        return pa !== pb ? pa - pb : (a.tag_name ?? '').localeCompare(b.tag_name ?? '');
+      });
+  });
+
+  openBatchTagDialog() {
+    this.batchTagAddList.set([]);
+    this.batchTagRemoveList.set([]);
+    this.closeBatchTagAddInput();
+    this.closeBatchTagRemoveInput();
+    this.batchTagDialogOpen.set(true);
+  }
+
+  closeBatchTagDialog() {
+    this.batchTagDialogOpen.set(false);
+  }
+
+  openBatchTagAddInput() {
+    this.batchTagAddQuery.set('');
+    this.batchTagAddInputOpen.set(true);
+    this.batchTagAddDropdownOpen.set(true);
+    setTimeout(() => this.batchTagAddInputRef?.nativeElement.focus());
+  }
+
+  closeBatchTagAddInput() {
+    this.batchTagAddInputOpen.set(false);
+    this.batchTagAddDropdownOpen.set(false);
+    this.batchTagAddQuery.set('');
+  }
+
+  addToBatchAddList(tagName: string) {
+    this.batchTagAddList.update(list => list.includes(tagName) ? list : [...list, tagName]);
+    this.closeBatchTagAddInput();
+  }
+
+  onBatchTagAddKeydown(event: KeyboardEvent) {
+    if (event.key === 'Enter') {
+      const matches = this.filteredBatchAddTags();
+      if (matches.length === 1) { this.addToBatchAddList(matches[0].tag_name!); }
+      else if (this.batchTagAddQuery().trim()) { this.addToBatchAddList(this.batchTagAddQuery().trim()); }
+      event.preventDefault();
+    } else if (event.key === 'Escape') { this.closeBatchTagAddInput(); }
+  }
+
+  openBatchTagRemoveInput() {
+    this.batchTagRemoveQuery.set('');
+    this.batchTagRemoveInputOpen.set(true);
+    this.batchTagRemoveDropdownOpen.set(true);
+    setTimeout(() => this.batchTagRemoveInputRef?.nativeElement.focus());
+  }
+
+  closeBatchTagRemoveInput() {
+    this.batchTagRemoveInputOpen.set(false);
+    this.batchTagRemoveDropdownOpen.set(false);
+    this.batchTagRemoveQuery.set('');
+  }
+
+  addToBatchRemoveList(tagName: string) {
+    this.batchTagRemoveList.update(list => list.includes(tagName) ? list : [...list, tagName]);
+    this.closeBatchTagRemoveInput();
+  }
+
+  onBatchTagRemoveKeydown(event: KeyboardEvent) {
+    if (event.key === 'Enter') {
+      const matches = this.filteredBatchRemoveTags();
+      if (matches.length === 1) { this.addToBatchRemoveList(matches[0].tag_name!); }
+      else if (this.batchTagRemoveQuery().trim()) { this.addToBatchRemoveList(this.batchTagRemoveQuery().trim()); }
+      event.preventDefault();
+    } else if (event.key === 'Escape') { this.closeBatchTagRemoveInput(); }
+  }
+
+  async submitBulkTag() {
+    const tagsToAdd = this.batchTagAddList();
+    const tagsToRemove = this.batchTagRemoveList();
+    if (!tagsToAdd.length && !tagsToRemove.length) return;
+    this.batchTagLoading.set(true);
+    const ids = [...this.selectedObsIds()];
+    const ok = await this.ocadbService.bulkTagObservations(ids, tagsToAdd, tagsToRemove);
+    this.batchTagLoading.set(false);
+    if (ok) {
+      this.displayedObservations.update(list =>
+        list.map(o => {
+          if (!o._id || !ids.includes(o._id)) return o;
+          const current = new Set(o.obs_tags ?? []);
+          tagsToAdd.forEach(t => current.add(t));
+          tagsToRemove.forEach(t => current.delete(t));
+          return { ...o, obs_tags: [...current] };
+        })
+      );
+      this.closeBatchTagDialog();
+    }
+  }
+
+  // Observation viewer — add tag inline combo-box
+  obsTagInputOpen = signal(false);
+  obsTagQuery = signal('');
+  obsTagDropdownOpen = signal(false);
+  obsTagDialogOpen = signal(false);
+  newTagName = signal('');
+  newTagDescription = signal('');
+
+  filteredSearchTags = computed(() => {
+    const q = this.obsTagQuery().toLowerCase();
+    const existing = new Set(this.selectedObservation()?.obs_tags ?? []);
+    return this.searchTags()
+      .filter(t => !existing.has(t.tag_name ?? '') && !this.NON_ADDABLE_TAGS.has(t.tag_name ?? '') && (!q || (t.tag_name ?? '').toLowerCase().includes(q)))
+      .sort((a, b) => {
+        const pa = this.TAG_PRIORITY[a.tag_name ?? ''] ?? 99;
+        const pb = this.TAG_PRIORITY[b.tag_name ?? ''] ?? 99;
+        return pa !== pb ? pa - pb : (a.tag_name ?? '').localeCompare(b.tag_name ?? '');
+      });
+  });
+
+  openObsTagInput() {
+    this.obsTagQuery.set('');
+    this.obsTagInputOpen.set(true);
+    this.obsTagDropdownOpen.set(true);
+    queueMicrotask(() => this.obsTagInputRef?.nativeElement.focus());
+  }
+
+  async removeObsTagFromObs(tag: string) {
+    const obs = this.selectedObservation();
+    if (!obs?._id) return;
+    const updatedTags = await this.ocadbService.removeObsTag(obs._id, tag);
+    if (updatedTags !== null) this.applyObsTagsUpdate(obs._id, updatedTags);
+  }
+
+  closeObsTagInput() {
+    this.obsTagInputOpen.set(false);
+    this.obsTagDropdownOpen.set(false);
+    this.obsTagQuery.set('');
+  }
+
+  private applyObsTagsUpdate(obsId: string, updatedTags: string[]) {
+    this.selectedObservation.update(o => o ? { ...o, obs_tags: updatedTags } : o);
+    this.displayedObservations.update(list =>
+      list.map(o => o._id === obsId ? { ...o, obs_tags: updatedTags } : o)
+    );
+  }
+
+  async selectObsTag(tagName: string) {
+    const obs = this.selectedObservation();
+    if (!obs?._id) return;
+    this.closeObsTagInput();
+    const updatedTags = await this.ocadbService.addObsTag(obs._id, tagName);
+    if (updatedTags) this.applyObsTagsUpdate(obs._id, updatedTags);
+  }
+
+  openNewTagDialog() {
+    this.newTagName.set(this.obsTagQuery());
+    this.newTagDescription.set('');
+    this.obsTagDropdownOpen.set(false);
+    this.obsTagDialogOpen.set(true);
+  }
+
+  closeTagDialog() {
+    this.obsTagDialogOpen.set(false);
+    this.obsTagInputOpen.set(false);
+    this.obsTagQuery.set('');
+  }
+
+  async submitNewTag() {
+    const name = this.newTagName().trim();
+    if (!name) return;
+    const created = await this.ocadbService.createSearchTag(name, this.newTagDescription().trim());
+    if (created) {
+      this.searchTags.update(tags => [...tags, created]);
+    }
+    await this.selectObsTag(name);
+    this.obsTagDialogOpen.set(false);
+  }
+
+  onObsTagKeydown(event: KeyboardEvent) {
+    if (event.key === 'Enter') {
+      const matches = this.filteredSearchTags();
+      if (matches.length === 1) { this.selectObsTag(matches[0].tag_name!); }
+      else { this.openNewTagDialog(); }
+      event.preventDefault();
+    } else if (event.key === 'Escape') {
+      this.closeObsTagInput();
+    }
+  }
+
+  toggleTag(tag: string) {
+    this.filters.update(f => {
+      const current = new Set(f.tags ?? []);
+      current.has(tag) ? current.delete(tag) : current.add(tag);
+      return { ...f, tags: current.size ? [...current] : null };
+    });
+    this.search();
   }
 
   formatDateInput(event: Event, key: 'date_obs_from' | 'date_obs_to') {
@@ -1294,6 +1549,7 @@ export class AppComponent implements OnInit {
     switch (fileClass) {
       case 'zdf': return 'bg-emerald-900/40 text-emerald-300 border-emerald-600/50';
       case 'raw': return 'bg-amber-900/30 text-amber-300 border-amber-600/50';
+      case 'metadata': return 'bg-violet-900/30 text-violet-300 border-violet-600/50';
       default: return 'bg-space-800 text-slate-400 border-slate-600/50';
     }
   }
@@ -1305,7 +1561,7 @@ export class AppComponent implements OnInit {
   getFileLabelByType(fileClass: string): string {
     if (!fileClass) return '?';
     const labels: Record<string, string> = {
-      raw: 'RAW', zdf: 'ZDF', master: 'MASTER', source: 'SRC', tmp: 'TMP', test: 'TEST'
+      raw: 'RAW', zdf: 'ZDF', master: 'MASTER', source: 'SRC', tmp: 'TMP', test: 'TEST', metadata: 'meta'
     };
     return labels[fileClass] ?? fileClass.toUpperCase();
   }
@@ -1458,14 +1714,15 @@ export class AppComponent implements OnInit {
 
   private async loadDropdowns() {
     const currentTelescope = this.filters().telescop;
-    const [telescopes, imageTypes, obsTypes, objects, pis, sciprogs, filterList] = await Promise.all([
+    const [telescopes, imageTypes, obsTypes, objects, pis, sciprogs, filterList, searchTags] = await Promise.all([
       this.ocadbService.fetchValuesList('telescop'),
       this.ocadbService.fetchValuesList('imagetyp'),
       this.ocadbService.fetchValuesList('obstype'),
       this.ocadbService.fetchSearchObjects(),
       this.ocadbService.fetchValuesList('pi'),
       this.ocadbService.fetchValuesList('sciprog'),
-      this.ocadbService.fetchTelescopeFilters(currentTelescope || 'all')
+      this.ocadbService.fetchTelescopeFilters(currentTelescope || 'all'),
+      this.ocadbService.fetchSearchTags(),
     ]);
     this.telescopes.set(telescopes);
     this.imageTypes.set(imageTypes);
@@ -1474,6 +1731,7 @@ export class AppComponent implements OnInit {
     this.pis.set(pis);
     this.sciprogs.set(sciprogs);
     this.availableFilters.set(filterList);
+    this.searchTags.set(searchTags);
   }
 
   private sanitizer = inject(DomSanitizer);

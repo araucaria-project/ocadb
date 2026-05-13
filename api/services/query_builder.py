@@ -29,6 +29,7 @@ class MultiSearchForm(BaseModel):
     exptime_to: Optional[str] = None
     pi: Optional[str] = None
     sort_expr: Optional[dict] = None
+    tags: Optional[set] = None
 
 class QueryBuilder(BaseFindOperator):
     def __init__(

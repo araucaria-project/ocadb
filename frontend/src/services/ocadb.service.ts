@@ -74,6 +74,7 @@ export interface Observation {
   object_id?: string | null;
   files: FitsFile[];
   filetypes?: string[];
+  obs_tags?: string[];
   source_files?: string[];
   fits_header: FitsHeader;
   metadata: Record<string, any>;
@@ -87,6 +88,11 @@ export interface SearchObject {
   first_alias: string | null;
   ra: number | null;
   dec: number | null;
+}
+
+export interface SearchTag {
+  tag_name: string | null;
+  tag_description: string | null;
 }
 
 export interface SearchFilters {
@@ -107,6 +113,7 @@ export interface SearchFilters {
   oca_jd_from?: string | null;
   oca_jd_to?: string | null;
   file_types?: string[] | null;
+  tags?: string[] | null;
   cone_search?: {
     ra: number;
     dec: number;
@@ -297,6 +304,7 @@ export class OcadbService {
       if (filters.sciprog) body.sciprog = filters.sciprog;
       if (filters.oca_jd_from) body.oca_jd_from = Number(filters.oca_jd_from);
       if (filters.oca_jd_to) body.oca_jd_to = Number(filters.oca_jd_to);
+      if (filters.tags && filters.tags.length > 0) body.tags = filters.tags;
       if (filters.cone_search) body.cone_search = filters.cone_search;
       if (sortExpr) body.sort_expr = sortExpr;
 
@@ -359,6 +367,74 @@ export class OcadbService {
       return await response.json();
     } catch {
       return [];
+    }
+  }
+
+  async fetchSearchTags(): Promise<SearchTag[]> {
+    if (!this.token()) return [];
+    try {
+      const response = await this.authenticatedFetch(`${this.v2BaseUrl}/observations/values/tags`);
+      if (!response.ok) return [];
+      return await response.json();
+    } catch {
+      return [];
+    }
+  }
+
+  async createSearchTag(tagName: string, tagDescription: string): Promise<SearchTag | null> {
+    try {
+      const response = await this.authenticatedFetch(`${this.v2BaseUrl}/observations/values/tags`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tag_name: tagName, tag_description: tagDescription }),
+      });
+      if (!response.ok) return null;
+      return await response.json();
+    } catch {
+      return null;
+    }
+  }
+
+  async addObsTag(obsId: string, tagName: string): Promise<string[] | null> {
+    try {
+      const response = await this.authenticatedFetch(`${this.v2BaseUrl}/observations/${obsId}/obs-tags`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tag_name: tagName }),
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      return data.obs_tags;
+    } catch {
+      return null;
+    }
+  }
+
+  async bulkTagObservations(obsIds: string[], tagsToAdd: string[], tagsToRemove: string[]): Promise<boolean> {
+    try {
+      const response = await this.authenticatedFetch(`${this.v2BaseUrl}/observations/bulk-tag`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ obs_ids: obsIds, tags_to_add: tagsToAdd, tags_to_remove: tagsToRemove }),
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  async removeObsTag(obsId: string, tagName: string): Promise<string[] | null> {
+    try {
+      const response = await this.authenticatedFetch(`${this.v2BaseUrl}/observations/${obsId}/obs-tags`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tag_name: tagName }),
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      return data.obs_tags;
+    } catch {
+      return null;
     }
   }
 
