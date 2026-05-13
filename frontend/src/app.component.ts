@@ -440,12 +440,14 @@ export class AppComponent implements OnInit {
   batchTagAddInputOpen = signal(false);
   batchTagAddQuery = signal('');
   batchTagAddDropdownOpen = signal(false);
+  batchTagAddError = signal('');
   @ViewChild('batchTagAddInput') batchTagAddInputRef?: ElementRef<HTMLInputElement>;
 
   batchTagRemoveList = signal<string[]>([]);
   batchTagRemoveInputOpen = signal(false);
   batchTagRemoveQuery = signal('');
   batchTagRemoveDropdownOpen = signal(false);
+  batchTagRemoveError = signal('');
   @ViewChild('batchTagRemoveInput') batchTagRemoveInputRef?: ElementRef<HTMLInputElement>;
 
   filteredBatchAddTags = computed(() => {
@@ -495,9 +497,16 @@ export class AppComponent implements OnInit {
     this.batchTagAddInputOpen.set(false);
     this.batchTagAddDropdownOpen.set(false);
     this.batchTagAddQuery.set('');
+    this.batchTagAddError.set('');
   }
 
   addToBatchAddList(tagName: string) {
+    if (this.SYSTEM_TAGS.has(tagName.toLowerCase())) {
+      this.batchTagAddError.set('not a user-controlled tag');
+      setTimeout(() => this.batchTagAddError.set(''), 2500);
+      return;
+    }
+    this.batchTagAddError.set('');
     this.batchTagAddList.update(list => list.includes(tagName) ? list : [...list, tagName]);
     this.closeBatchTagAddInput();
   }
@@ -506,7 +515,7 @@ export class AppComponent implements OnInit {
     if (event.key === 'Enter') {
       const matches = this.filteredBatchAddTags();
       if (matches.length === 1) { this.addToBatchAddList(matches[0].tag_name!); }
-      else if (this.batchTagAddQuery().trim()) { this.addToBatchAddList(this.batchTagAddQuery().trim()); }
+      else if (this.batchTagAddQuery().trim()) { this.openBatchNewTagDialog(); }
       event.preventDefault();
     } else if (event.key === 'Escape') { this.closeBatchTagAddInput(); }
   }
@@ -522,9 +531,16 @@ export class AppComponent implements OnInit {
     this.batchTagRemoveInputOpen.set(false);
     this.batchTagRemoveDropdownOpen.set(false);
     this.batchTagRemoveQuery.set('');
+    this.batchTagRemoveError.set('');
   }
 
   addToBatchRemoveList(tagName: string) {
+    if (this.SYSTEM_TAGS.has(tagName.toLowerCase())) {
+      this.batchTagRemoveError.set('not a user-controlled tag');
+      setTimeout(() => this.batchTagRemoveError.set(''), 2500);
+      return;
+    }
+    this.batchTagRemoveError.set('');
     this.batchTagRemoveList.update(list => list.includes(tagName) ? list : [...list, tagName]);
     this.closeBatchTagRemoveInput();
   }
@@ -565,6 +581,7 @@ export class AppComponent implements OnInit {
   obsTagQuery = signal('');
   obsTagDropdownOpen = signal(false);
   obsTagDialogOpen = signal(false);
+  obsTagError = signal('');
   newTagName = signal('');
   newTagDescription = signal('');
 
@@ -584,7 +601,7 @@ export class AppComponent implements OnInit {
     this.obsTagQuery.set('');
     this.obsTagInputOpen.set(true);
     this.obsTagDropdownOpen.set(true);
-    queueMicrotask(() => this.obsTagInputRef?.nativeElement.focus());
+    setTimeout(() => this.obsTagInputRef?.nativeElement.focus());
   }
 
   async removeObsTagFromObs(tag: string) {
@@ -598,6 +615,7 @@ export class AppComponent implements OnInit {
     this.obsTagInputOpen.set(false);
     this.obsTagDropdownOpen.set(false);
     this.obsTagQuery.set('');
+    this.obsTagError.set('');
   }
 
   private applyObsTagsUpdate(obsId: string, updatedTags: string[]) {
@@ -610,15 +628,37 @@ export class AppComponent implements OnInit {
   async selectObsTag(tagName: string) {
     const obs = this.selectedObservation();
     if (!obs?._id) return;
+    if (this.SYSTEM_TAGS.has(tagName.toLowerCase())) {
+      this.obsTagError.set('not a user-controlled tag');
+      setTimeout(() => this.obsTagError.set(''), 2500);
+      return;
+    }
+    this.obsTagError.set('');
     this.closeObsTagInput();
     const updatedTags = await this.ocadbService.addObsTag(obs._id, tagName);
     if (updatedTags) this.applyObsTagsUpdate(obs._id, updatedTags);
   }
 
+  newTagContext = signal<'obs' | 'batch'>('obs');
+
   openNewTagDialog() {
+    this.newTagContext.set('obs');
     this.newTagName.set(this.obsTagQuery());
     this.newTagDescription.set('');
     this.obsTagDropdownOpen.set(false);
+    this.obsTagDialogOpen.set(true);
+  }
+
+  openBatchNewTagDialog() {
+    if (this.SYSTEM_TAGS.has(this.batchTagAddQuery().trim().toLowerCase())) {
+      this.batchTagAddError.set('not a user-controlled tag');
+      setTimeout(() => this.batchTagAddError.set(''), 2500);
+      return;
+    }
+    this.newTagContext.set('batch');
+    this.newTagName.set(this.batchTagAddQuery());
+    this.newTagDescription.set('');
+    this.batchTagAddDropdownOpen.set(false);
     this.obsTagDialogOpen.set(true);
   }
 
@@ -635,15 +675,23 @@ export class AppComponent implements OnInit {
     if (created) {
       this.searchTags.update(tags => [...tags, created]);
     }
-    await this.selectObsTag(name);
+    if (this.newTagContext() === 'batch') {
+      this.addToBatchAddList(name);
+    } else {
+      await this.selectObsTag(name);
+    }
     this.obsTagDialogOpen.set(false);
   }
 
   onObsTagKeydown(event: KeyboardEvent) {
     if (event.key === 'Enter') {
+      const q = this.obsTagQuery().trim();
       const matches = this.filteredSearchTags();
       if (matches.length === 1) { this.selectObsTag(matches[0].tag_name!); }
-      else { this.openNewTagDialog(); }
+      else if (q && this.SYSTEM_TAGS.has(q.toLowerCase())) {
+        this.obsTagError.set('not a user-controlled tag');
+        setTimeout(() => this.obsTagError.set(''), 2500);
+      } else { this.openNewTagDialog(); }
       event.preventDefault();
     } else if (event.key === 'Escape') {
       this.closeObsTagInput();

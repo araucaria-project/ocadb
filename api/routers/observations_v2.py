@@ -27,6 +27,11 @@ from api.services.auth_service import AuthService
 from api.routers.api_auth import read_users_me
 from api.services.s3_api_service import S3Connection
 from api.schemas import DownloadScriptRequest
+from pydantic import BaseModel
+
+class SearchTagCreate(BaseModel):
+    tag_name: str
+    tag_description: Optional[str] = None
 
 
 
@@ -327,13 +332,14 @@ async def get_search_tags(
 
 @router.post('/values/tags', response_description="Create a new search tag", response_model=SearchTag, status_code=status.HTTP_201_CREATED)
 async def create_search_tag(
-        tag: Annotated[SearchTag, Body(...)],
+        data: Annotated[SearchTagCreate, Body(...)],
         token: Annotated[str, Depends(AuthService.validate_token)]
 ):
+    tag = SearchTag(tag_name=data.tag_name, tag_description=data.tag_description)
     try:
         await tag.insert()
     except DuplicateKeyError:
-        raise HTTPException(status_code=409, detail=f"Tag '{tag.tag_name}' already exists")
+        raise HTTPException(status_code=409, detail=f"Tag '{data.tag_name}' already exists")
     return tag
 
 @router.post('/{id}/obs-tags', response_description="Add a tag to an observation", status_code=200)
@@ -396,12 +402,6 @@ async def get_values_object(
     values = await Observation.distinct("canonized_object_name")
     return sorted(v for v in values if v is not None)
 
-@router.get("/values/tags", response_description="Tags with description", response_model=List[SearchTag])
-async def get_values_tags(
-        token: Annotated[str, Depends(AuthService.validate_token)]
-):
-    values = await SearchTag.find_all().to_list()
-    return values
 
 # /api/v1/observations/values/FILTER  per TELESCOP
 @router.get("/values/{telescope}/filter", response_description="Unique values for FILTER of TELESCOP header field", response_model=List[str])

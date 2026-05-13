@@ -1320,7 +1320,7 @@
     <!-- Batch tag dialog -->
     @if (batchTagDialogOpen()) {
       <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-        <div class="bg-space-900 border border-space-700 rounded-lg shadow-2xl w-96 p-5 flex flex-col gap-4">
+        <div class="relative z-30 bg-space-900 border border-space-700 rounded-lg shadow-2xl w-96 p-5 flex flex-col gap-4">
           <div class="flex items-center justify-between">
             <span class="text-sm font-medium text-slate-200">Add or remove tags for {{ selectedObsIds().size }} observations</span>
             <button type="button" (click)="closeBatchTagDialog()"
@@ -1330,22 +1330,6 @@
           </div>
 
           <!-- Tags to add -->
-          <ng-container *ngTemplateOutlet="batchCombo; context: {
-            $implicit: 'Tags to add',
-            list: batchTagAddList(),
-            inputOpen: batchTagAddInputOpen(),
-            query: batchTagAddQuery(),
-            dropdownOpen: batchTagAddDropdownOpen(),
-            filtered: filteredBatchAddTags(),
-            inputRef: 'batchTagAddInput',
-            onOpen: 'openBatchTagAddInput',
-            onClose: 'closeBatchTagAddInput',
-            onAdd: 'addToBatchAddList',
-            onRemove: 'batchTagAddList.update',
-            onKeydown: 'onBatchTagAddKeydown',
-            onQueryChange: 'batchTagAddQuery'
-          }"></ng-container>
-
           <div>
             <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Tags to add</div>
             <div class="flex flex-wrap items-center gap-1.5">
@@ -1371,6 +1355,9 @@
                       <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                     </button>
                   </div>
+                  @if (batchTagAddError()) {
+                    <div class="absolute left-0 mt-1 text-[10px] text-red-400">{{ batchTagAddError() }}</div>
+                  }
                   @if (batchTagAddDropdownOpen()) {
                     <div class="absolute z-20 left-0 mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden min-w-40 max-h-40 overflow-y-auto">
                       @for (tag of filteredBatchAddTags(); track tag.tag_name) {
@@ -1380,7 +1367,7 @@
                           @if (tag.tag_description) { <span class="text-[10px] text-slate-500 truncate">{{ tag.tag_description }}</span> }
                         </button>
                       }
-                      <button type="button" (mousedown)="$event.preventDefault(); addToBatchAddList(batchTagAddQuery().trim())"
+                      <button type="button" (mousedown)="$event.preventDefault(); openBatchNewTagDialog()"
                         class="w-full px-3 py-1.5 flex items-center gap-1.5 hover:bg-space-800 transition-colors text-left text-[10px] text-accent-500 border-t border-space-700">
                         <svg class="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
                         add "{{ batchTagAddQuery() || 'new tag' }}"
@@ -1423,6 +1410,9 @@
                       <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                     </button>
                   </div>
+                  @if (batchTagRemoveError()) {
+                    <div class="absolute left-0 mt-1 text-[10px] text-red-400">{{ batchTagRemoveError() }}</div>
+                  }
                   @if (batchTagRemoveDropdownOpen()) {
                     <div class="absolute z-20 left-0 mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden min-w-40 max-h-40 overflow-y-auto">
                       @for (tag of filteredBatchRemoveTags(); track tag.tag_name) {
@@ -1456,6 +1446,46 @@
               </svg>
             }
             {{ (!batchTagAddList().length && !batchTagRemoveList().length) ? 'Edit tags' : (batchTagAddList().length && batchTagRemoveList().length) ? 'Edit tags' : batchTagAddList().length ? 'Add tags' : 'Remove tags' }}
+          </button>
+        </div>
+      </div>
+    }
+
+    <!-- New tag dialog (shared between obs viewer and batch dialog) -->
+    @if (obsTagDialogOpen()) {
+      <div class="fixed inset-0 z-[60] flex items-center justify-center bg-black/60">
+        <div class="bg-space-900 border border-space-700 rounded-lg shadow-2xl w-80 p-5 flex flex-col gap-4">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-medium text-slate-200">New tag</span>
+            <button type="button" (click)="closeTagDialog()"
+              class="text-slate-500 hover:text-slate-200 transition-colors">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <div class="flex flex-col gap-3">
+            <div>
+              <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Tag name</label>
+              <input type="text"
+                [ngModel]="newTagName()"
+                (ngModelChange)="newTagName.set($event)"
+                (keyup.enter)="submitNewTag()"
+                class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:border-accent-500 focus:outline-none">
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Description</label>
+              <input type="text"
+                [ngModel]="newTagDescription()"
+                (ngModelChange)="newTagDescription.set($event)"
+                (keyup.enter)="submitNewTag()"
+                placeholder="optional"
+                class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:border-accent-500 focus:outline-none">
+            </div>
+          </div>
+          <button type="button"
+            (click)="submitNewTag()"
+            [disabled]="!newTagName().trim()"
+            class="w-full py-1.5 rounded bg-accent-600 text-white text-sm font-medium hover:bg-accent-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+            Add this tag
           </button>
         </div>
       </div>
@@ -1634,6 +1664,9 @@
                         <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                       </button>
                     </div>
+                    @if (obsTagError()) {
+                      <div class="absolute left-0 mt-1 text-[10px] text-red-400">{{ obsTagError() }}</div>
+                    }
                     @if (obsTagDropdownOpen()) {
                       <div class="absolute z-20 left-0 mt-1 bg-space-900 border border-space-700 rounded shadow-lg overflow-hidden min-w-40 max-h-40 overflow-y-auto">
                         @for (tag of filteredSearchTags(); track tag.tag_name) {
@@ -1667,46 +1700,6 @@
                 }
               </div>
             </div>
-
-            <!-- New tag dialog -->
-            @if (obsTagDialogOpen()) {
-              <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-                <div class="bg-space-900 border border-space-700 rounded-lg shadow-2xl w-80 p-5 flex flex-col gap-4">
-                  <div class="flex items-center justify-between">
-                    <span class="text-sm font-medium text-slate-200">New tag</span>
-                    <button type="button" (click)="closeTagDialog()"
-                      class="text-slate-500 hover:text-slate-200 transition-colors">
-                      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                    </button>
-                  </div>
-                  <div class="flex flex-col gap-3">
-                    <div>
-                      <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Tag name</label>
-                      <input type="text"
-                        [ngModel]="newTagName()"
-                        (ngModelChange)="newTagName.set($event)"
-                        (keyup.enter)="submitNewTag()"
-                        class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:border-accent-500 focus:outline-none">
-                    </div>
-                    <div>
-                      <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Description</label>
-                      <input type="text"
-                        [ngModel]="newTagDescription()"
-                        (ngModelChange)="newTagDescription.set($event)"
-                        (keyup.enter)="submitNewTag()"
-                        placeholder="optional"
-                        class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:border-accent-500 focus:outline-none">
-                    </div>
-                  </div>
-                  <button type="button"
-                    (click)="submitNewTag()"
-                    [disabled]="!newTagName().trim()"
-                    class="w-full py-1.5 rounded bg-accent-600 text-white text-sm font-medium hover:bg-accent-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-                    Add this tag
-                  </button>
-                </div>
-              </div>
-            }
 
             <!-- Files -->
             @if (filesLoading() ? (selectedObservation()!.filetypes?.length ?? 0) > 0 : selectedObservation()!.files.length > 0) {
