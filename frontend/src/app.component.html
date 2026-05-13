@@ -1096,7 +1096,7 @@
                     <td class="px-4 py-2 whitespace-nowrap relative group/tags">
                       @if (obs.obs_tags && obs.obs_tags.length > 3) {
                         <!-- collapsed: show 2 tags + ellipsis -->
-                        <div class="flex items-center gap-1 group-hover/tags:invisible">
+                        <div class="flex items-center gap-1 transition-opacity duration-200 ease-out group-hover/tags:opacity-0">
                           @for (tag of sortedFileTypes(obs.obs_tags ?? []).slice(0, 2); track tag) {
                             <span class="px-1.5 py-0.5 rounded text-[10px] font-medium border"
                               [class]="getFileBadgeClassByType(tag)">
@@ -1106,7 +1106,7 @@
                           <svg class="w-3.5 h-3.5 text-yellow-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14m-7-7l7 7-7 7"/></svg>
                         </div>
                         <!-- expanded: absolutely positioned, overlaps columns to the left -->
-                        <div class="hidden group-hover/tags:flex absolute right-0 top-0 bottom-0 z-20 items-center gap-1 px-4 bg-slate-900 border-l border-slate-700 shadow-xl">
+                        <div class="flex absolute right-0 top-0 bottom-0 z-20 items-center gap-1 px-4 bg-slate-900 border-l border-slate-700 shadow-xl opacity-0 translate-x-4 group-hover/tags:opacity-100 group-hover/tags:translate-x-0 transition-all duration-200 ease-out pointer-events-none group-hover/tags:pointer-events-auto">
                           @for (tag of sortedFileTypes(obs.obs_tags ?? []); track tag) {
                             <span class="px-1.5 py-0.5 rounded text-[10px] font-medium border whitespace-nowrap"
                               [class]="getFileBadgeClassByType(tag)">
