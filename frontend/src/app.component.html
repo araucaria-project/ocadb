@@ -904,8 +904,8 @@
 
         <!-- Selected above indicator (outside scroll container so thead doesn't cover it) -->
         @if (hasSelectionAbove()) {
-          <div class="absolute top-10 left-0 right-0 flex justify-center z-30">
-            <div (click)="scrollToNearestSelectionAbove()" class="bg-amber-500 text-amber-950 px-3 py-0.5 rounded-b text-[10px] font-bold flex items-center gap-1 shadow-md cursor-pointer hover:bg-amber-400 transition-colors">
+          <div class="absolute top-10 left-0 right-0 flex justify-center z-30 pointer-events-none">
+            <div (click)="scrollToNearestSelectionAbove()" class="pointer-events-auto bg-amber-500 text-amber-950 px-3 py-0.5 rounded-b text-[10px] font-bold flex items-center gap-1 shadow-md cursor-pointer hover:bg-amber-400 transition-colors">
               <svg class="w-2.5 h-2.5" viewBox="0 0 10 6" fill="currentColor"><path d="M5 0L10 6H0z"/></svg>
               selected above
             </div>
