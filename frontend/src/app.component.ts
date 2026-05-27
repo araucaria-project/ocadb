@@ -911,7 +911,16 @@ export class AppComponent implements OnInit {
 
   async goToPage(page: number) {
     if (page < 1 || page > this.totalPages) return;
-    const results = await this.ocadbService.searchObservations(this.filters(), page, this.getSortExpr());
+    const hasRa = this.coneRa() != null;
+    const hasDec = this.coneDec() != null;
+    const cone_search = (this.coneSearchExpanded() && hasRa && hasDec) ? {
+      ra: this.coneRa()!,
+      dec: this.coneDec()!,
+      arc_seconds: this.coneRadius(),
+      epoch: this.coneEpoch() || '2000.0'
+    } : null;
+    const baseFilters = this.coneSearchExpanded() ? { ...this.filters(), object: null } : this.filters();
+    const results = await this.ocadbService.searchObservations({ ...baseFilters, cone_search }, page, this.getSortExpr());
     this.displayedObservations.set(results);
   }
 
