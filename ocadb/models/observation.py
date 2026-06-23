@@ -62,7 +62,7 @@ class Observation(Document):
         if self.metadata:
             self.obs_tags.add("metadata")
         else:
-            self.obs_tags.remove("metadata")
+            self.obs_tags.discard("metadata")
 
     def get_id(self):
         return self.id

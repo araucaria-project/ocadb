@@ -1821,6 +1821,11 @@ export class AppComponent implements OnInit {
     return Object.entries(header).filter(([, v]) => v != null);
   }
 
+  missingPinnedFields(header: Record<string, any> | null | undefined): string[] {
+    const h = header ?? {};
+    return this.visibleFields().filter(k => !(k in h));
+  }
+
   private async loadDropdowns() {
     const currentTelescope = this.filters().telescop;
     const [telescopes, imageTypes, obsTypes, objects, pis, sciprogs, filterList, searchTags] = await Promise.all([

@@ -58,8 +58,8 @@ async def list_observations(
     """List all observations"""
     user = await read_users_me(token)
 
-    observations = await Observation.find_all().aggregate(AggregationQueryBuilder.aggregate(match_query={}, access_tags=user.access_tags, page=page, page_size=page_size, sort_expr={})).to_list()
-    if len(observations) == 0:
+    observations = await Observation.find_all().aggregate(AggregationQueryBuilder.aggregate(access_tags=user.access_tags, page=page, page_size=page_size, sort_expr={})).to_list()
+    if not observations or not observations[0].get("data"):
         raise HTTPException(status_code=404, detail="No observations found")
 
     return observations[0]
@@ -189,9 +189,9 @@ async def list_observations_by_object(
 ):
     """List observations of a specific object"""
     user = await read_users_me(token)
-    observations = await Observation.find(Observation.canonized_object_name == name_canonizator(object_name)).aggregate(AggregationQueryBuilder.aggregate(match_query={}, access_tags=user.access_tags, page=page, page_size=page_size, sort_expr={})).to_list()
+    observations = await Observation.find(Observation.canonized_object_name == name_canonizator(object_name)).aggregate(AggregationQueryBuilder.aggregate(access_tags=user.access_tags, page=page, page_size=page_size, sort_expr={})).to_list()
 
-    if not observations:
+    if not observations or not observations[0].get("data"):
         raise HTTPException(status_code=404, detail=f"Observation for object {object_name} not found")
 
     return observations[0]
@@ -207,9 +207,9 @@ async def list_observations_by_filter(
     """List observations using a specific filter"""
     user = await read_users_me(token)
 
-    observations = await Observation.find(Observation.fits_header.FILTER == filter_name).aggregate(AggregationQueryBuilder.aggregate(match_query={}, access_tags=user.access_tags, page=page, page_size=page_size, sort_expr={})).to_list()
+    observations = await Observation.find(Observation.fits_header.FILTER == filter_name).aggregate(AggregationQueryBuilder.aggregate(access_tags=user.access_tags, page=page, page_size=page_size, sort_expr={})).to_list()
 
-    if not observations:
+    if not observations or not observations[0].get("data"):
         raise HTTPException(status_code=404, detail=f"No observations found")
 
     return observations[0]
@@ -226,9 +226,9 @@ async def list_observations_by_geo(
     observations = await (Observation.find(
         OcaWithin(Observation.telescope_coordinates.lon_lat, (sky_area.get_ref_lon(), sky_area.get_ref_lat()),
                   sky_area.rad_distance())).aggregate(
-        AggregationQueryBuilder.aggregate(match_query={}, access_tags=user.access_tags, page=page, page_size=page_size))).to_list()
+        AggregationQueryBuilder.aggregate(access_tags=user.access_tags, page=page, page_size=page_size, sort_expr={}))).to_list()
 
-    if not observations:
+    if not observations or not observations[0].get("data"):
         raise HTTPException(status_code=404, detail=f"No observations found")
 
     return observations[0]
@@ -280,7 +280,7 @@ async def search_multi(
     pipeline[-1]['$facet']['data'].append({"$addFields": {"files": []}})
     observations = await observations.find(fetch_links=False).aggregate(pipeline).to_list()
 
-    if not observations:
+    if not observations or not observations[0].get("data"):
         raise HTTPException(status_code=404, detail=f"No observations found")
 
     return observations[0]

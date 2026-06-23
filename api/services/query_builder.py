@@ -40,6 +40,10 @@ class QueryBuilder(BaseFindOperator):
         self.radius = radius
 
     @property
+    def query(self):
+        return self.geo_query
+
+    @property
     def find_query(self):
         return {"$geoWithin": {"$centerSphere": [[self.coordinates[0], self.coordinates[1]], self.radius]}}
 

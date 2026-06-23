@@ -75,12 +75,31 @@ frontend/    Angular 21 web app — Vite + Tailwind CSS, serves on :8085
 
 ## Testing
 
-Requires MongoDB on localhost:27017.
+Tests require MongoDB on `localhost:27017`. The easiest way is to start the Docker stack:
 
 ```bash
-poetry run pytest
-poetry run pytest --cov=ocadb
+docker compose up -d mongodb
 ```
+
+Then run the suite:
+
+```bash
+# All tests
+poetry run pytest
+
+# With coverage report
+poetry run pytest --cov=ocadb
+
+# Single test file
+poetry run pytest tests/test_model_observation.py
+
+# Single test
+poetry run pytest tests/test_api_observations.py::test_create_observation_success
+```
+
+Tests use an isolated `ocadb_test` database that is wiped before each test — your `ocadb` database is never touched.
+
+> **Note:** The Docker image is pinned to `mongo:6.0`. `mongo:latest` (8.x) segfaults on Proxmox/modified kernels.
 
 ## License
 
