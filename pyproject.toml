@@ -34,6 +34,7 @@ typer = "^0.16.0"
 pyaraucaria = {git = "https://github.com/araucaria-project/pyaraucaria.git"}
 ocafitsfiles = {git = "https://github.com/araucaria-project/ocafitsfiles.git"}
 aioboto3 = "^15.2.0"
+datamodels = {git = "https://github.com/araucaria-project/datamodels.git", branch = "ocadb_shared_models"}
 
 [tool.poetry.extras]
 # API server dependencies (includes authentication)
