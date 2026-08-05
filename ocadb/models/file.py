@@ -3,7 +3,7 @@ from typing import List, Optional
 
 import pymongo
 from beanie import Document, PydanticObjectId
-from pydantic import Field
+from pydantic import BaseModel, Field
 from pymongo import IndexModel
 
 from api.services.s3_api_service import S3Connection
@@ -21,8 +21,28 @@ from ocadb.models.s3_presigned_url import S3PresignedUrl
 __all__ = [
     "DigestStr", "FileClassification", "FitsHeader",
     "StorageLocationStatus", "StorageStatus", "StorageStatusType",
-    "FITSFile", "document_models",
+    "UploadRequest", "FITSFile", "document_models",
 ]
+
+# Statuses that mean "not sitting in cloud storage yet" — a download request
+# against a file in one of these states is a signal an operator needs to act on.
+_CLOUD_UPLOAD_PENDING_STATUSES = [
+    StorageStatusType.NOT_STORED.value,
+    StorageStatusType.DELETED.value,
+    StorageStatusType.CORRUPTED.value,
+]
+_CLOUD_UPLOAD_ALREADY_FLAGGED_STATUSES = _CLOUD_UPLOAD_PENDING_STATUSES + [StorageStatusType.REQUESTED.value]
+
+
+class UploadRequest(BaseModel):
+    """OcaDB-local record of who asked for a file that isn't in cloud storage yet.
+
+    Deliberately not part of the shared `datamodels` contract: it's an
+    operator-review concern specific to OcaDB, not something the file
+    producer side needs to know about.
+    """
+    requested_by: str
+    requested_at: datetime
 
 
 class FITSFile(FITSFileBase, Document):
@@ -39,6 +59,9 @@ class FITSFile(FITSFileBase, Document):
         description="Access control tags inherited from parent observation (INSTRUME, ORIGIN, PI)"
     )
 
+    # Operator review queue — who has asked to download this file while it wasn't in cloud storage
+    upload_requests: List[UploadRequest] = Field(default_factory=list)
+
     class Settings:
         name = "fits_files"
         indexes = [
@@ -51,6 +74,42 @@ class FITSFile(FITSFileBase, Document):
             IndexModel([("created_at", pymongo.DESCENDING)]),
         ]
         validate_assignment = True
+
+    @classmethod
+    async def request_cloud_uploads(cls, filenames: List[str], username: str) -> None:
+        """Flag files that aren't in cloud storage as REQUESTED and log the requester.
+
+        Called when a user asks to download files (e.g. via the download-script
+        endpoint). Files already stored/scheduled/queued/storing in cloud are left
+        untouched — this is purely a signal for an operator to review and decide
+        whether/when to actually run the upload.
+        """
+        if not filenames:
+            return
+
+        now = datetime.utcnow()
+        entry = {"requested_by": username, "requested_at": now}
+
+        # Log the request against anything still pending an upload decision,
+        # even if it was already flagged REQUESTED by an earlier request.
+        await cls.find({
+            "filename": {"$in": filenames},
+            "file_status.cloud.status": {"$in": _CLOUD_UPLOAD_ALREADY_FLAGGED_STATUSES},
+        }).update({
+            "$push": {"upload_requests": entry},
+            "$set": {"updated_at": now},
+        })
+
+        # Only flip the status the first time — don't stomp on an in-flight upload.
+        await cls.find({
+            "filename": {"$in": filenames},
+            "file_status.cloud.status": {"$in": _CLOUD_UPLOAD_PENDING_STATUSES},
+        }).update({
+            "$set": {
+                "file_status.cloud.status": StorageStatusType.REQUESTED.value,
+                "file_status.cloud.check_needed": True,
+            },
+        })
 
     async def resolve_source_files(self) -> List["FITSFile"]:
         """Resolve source file references to actual documents.

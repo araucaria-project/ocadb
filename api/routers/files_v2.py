@@ -14,7 +14,7 @@ from pymongo.results import UpdateResult
 from api.routers.observations_v2 import get_observation, create_observation, get_observation_by_obs_name, \
     get_observation_by_filename
 from ocadb.models import Observation, FitsHeader, SkyCoord
-from ocadb.models.file import FITSFile, StorageStatus, StorageLocationStatus
+from ocadb.models.file import FITSFile, StorageStatus, StorageLocationStatus, StorageStatusType
 from api.services.auth_service import AuthService
 
 
@@ -259,6 +259,16 @@ async def list_files_status(
             response[file.filename] = file.file_status
 
     return response
+
+@router.get("/upload-requests", response_description="List files requested for download that aren't in cloud storage yet", response_model=List[FITSFile])
+async def list_pending_upload_requests(
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    """Operator review queue: files someone tried to download while file_status.cloud
+    wasn't STORED, together with who asked and when (FITSFile.upload_requests)."""
+    return await FITSFile.find(
+        {"file_status.cloud.status": StorageStatusType.REQUESTED.value}
+    ).sort("-updated_at").to_list()
 
 @router.put("/file-status/{fitsfile_name}/", response_description="Update file status", response_model=FITSFile)
 async def update_file_status(

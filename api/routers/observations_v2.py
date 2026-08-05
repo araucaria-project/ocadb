@@ -695,6 +695,8 @@ async def generate_download_script(
     if not filenames:
         raise HTTPException(status_code=404, detail="No files found for the selected observations")
 
+    await FITSFile.request_cloud_uploads(filenames, user.username)
+
     data_block = "\n".join(filenames)
     script_username = request.username or user.username
     script = render_download_script(data_block, username=script_username)
