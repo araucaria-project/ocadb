@@ -29,7 +29,7 @@ export interface FitsFile {
   observation_id?: string | null;
   obs_name: string;
   source_filenames: string[];
-  fits_header?: FitsHeader | null;
+  image_type?: string | null;
   file_status: StorageStatus;
   access_tags: string[];
   created_at?: string | null;

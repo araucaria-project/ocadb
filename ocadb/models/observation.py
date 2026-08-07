@@ -1,4 +1,4 @@
-from typing import Any, List
+from typing import Any, List, Optional
 
 import pymongo
 from beanie import Document, Link, after_event, Replace, Update, Insert
@@ -33,13 +33,41 @@ class Observation(ObservationBase, Document):
     # Coordinates — DB-only, not part of the shared plain contract
     telescope_coordinates: SkyCoord = Field(SkyCoord, description="telescope direction coordinates", exclude=True)  # exclude field from json dump
 
-    async def store_file(self, fits_file: FITSFile):
+    # Tracks which linked file's header currently backs fits_header, now that the full
+    # header is no longer stored per-file — ZDF always takes precedence over raw/other.
+    fits_header_source: Optional[FileClassification] = Field(
+        None, exclude=True,
+        description="file_class of the FITSFile currently backing fits_header (ZDF always wins over RAW/other)",
+    )
+
+    async def store_file(self, fits_file: FITSFile, fits_header: Optional[FitsHeader] = None):
         self.files.append(fits_file)
         self.filetypes.add(fits_file.file_class)
 
         self.obs_tags.add(fits_file.file_class)
 
         self.source_files.update(fits_file.source_filenames)
+
+        header = fits_header if fits_header is not None else fits_file.fits_header
+        self.adopt_header_if_precedent(fits_file.file_class, header)
+
+    def adopt_header_if_precedent(self, file_class: FileClassification, fits_header: Optional[FitsHeader]) -> bool:
+        """Adopt fits_header as this observation's own header, if precedent allows.
+
+        A ZDF file's header always wins (it's the more complete one). A non-ZDF
+        header is only adopted if no ZDF-sourced header has been recorded yet —
+        this must not let a later raw upload clobber an existing zdf-derived header.
+        Returns True if the header was adopted (caller should persist the change).
+        """
+        if fits_header is None:
+            return False
+        is_zdf = file_class == FileClassification.ZDF
+        already_zdf = self.fits_header_source == FileClassification.ZDF
+        if is_zdf or not already_zdf:
+            self.fits_header = fits_header        # validate_assignment=True re-runs
+            self.fits_header_source = file_class   # store_skycoord/store_canonical_object/
+            return True                            # store_obs_date/store_tags automatically
+        return False
 
     def get_id(self):
         return self.id

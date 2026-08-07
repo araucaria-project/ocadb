@@ -62,6 +62,12 @@ class FITSFile(FITSFileBase, Document):
     # Operator review queue — who has asked to download this file while it wasn't in cloud storage
     upload_requests: List[UploadRequest] = Field(default_factory=list)
 
+    # Small derived scalar kept from fits_header (e.g. "zero", "dark", "science") even
+    # though the full header itself is no longer persisted here — see fits_header below.
+    image_type: Optional[str] = Field(
+        None, description="FITS header IMAGETYP, copied at write time (header itself is not persisted)"
+    )
+
     class Settings:
         name = "fits_files"
         indexes = [
@@ -110,6 +116,17 @@ class FITSFile(FITSFileBase, Document):
                 "file_status.cloud.check_needed": True,
             },
         })
+
+    def pop_fits_header(self) -> Optional[FitsHeader]:
+        """Detach fits_header (deriving image_type from it first) before this object
+        is persisted — the full header must never be written to FITSFile storage,
+        only to the parent Observation. Returns the detached header for the caller
+        to hand to Observation.store_file/adopt_header_if_precedent.
+        """
+        header = self.fits_header
+        self.image_type = header.IMAGETYP if header is not None else None
+        self.fits_header = None
+        return header
 
     async def resolve_source_files(self) -> List["FITSFile"]:
         """Resolve source file references to actual documents.

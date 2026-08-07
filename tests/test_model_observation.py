@@ -174,6 +174,65 @@ async def test_store_file_adds_file_to_observation(beanie):
     assert FileClassification.RAW in obs.filetypes
 
 
+# --- adopt_header_if_precedent / ZDF-wins-over-RAW priority ---
+
+async def test_raw_then_zdf_ends_with_zdf_header(beanie):
+    """RAW arrives first (no header recorded yet), then ZDF arrives — ZDF must win."""
+    from ocadb.models.file import FileClassification
+    obs = Observation(obs_name="test_priority_raw_then_zdf", fits_header=make_fits_header(**{"TELESCOP": "raw-scope"}))
+    assert obs.fits_header_source is None
+
+    adopted = obs.adopt_header_if_precedent(FileClassification.RAW, make_fits_header(**{"TELESCOP": "raw-scope"}))
+    assert adopted is True
+    assert obs.fits_header_source == FileClassification.RAW
+    assert obs.fits_header.TELESCOP == "raw-scope"
+
+    adopted = obs.adopt_header_if_precedent(FileClassification.ZDF, make_fits_header(**{"TELESCOP": "zdf-scope"}))
+    assert adopted is True
+    assert obs.fits_header_source == FileClassification.ZDF
+    assert obs.fits_header.TELESCOP == "zdf-scope"
+
+
+async def test_zdf_then_raw_keeps_zdf_header(beanie):
+    """ZDF arrives first, then a later RAW upload must NOT clobber it."""
+    from ocadb.models.file import FileClassification
+    obs = Observation(obs_name="test_priority_zdf_then_raw", fits_header=make_fits_header(**{"TELESCOP": "initial"}))
+
+    adopted = obs.adopt_header_if_precedent(FileClassification.ZDF, make_fits_header(**{"TELESCOP": "zdf-scope"}))
+    assert adopted is True
+    assert obs.fits_header_source == FileClassification.ZDF
+
+    adopted = obs.adopt_header_if_precedent(FileClassification.RAW, make_fits_header(**{"TELESCOP": "raw-scope"}))
+    assert adopted is False
+    assert obs.fits_header_source == FileClassification.ZDF
+    assert obs.fits_header.TELESCOP == "zdf-scope"
+
+
+async def test_adopt_header_none_is_noop(beanie):
+    from ocadb.models.file import FileClassification
+    obs = Observation(obs_name="test_priority_none", fits_header=make_fits_header(**{"TELESCOP": "initial"}))
+    adopted = obs.adopt_header_if_precedent(FileClassification.ZDF, None)
+    assert adopted is False
+    assert obs.fits_header.TELESCOP == "initial"
+
+
+async def test_store_file_adopts_header_via_fits_file(beanie):
+    """store_file should adopt fits_file's own header when no explicit header is passed."""
+    from ocadb.models.file import FITSFile, FileClassification
+    from tests.conftest import make_storage_status
+    obs = Observation(obs_name="test_store_file_header", fits_header=make_fits_header(**{"TELESCOP": "initial"}))
+    fits_file = FITSFile(
+        filename="test_zdf.fits",
+        file_class=FileClassification.ZDF,
+        obs_name="test_store_file_header",
+        file_status=make_storage_status(),
+        fits_header=make_fits_header(**{"TELESCOP": "zdf-scope"}),
+    )
+    await obs.store_file(fits_file)
+    assert obs.fits_header.TELESCOP == "zdf-scope"
+    assert obs.fits_header_source == FileClassification.ZDF
+
+
 # --- persistence ---
 
 async def test_observation_insert_and_find(beanie):

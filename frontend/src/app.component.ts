@@ -1698,7 +1698,7 @@ export class AppComponent implements OnInit {
 
   getCalibDisplayLabel(file: FitsFile): string {
     const parsed = this.getCalibFileLabel(file.filename);
-    const imagetyp = (file.fits_header?.['IMAGETYP'] as string | null | undefined)?.toLowerCase();
+    const imagetyp = file.image_type?.toLowerCase();
     if (imagetyp && imagetyp !== 'raw') return imagetyp;
     return parsed;
   }
@@ -1809,11 +1809,6 @@ export class AppComponent implements OnInit {
 
   hasMetadata(obs: Observation): boolean {
     return obs.metadata != null && Object.keys(obs.metadata).length > 0;
-  }
-
-  fitsHeaderEntries(file: FitsFile): [string, any][] {
-    if (!file.fits_header) return [];
-    return Object.entries(file.fits_header).filter(([, v]) => v != null);
   }
 
   headerEntries2(header: Record<string, any> | null | undefined): [string, any][] {

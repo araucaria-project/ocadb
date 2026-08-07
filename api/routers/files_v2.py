@@ -52,9 +52,10 @@ async def create_file(
                     raise HTTPException(status_code=e.status_code, detail="Cannot create observation object.")
 
             file_data.observation_id = observation.get_id()
+            header = file_data.pop_fits_header()
             await file_data.insert()
 
-            await observation.store_file(file_data)
+            await observation.store_file(file_data, fits_header=header)
 
             if file_data.metadata:
                 observation.store_metadata(file_data.metadata)
@@ -86,7 +87,7 @@ async def upsert_fitsfile(
                 "digest": file_data.digest,
                 "observation_id": file_data.observation_id,
                 "source_filenames": file_data.source_filenames,
-                "fits_header": file_data.fits_header,
+                "image_type": file_data.fits_header.IMAGETYP if file_data.fits_header else None,
                 "file_status": file_data.file_status,
                 "metadata": file_data.metadata,
                 "access_tags": file_data.access_tags,
@@ -132,6 +133,14 @@ async def upsert_fitsfile(
             FITSFile.filename == file_data.filename
         )
 
+        if file_data.fits_header is not None and file_data.obs_name is not None:
+            try:
+                observation = await get_observation_by_obs_name(file_data.obs_name, token=token)
+                if observation.adopt_header_if_precedent(file_data.file_class, file_data.fits_header):
+                    await observation.replace()
+            except HTTPException:
+                log.warning("upsert_fitsfile: could not adopt header — observation '%s' not found", file_data.obs_name)
+
         file_data = updated_doc
 
     return file_data
@@ -144,6 +153,7 @@ async def update_fitsfile(
     """Update an existing FITSfile record"""
 
     file_data.updated_at = datetime.utcnow()
+    header = file_data.pop_fits_header()
 
     try:
         await file_data.replace()
@@ -156,6 +166,7 @@ async def update_fitsfile(
         raise HTTPException(status_code=404, detail=f"Observation with name {file_data.obs_name} not found")
 
     observation.store_metadata(file_data.metadata)
+    observation.adopt_header_if_precedent(file_data.file_class, header)
     await observation.replace()
 
     return file_data

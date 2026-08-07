@@ -2,6 +2,8 @@ import secrets
 import hashlib
 from datetime import datetime
 from beanie import Document
+import pymongo
+from pymongo import IndexModel
 
 
 class RefreshTokenDocument(Document):
@@ -13,7 +15,11 @@ class RefreshTokenDocument(Document):
 
     class Settings:
         name = "refresh_tokens"
-        indexes = ["token_hash", "username", "expires_at"]
+        indexes = [
+            "token_hash",
+            "username",
+            IndexModel([("expires_at", pymongo.ASCENDING)], expireAfterSeconds=0),
+        ]
 
     @staticmethod
     def generate() -> tuple[str, str]:

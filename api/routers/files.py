@@ -40,6 +40,7 @@ async def create_file(
 ):
     """Create a new observation record"""
     try:
+        header = file_data.pop_fits_header()
         await file_data.insert()
         if file_data.obs_name is not None:
             observation = None
@@ -47,9 +48,9 @@ async def create_file(
                 observations = await get_observation_by_obs_name(file_data.obs_name, token=token)
                 observation = observations[0] # change it laterrr
             except HTTPException as exc:
-                observation = await create_observation(observation_data=Observation(obs_name=file_data.obs_name, file_name=file_data.filename, fits_header=file_data.fits_header), token=token)
+                observation = await create_observation(observation_data=Observation(obs_name=file_data.obs_name, file_name=file_data.filename, fits_header=header), token=token)
 
-            await observation.store_file(file_data)
+            await observation.store_file(file_data, fits_header=header)
             await observation.replace()
     except DuplicateKeyError as e:
         raise HTTPException(status_code=403, detail=f"Observation with filename {file_data.filename} already exists.")
@@ -61,10 +62,20 @@ async def update_fitsfile(
         token: Annotated[str, Depends(AuthService.validate_token)]
 ):
     fitsfile_data.updated_at = datetime.utcnow()
+    header = fitsfile_data.pop_fits_header()
     try:
         await fitsfile_data.replace()
     except (ValueError, exceptions.DocumentNotFound):
         raise HTTPException(status_code=404, detail=f"File with ID {fitsfile_data._id} not found")
+
+    if header is not None and fitsfile_data.obs_name is not None:
+        try:
+            observations = await get_observation_by_obs_name(fitsfile_data.obs_name, token=token)
+            observation = observations[0]
+            if observation.adopt_header_if_precedent(fitsfile_data.file_class, header):
+                await observation.replace()
+        except HTTPException:
+            log.warning("update_fitsfile: could not adopt header — observation '%s' not found", fitsfile_data.obs_name)
 
     return fitsfile_data
 
