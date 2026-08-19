@@ -105,3 +105,14 @@ class AuthService:
         except JWTError:
             raise credentials_exception
         return token
+
+    @staticmethod
+    async def require_moderator(token: Annotated[str, Depends(oauth2_scheme)]) -> str:
+        """Like validate_token, but additionally requires the user to be a moderator."""
+        validated_token = await AuthService.validate_token(token)
+        payload = jwt.decode(validated_token, AuthService._SECRET_KEY, algorithms=[AuthService._ALGORITHM])
+        username = payload.get("sub")
+        user = await DatabaseConnection.get_user(username)
+        if user is None or not user.moderator:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+        return username

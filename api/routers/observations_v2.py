@@ -18,6 +18,8 @@ from pymongo.errors import DuplicateKeyError
 from api.services.aggregation_query_builder import AggregationQueryBuilder
 from api.services.oca_geospatial_query import OcaWithin
 from api.services.query_builder import MultiSearchForm
+from ocadb.database import Connection
+from ocadb.migrations.fits_header_migration import run_pass1, run_pass2
 from ocadb.models import Observation, FitsHeader, SkyCoord
 from ocadb.models.file import FITSFile
 from ocadb.models.search_object import SearchObject, SearchTag
@@ -634,6 +636,100 @@ async def migrate_api_status(
         token: Annotated[str, Depends(AuthService.validate_token)]
 ):
     return _migration_job
+
+
+# --- fits_header -> Observation migration (see ocadb/migrations/fits_header_migration.py) ---
+#
+# Job state is persisted in a plain Mongo collection (not a Beanie document) rather than an
+# in-process global: the previous migrate-api job lived only in memory, so a Railway
+# redeploy/restart mid-run silently wiped its progress. Pass 2 here is destructive and
+# not re-runnable, so losing track of how far it got is worse than for earlier migrations.
+
+_FITS_HEADER_MIGRATION_JOB_ID = "fits_header_migration"
+
+
+def _fits_header_migration_jobs():
+    return Connection().database["migration_jobs"]
+
+
+async def _run_fits_header_migration(apply: bool) -> None:
+    jobs = _fits_header_migration_jobs()
+
+    async def persist_progress(progress: dict) -> None:
+        await jobs.update_one(
+            {"_id": _FITS_HEADER_MIGRATION_JOB_ID},
+            {"$set": {"status": "running", "progress": progress}},
+        )
+
+    try:
+        pass1_result = await run_pass1(dry_run=not apply, on_progress=persist_progress)
+        if not apply:
+            await jobs.update_one(
+                {"_id": _FITS_HEADER_MIGRATION_JOB_ID},
+                {"$set": {
+                    "status": "done", "apply": False,
+                    "pass1": pass1_result, "pass2": None,
+                    "finished_at": datetime.utcnow().isoformat(),
+                }},
+            )
+            return
+
+        pass2_result = await run_pass2(on_progress=persist_progress)
+        await jobs.update_one(
+            {"_id": _FITS_HEADER_MIGRATION_JOB_ID},
+            {"$set": {
+                "status": "done", "apply": True,
+                "pass1": pass1_result, "pass2": pass2_result,
+                "finished_at": datetime.utcnow().isoformat(),
+            }},
+        )
+    except Exception as e:
+        log.error(f"fits_header migration failed: {e}")
+        await jobs.update_one(
+            {"_id": _FITS_HEADER_MIGRATION_JOB_ID},
+            {"$set": {"status": "failed", "error": str(e), "finished_at": datetime.utcnow().isoformat()}},
+        )
+
+
+@router.post("/migrate-fits-header", response_description="Start the fits_header migration in the background",
+             status_code=status.HTTP_202_ACCEPTED)
+async def migrate_fits_header(
+        moderator: Annotated[str, Depends(AuthService.require_moderator)],
+        apply: bool = False,
+        force: bool = False,
+):
+    """Move fits_header from FITSFile documents onto their parent Observation (ZDF wins over
+    RAW/other). Defaults to a dry run (Pass 1 only, no writes). Pass apply=true to also run
+    Pass 2, which is destructive and strips fits_header from every FITSFile document.
+
+    force=true bypasses the "already running" guard — needed if a previous run's process
+    was killed/redeployed mid-flight and left a stale "running" status behind.
+    """
+    jobs = _fits_header_migration_jobs()
+    existing = await jobs.find_one({"_id": _FITS_HEADER_MIGRATION_JOB_ID})
+    if existing is not None and existing.get("status") == "running" and not force:
+        raise HTTPException(status_code=409, detail="fits_header migration already running (pass force=true to override)")
+
+    await jobs.update_one(
+        {"_id": _FITS_HEADER_MIGRATION_JOB_ID},
+        {"$set": {"status": "running", "apply": apply, "started_at": datetime.utcnow().isoformat(),
+                  "started_by": moderator, "progress": None}},
+        upsert=True,
+    )
+    asyncio.create_task(_run_fits_header_migration(apply))
+    return {"status": "accepted", "apply": apply,
+            "message": "Migration started. Poll /migrate-fits-header/status for progress."}
+
+
+@router.get("/migrate-fits-header/status", response_description="Get fits_header migration job status")
+async def migrate_fits_header_status(
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    job = await _fits_header_migration_jobs().find_one({"_id": _FITS_HEADER_MIGRATION_JOB_ID})
+    if job is None:
+        return {"status": "idle"}
+    return job
+
 
 @router.post("/download-script", response_description="Generate a POSIX shell download script for selected observations")
 async def generate_download_script(
