@@ -146,6 +146,75 @@ async def test_update_file_status_not_found(client, auth_headers, regular_user):
     assert resp.status_code == 404
 
 
+# --- metadata: stored only on Observation, never persisted on FITSFile ---
+
+async def test_create_file_metadata_goes_only_to_observation(client, auth_headers, regular_user):
+    resp = await client.post(
+        "/api/v2/files/",
+        json=make_file_payload(filename="meta_create.fits", obs_name="obs_meta_create",
+                                metadata={"quality": "good"}),
+        headers=auth_headers,
+    )
+    assert resp.status_code == 201
+    assert resp.json()["metadata"] == {}
+
+    obs_resp = await client.get("/api/v2/observations/by-observation-name/obs_meta_create/", headers=auth_headers)
+    assert obs_resp.json()["metadata"] == {"quality": "good"}
+
+
+async def test_upsert_insert_metadata_goes_only_to_observation(client, auth_headers, regular_user):
+    resp = await client.post(
+        "/api/v2/files/upsert",
+        json=make_file_payload(filename="meta_upsert_insert.fits", obs_name="obs_meta_upsert_insert",
+                                metadata={"quality": "good"}),
+        headers=auth_headers,
+    )
+    assert resp.status_code in (200, 201)
+
+    file_resp = await client.get("/api/v2/files/by-filename/meta_upsert_insert.fits/", headers=auth_headers)
+    assert file_resp.json()["metadata"] == {}
+
+    obs_resp = await client.get("/api/v2/observations/by-observation-name/obs_meta_upsert_insert/", headers=auth_headers)
+    assert obs_resp.json()["metadata"] == {"quality": "good"}
+
+
+async def test_upsert_update_metadata_goes_only_to_observation(client, auth_headers, regular_user):
+    await client.post(
+        "/api/v2/files/upsert",
+        json=make_file_payload(filename="meta_upsert_update.fits", obs_name="obs_meta_upsert_update"),
+        headers=auth_headers,
+    )
+    resp = await client.post(
+        "/api/v2/files/upsert",
+        json=make_file_payload(filename="meta_upsert_update.fits", obs_name="obs_meta_upsert_update",
+                                metadata={"quality": "good"}),
+        headers=auth_headers,
+    )
+    assert resp.status_code in (200, 201)
+
+    file_resp = await client.get("/api/v2/files/by-filename/meta_upsert_update.fits/", headers=auth_headers)
+    assert file_resp.json()["metadata"] == {}
+
+    obs_resp = await client.get("/api/v2/observations/by-observation-name/obs_meta_upsert_update/", headers=auth_headers)
+    assert obs_resp.json()["metadata"] == {"quality": "good"}
+
+
+async def test_update_fitsfile_metadata_goes_only_to_observation(client, auth_headers, regular_user):
+    create = await client.post(
+        "/api/v2/files/",
+        json=make_file_payload(filename="meta_update.fits", obs_name="obs_meta_update"),
+        headers=auth_headers,
+    )
+    file_body = create.json()
+    file_body["metadata"] = {"quality": "good"}
+    resp = await client.put("/api/v2/files/", json=file_body, headers=auth_headers)
+    assert resp.status_code == 200
+    assert resp.json()["metadata"] == {}
+
+    obs_resp = await client.get("/api/v2/observations/by-observation-name/obs_meta_update/", headers=auth_headers)
+    assert obs_resp.json()["metadata"] == {"quality": "good"}
+
+
 # --- POST /api/v2/files/upsert ---
 
 async def test_upsert_creates_new_file(client, auth_headers, regular_user):

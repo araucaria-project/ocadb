@@ -20,6 +20,7 @@ from api.services.oca_geospatial_query import OcaWithin
 from api.services.query_builder import MultiSearchForm
 from ocadb.database import Connection
 from ocadb.migrations.fits_header_migration import run_pass1, run_pass2
+from ocadb.migrations.metadata_migration import run_pass1 as run_metadata_pass1, run_pass2 as run_metadata_pass2
 from ocadb.models import Observation, FitsHeader, SkyCoord
 from ocadb.models.file import FITSFile
 from ocadb.models.search_object import SearchObject, SearchTag
@@ -726,6 +727,98 @@ async def migrate_fits_header_status(
         token: Annotated[str, Depends(AuthService.validate_token)]
 ):
     job = await _fits_header_migration_jobs().find_one({"_id": _FITS_HEADER_MIGRATION_JOB_ID})
+    if job is None:
+        return {"status": "idle"}
+    return job
+
+
+# --- metadata -> Observation migration (see ocadb/migrations/metadata_migration.py) ---
+#
+# Same shape/rationale as the fits_header migration above: Mongo-persisted job state
+# (survives a Railway redeploy), moderator-gated trigger, dry-run by default.
+
+_METADATA_MIGRATION_JOB_ID = "metadata_migration"
+
+
+def _metadata_migration_jobs():
+    return Connection().database["migration_jobs"]  # same collection, distinct _id
+
+
+async def _run_metadata_migration(apply: bool) -> None:
+    jobs = _metadata_migration_jobs()
+
+    async def persist_progress(progress: dict) -> None:
+        await jobs.update_one(
+            {"_id": _METADATA_MIGRATION_JOB_ID},
+            {"$set": {"status": "running", "progress": progress}},
+        )
+
+    try:
+        pass1_result = await run_metadata_pass1(dry_run=not apply, on_progress=persist_progress)
+        if not apply:
+            await jobs.update_one(
+                {"_id": _METADATA_MIGRATION_JOB_ID},
+                {"$set": {
+                    "status": "done", "apply": False,
+                    "pass1": pass1_result, "pass2": None,
+                    "finished_at": datetime.utcnow().isoformat(),
+                }},
+            )
+            return
+
+        pass2_result = await run_metadata_pass2(on_progress=persist_progress)
+        await jobs.update_one(
+            {"_id": _METADATA_MIGRATION_JOB_ID},
+            {"$set": {
+                "status": "done", "apply": True,
+                "pass1": pass1_result, "pass2": pass2_result,
+                "finished_at": datetime.utcnow().isoformat(),
+            }},
+        )
+    except Exception as e:
+        log.error(f"metadata migration failed: {e}")
+        await jobs.update_one(
+            {"_id": _METADATA_MIGRATION_JOB_ID},
+            {"$set": {"status": "failed", "error": str(e), "finished_at": datetime.utcnow().isoformat()}},
+        )
+
+
+@router.post("/migrate-metadata", response_description="Start the metadata migration in the background",
+             status_code=status.HTTP_202_ACCEPTED)
+async def migrate_metadata(
+        moderator: Annotated[str, Depends(AuthService.require_moderator)],
+        apply: bool = False,
+        force: bool = False,
+):
+    """Merge metadata from FITSFile documents onto their parent Observation (ZDF wins over
+    RAW/other on key collision, mirroring fits_header's precedence). Defaults to a dry run
+    (Pass 1 only, no writes). Pass apply=true to also run Pass 2, which clears metadata from
+    every FITSFile document — unlike fits_header's Pass 2, this is freely re-runnable.
+
+    force=true bypasses the "already running" guard — needed if a previous run's process
+    was killed/redeployed mid-flight and left a stale "running" status behind.
+    """
+    jobs = _metadata_migration_jobs()
+    existing = await jobs.find_one({"_id": _METADATA_MIGRATION_JOB_ID})
+    if existing is not None and existing.get("status") == "running" and not force:
+        raise HTTPException(status_code=409, detail="metadata migration already running (pass force=true to override)")
+
+    await jobs.update_one(
+        {"_id": _METADATA_MIGRATION_JOB_ID},
+        {"$set": {"status": "running", "apply": apply, "started_at": datetime.utcnow().isoformat(),
+                  "started_by": moderator, "progress": None}},
+        upsert=True,
+    )
+    asyncio.create_task(_run_metadata_migration(apply))
+    return {"status": "accepted", "apply": apply,
+            "message": "Migration started. Poll /migrate-metadata/status for progress."}
+
+
+@router.get("/migrate-metadata/status", response_description="Get metadata migration job status")
+async def migrate_metadata_status(
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    job = await _metadata_migration_jobs().find_one({"_id": _METADATA_MIGRATION_JOB_ID})
     if job is None:
         return {"status": "idle"}
     return job

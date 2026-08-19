@@ -128,6 +128,15 @@ class FITSFile(FITSFileBase, Document):
         self.fits_header = None
         return header
 
+    def pop_metadata(self) -> dict:
+        """Detach metadata before this object is persisted — metadata must never be
+        written to FITSFile storage, only to the parent Observation. Unlike
+        pop_fits_header, metadata is a non-Optional dict, so it resets to {} not None.
+        """
+        metadata = self.metadata
+        self.metadata = {}
+        return metadata
+
     async def resolve_source_files(self) -> List["FITSFile"]:
         """Resolve source file references to actual documents.
 

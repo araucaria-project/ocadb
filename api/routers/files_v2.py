@@ -53,12 +53,13 @@ async def create_file(
 
             file_data.observation_id = observation.get_id()
             header = file_data.pop_fits_header()
+            metadata = file_data.pop_metadata()
             await file_data.insert()
 
             await observation.store_file(file_data, fits_header=header)
 
-            if file_data.metadata:
-                observation.store_metadata(file_data.metadata)
+            if metadata:
+                observation.store_metadata(metadata)
 
             await observation.replace()
     except DuplicateKeyError as e:
@@ -89,7 +90,6 @@ async def upsert_fitsfile(
                 "source_filenames": file_data.source_filenames,
                 "image_type": file_data.fits_header.IMAGETYP if file_data.fits_header else None,
                 "file_status": file_data.file_status,
-                "metadata": file_data.metadata,
                 "access_tags": file_data.access_tags,
                 "updated_at": datetime.utcnow(),
             },
@@ -133,13 +133,19 @@ async def upsert_fitsfile(
             FITSFile.filename == file_data.filename
         )
 
-        if file_data.fits_header is not None and file_data.obs_name is not None:
+        if file_data.obs_name is not None and (file_data.fits_header is not None or file_data.metadata):
             try:
                 observation = await get_observation_by_obs_name(file_data.obs_name, token=token)
-                if observation.adopt_header_if_precedent(file_data.file_class, file_data.fits_header):
+                changed = False
+                if file_data.fits_header is not None:
+                    changed = observation.adopt_header_if_precedent(file_data.file_class, file_data.fits_header)
+                if file_data.metadata:
+                    observation.store_metadata(file_data.metadata)
+                    changed = True
+                if changed:
                     await observation.replace()
             except HTTPException:
-                log.warning("upsert_fitsfile: could not adopt header — observation '%s' not found", file_data.obs_name)
+                log.warning("upsert_fitsfile: could not adopt header/metadata — observation '%s' not found", file_data.obs_name)
 
         file_data = updated_doc
 
@@ -154,6 +160,7 @@ async def update_fitsfile(
 
     file_data.updated_at = datetime.utcnow()
     header = file_data.pop_fits_header()
+    metadata = file_data.pop_metadata()
 
     try:
         await file_data.replace()
@@ -165,7 +172,8 @@ async def update_fitsfile(
     if observation is None:
         raise HTTPException(status_code=404, detail=f"Observation with name {file_data.obs_name} not found")
 
-    observation.store_metadata(file_data.metadata)
+    if metadata:
+        observation.store_metadata(metadata)
     observation.adopt_header_if_precedent(file_data.file_class, header)
     await observation.replace()
 

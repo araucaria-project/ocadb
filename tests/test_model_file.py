@@ -68,6 +68,36 @@ def test_fitsfile_all_file_classifications():
         assert f.file_class == cls
 
 
+# --- pop_fits_header / pop_metadata ---
+
+def test_pop_fits_header_detaches_and_derives_image_type():
+    header = make_fits_header(IMAGETYP="dark")
+    f = FITSFile(
+        filename="foo.fits",
+        file_class=FileClassification.RAW,
+        obs_name="obs001",
+        file_status=make_storage_status(),
+        fits_header=header,
+    )
+    popped = f.pop_fits_header()
+    assert popped == header
+    assert f.fits_header is None
+    assert f.image_type == "dark"
+
+
+def test_pop_metadata_detaches_and_resets_to_empty_dict():
+    f = FITSFile(
+        filename="foo.fits",
+        file_class=FileClassification.RAW,
+        obs_name="obs001",
+        file_status=make_storage_status(),
+        metadata={"quality": "good"},
+    )
+    popped = f.pop_metadata()
+    assert popped == {"quality": "good"}
+    assert f.metadata == {}  # reset to {}, not None — metadata is never Optional
+
+
 # --- StorageStatus ---
 
 def test_storage_status_all_not_stored():
