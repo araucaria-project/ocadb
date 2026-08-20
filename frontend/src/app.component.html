@@ -1943,12 +1943,6 @@
 
             <!-- File Info -->
             <div class="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
-              <div class="text-slate-500 uppercase tracking-wider">Telescope</div>
-              <div class="flex items-center gap-1.5 text-slate-300">
-                <span class="inline-block w-2 h-2 rounded-full shrink-0" [style.background-color]="getTelescopeColor(selectedObservation()?.fits_header?.['TELESCOP'])"></span>
-                {{ selectedObservation()?.fits_header?.['TELESCOP'] ?? '—' }}
-              </div>
-
               <div class="text-slate-500 uppercase tracking-wider">Obs Name</div>
               <div class="font-mono text-slate-300">{{ selectedFile()!.obs_name }}</div>
 
@@ -2026,21 +2020,6 @@
                       <span class="text-[10px] text-slate-500 shrink-0">⏳ scheduled</span>
                     </div>
                   }
-                  }
-                </div>
-              </div>
-            }
-
-            <!-- FITS Header (from the parent Observation — files no longer store their own header) -->
-            @if (headerEntries2(selectedObservation()?.fits_header).length > 0) {
-              <div>
-                <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">FITS Header</div>
-                <div class="bg-space-950 rounded p-3 font-mono text-[11px] max-h-64 overflow-y-auto space-y-0.5">
-                  @for (entry of headerEntries2(selectedObservation()?.fits_header); track entry[0]) {
-                    <div class="flex items-baseline gap-4">
-                      <span class="text-blue-400/70 whitespace-nowrap w-28 shrink-0">{{ entry[0] }}</span>
-                      <span class="text-slate-300 break-all flex-1">{{ entry[1] }}</span>
-                    </div>
                   }
                 </div>
               </div>
