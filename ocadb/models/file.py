@@ -30,6 +30,7 @@ _CLOUD_UPLOAD_PENDING_STATUSES = [
     StorageStatusType.NOT_STORED.value,
     StorageStatusType.DELETED.value,
     StorageStatusType.CORRUPTED.value,
+    StorageStatusType.ON_DEMAND.value,
 ]
 _CLOUD_UPLOAD_ALREADY_FLAGGED_STATUSES = _CLOUD_UPLOAD_PENDING_STATUSES + [StorageStatusType.REQUESTED.value]
 
@@ -88,7 +89,10 @@ class FITSFile(FITSFileBase, Document):
         Called when a user asks to download files (e.g. via the download-script
         endpoint). Files already stored/scheduled/queued/storing in cloud are left
         untouched — this is purely a signal for an operator to review and decide
-        whether/when to actually run the upload.
+        whether/when to actually run the upload. ON_DEMAND files (available at the
+        producer but not proactively uploaded) are flipped to REQUESTED just like
+        NOT_STORED/DELETED/CORRUPTED, since a download request is exactly the signal
+        they were waiting for.
         """
         if not filenames:
             return
