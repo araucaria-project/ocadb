@@ -83,6 +83,7 @@ async def upsert_fitsfile(
             "$set": {
                 "obs_name": file_data.obs_name,
                 "file_class": file_data.file_class,
+                "path": str(file_data.path) if file_data.path else None,
                 "filesize": file_data.filesize,
                 "mtime": file_data.mtime,
                 "digest": file_data.digest,
