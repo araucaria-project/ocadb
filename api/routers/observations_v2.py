@@ -21,6 +21,7 @@ from api.services.query_builder import MultiSearchForm
 from ocadb.database import Connection
 from ocadb.migrations.fits_header_migration import run_pass1, run_pass2
 from ocadb.migrations.metadata_migration import run_pass1 as run_metadata_pass1, run_pass2 as run_metadata_pass2
+from ocadb.migrations.storage_status_migration import run_pass1 as run_storage_status_pass1
 from ocadb.models import Observation, FitsHeader, SkyCoord
 from ocadb.models.file import FITSFile
 from ocadb.models.search_object import SearchObject, SearchTag
@@ -819,6 +820,89 @@ async def migrate_metadata_status(
         token: Annotated[str, Depends(AuthService.validate_token)]
 ):
     job = await _metadata_migration_jobs().find_one({"_id": _METADATA_MIGRATION_JOB_ID})
+    if job is None:
+        return {"status": "idle"}
+    return job
+
+
+# --- FITSFile storage status migration: scheduled -> on_demand (see
+# ocadb/migrations/storage_status_migration.py) ---
+#
+# Same shape/rationale as the fits_header/metadata migrations above: Mongo-persisted
+# job state (survives a Railway redeploy), moderator-gated trigger, dry-run by default.
+# Single pass only — flipping a status field is not destructive, so there's no
+# separate pass2 to strip anything afterwards.
+
+_STORAGE_STATUS_MIGRATION_JOB_ID = "storage_status_migration"
+
+
+def _storage_status_migration_jobs():
+    return Connection().database["migration_jobs"]  # same collection, distinct _id
+
+
+async def _run_storage_status_migration(apply: bool) -> None:
+    jobs = _storage_status_migration_jobs()
+
+    async def persist_progress(progress: dict) -> None:
+        await jobs.update_one(
+            {"_id": _STORAGE_STATUS_MIGRATION_JOB_ID},
+            {"$set": {"status": "running", "progress": progress}},
+        )
+
+    try:
+        pass1_result = await run_storage_status_pass1(dry_run=not apply, on_progress=persist_progress)
+        await jobs.update_one(
+            {"_id": _STORAGE_STATUS_MIGRATION_JOB_ID},
+            {"$set": {
+                "status": "done", "apply": apply,
+                "pass1": pass1_result,
+                "finished_at": datetime.utcnow().isoformat(),
+            }},
+        )
+    except Exception as e:
+        log.error(f"storage status migration failed: {e}")
+        await jobs.update_one(
+            {"_id": _STORAGE_STATUS_MIGRATION_JOB_ID},
+            {"$set": {"status": "failed", "error": str(e), "finished_at": datetime.utcnow().isoformat()}},
+        )
+
+
+@router.post("/migrate-storage-status", response_description="Start the storage status migration in the background",
+             status_code=status.HTTP_202_ACCEPTED)
+async def migrate_storage_status(
+        moderator: Annotated[str, Depends(AuthService.require_moderator)],
+        apply: bool = False,
+        force: bool = False,
+):
+    """Flip FITSFile storage status from SCHEDULED to ON_DEMAND across all three
+    storage locations (observatory, hub, cloud). Defaults to a dry run (report only,
+    no writes). Pass apply=true to actually write the changes — safe to re-run since
+    files with no SCHEDULED location are skipped.
+
+    force=true bypasses the "already running" guard — needed if a previous run's process
+    was killed/redeployed mid-flight and left a stale "running" status behind.
+    """
+    jobs = _storage_status_migration_jobs()
+    existing = await jobs.find_one({"_id": _STORAGE_STATUS_MIGRATION_JOB_ID})
+    if existing is not None and existing.get("status") == "running" and not force:
+        raise HTTPException(status_code=409, detail="storage status migration already running (pass force=true to override)")
+
+    await jobs.update_one(
+        {"_id": _STORAGE_STATUS_MIGRATION_JOB_ID},
+        {"$set": {"status": "running", "apply": apply, "started_at": datetime.utcnow().isoformat(),
+                  "started_by": moderator, "progress": None}},
+        upsert=True,
+    )
+    asyncio.create_task(_run_storage_status_migration(apply))
+    return {"status": "accepted", "apply": apply,
+            "message": "Migration started. Poll /migrate-storage-status/status for progress."}
+
+
+@router.get("/migrate-storage-status/status", response_description="Get storage status migration job status")
+async def migrate_storage_status_status(
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    job = await _storage_status_migration_jobs().find_one({"_id": _STORAGE_STATUS_MIGRATION_JOB_ID})
     if job is None:
         return {"status": "idle"}
     return job

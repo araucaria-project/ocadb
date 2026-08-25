@@ -39,3 +39,6 @@ package-lock.json
 
 .env
 *.env
+
+migrate_fits_header.md
+migrate_metadata.md
