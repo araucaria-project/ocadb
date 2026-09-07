@@ -203,52 +203,27 @@
               </div>
               @if (coneSearchExpanded()) {
                 <div class="mt-2 space-y-2">
-                  <div class="flex gap-2">
-                    <div class="flex-1">
-                      <label class="block text-[10px] text-slate-500 mb-1">RA (deg)</label>
-                      <div class="relative">
-                        <input type="number" step="any"
-                          [ngModel]="coneRa()"
-                          (ngModelChange)="coneRa.set($event); coneSearchError.set(null)"
-                          (focus)="otherFieldsFocused.set(true)"
-                          (blur)="otherFieldsFocused.set(false)"
-                          (keyup.enter)="search()"
-                          placeholder="0.0"
-                          class="w-full bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs text-slate-300 focus:border-accent-500 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                          [class.pr-6]="coneRa() != null"
-                          [class.border-red-500]="coneSearchError() && coneDec() != null && coneRa() == null"
-                          [style.border-color]="coneRa() != null && !(coneSearchError() && coneDec() != null && coneRa() == null) ? 'var(--color-accent-500)' : null">
-                        @if (coneRa() != null) {
-                          <button type="button" tabindex="-1"
-                            (click)="coneRa.set(null); coneSearchError.set(null)"
-                            class="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
-                            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                          </button>
-                        }
-                      </div>
-                    </div>
-                    <div class="flex-1">
-                      <label class="block text-[10px] text-slate-500 mb-1">Dec (deg)</label>
-                      <div class="relative">
-                        <input type="number" step="any"
-                          [ngModel]="coneDec()"
-                          (ngModelChange)="coneDec.set($event); coneSearchError.set(null)"
-                          (focus)="otherFieldsFocused.set(true)"
-                          (blur)="otherFieldsFocused.set(false)"
-                          (keyup.enter)="search()"
-                          placeholder="0.0"
-                          class="w-full bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs text-slate-300 focus:border-accent-500 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                          [class.pr-6]="coneDec() != null"
-                          [class.border-red-500]="coneSearchError() && coneRa() != null && coneDec() == null"
-                          [style.border-color]="coneDec() != null && !(coneSearchError() && coneRa() != null && coneDec() == null) ? 'var(--color-accent-500)' : null">
-                        @if (coneDec() != null) {
-                          <button type="button" tabindex="-1"
-                            (click)="coneDec.set(null); coneSearchError.set(null)"
-                            class="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
-                            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                          </button>
-                        }
-                      </div>
+                  <div>
+                    <label class="block text-[10px] text-slate-500 mb-1">RA Dec</label>
+                    <div class="relative">
+                      <input type="text"
+                        [ngModel]="coneCoordinates()"
+                        (ngModelChange)="coneCoordinates.set($event); coneSearchError.set(null)"
+                        (focus)="otherFieldsFocused.set(true)"
+                        (blur)="otherFieldsFocused.set(false)"
+                        (keyup.enter)="search()"
+                        placeholder="e.g. 161.265, -59.684 or 10:45:03.6 -59:41:04"
+                        class="w-full bg-space-950 border border-space-700 rounded px-2 py-1.5 text-xs text-slate-300 focus:border-accent-500 focus:outline-none"
+                        [class.pr-6]="coneCoordinates()"
+                        [class.border-red-500]="coneSearchError()"
+                        [style.border-color]="coneCoordinates() && !coneSearchError() ? 'var(--color-accent-500)' : null">
+                      @if (coneCoordinates()) {
+                        <button type="button" tabindex="-1"
+                          (click)="coneCoordinates.set(''); coneSearchError.set(null)"
+                          class="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none">
+                          <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                      }
                     </div>
                   </div>
                   @if (coneSearchError()) {
@@ -915,7 +890,7 @@
         <!-- Table -->
         <div class="flex-1 overflow-auto relative" #tableScrollContainer (scroll)="updateSelectionIndicators()">
           @if (ocadbService.loading()) {
-            <div class="fixed top-0 bottom-0 left-0 right-0 md:left-80 z-20 flex items-center justify-center backdrop-blur-sm bg-space-950/40">
+            <div class="fixed top-0 bottom-0 left-0 right-0 md:left-80 z-20 flex flex-col items-center justify-center gap-3 backdrop-blur-sm bg-space-950/40">
               <!-- Orrery spinner -->
               <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <!-- Outer orbit ring -->
@@ -941,6 +916,9 @@
                   <animateTransform attributeName="transform" type="rotate" from="0 40 40" to="360 40 40" dur="4.2s" repeatCount="indefinite"/>
                 </circle>
               </svg>
+              @if (ocadbService.isInitialLoad()) {
+                <p class="text-sm text-slate-400">Initializing application</p>
+              }
             </div>
           }
           @if (displayedObservations().length === 0 && !ocadbService.loading()) {

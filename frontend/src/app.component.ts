@@ -109,8 +109,7 @@ export class AppComponent implements OnInit {
   obsNameFocused = signal(false);
   otherFieldsFocused = signal(false);
 
-  coneRa = signal<number | null>(null);
-  coneDec = signal<number | null>(null);
+  coneCoordinates = signal<string>('');
   coneRadius = signal<number>(60);
   coneEpoch = signal('2000.0');
   coneSearchError = signal<string | null>(null);
@@ -845,7 +844,7 @@ export class AppComponent implements OnInit {
       f.filter?.length || f.date_obs_from || f.date_obs_to ||
       f.pi || f.sciprog || f.jd_from != null || f.jd_to != null ||
       f.oca_jd_from != null || f.oca_jd_to != null ||
-      f.file_types?.length || this.coneRa() != null || this.coneSearchExpanded());
+      f.file_types?.length || this.coneCoordinates().trim() !== '' || this.coneSearchExpanded());
   }
 
 
@@ -859,6 +858,7 @@ export class AppComponent implements OnInit {
       this.ocadbService.loading.set(true);
       const obs = await this.ocadbService.fetchObservationByName(this.filters().obs_name!);
       this.ocadbService.loading.set(false);
+      this.ocadbService.isInitialLoad.set(false);
       const results = obs ? [obs] : [];
       this.displayedObservations.set(results);
       this.ocadbService.pagination.update(p => ({ ...p, total: results.length, page: 1 }));
@@ -866,17 +866,11 @@ export class AppComponent implements OnInit {
       return;
     }
 
-    const hasRa = this.coneRa() != null;
-    const hasDec = this.coneDec() != null;
-    if (this.coneSearchExpanded() && hasRa !== hasDec) {
-      this.coneSearchError.set('Both RA and Dec are required for cone search.');
-      return;
-    }
     this.coneSearchError.set(null);
 
-    const cone_search = (this.coneSearchExpanded() && hasRa && hasDec) ? {
-      ra: this.coneRa()!,
-      dec: this.coneDec()!,
+    const coordinates = this.coneCoordinates().trim();
+    const cone_search = (this.coneSearchExpanded() && coordinates) ? {
+      coordinates,
       arc_seconds: this.coneRadius(),
       epoch: this.coneEpoch() || '2000.0'
     } : null;
@@ -884,6 +878,10 @@ export class AppComponent implements OnInit {
     this.ocadbService.pagination.update(p => ({ ...p, page: 1 }));
     const baseFilters = this.coneSearchExpanded() ? { ...this.filters(), object: null } : this.filters();
     const results = await this.ocadbService.searchObservations({ ...baseFilters, cone_search }, 1, this.getSortExpr());
+    this.ocadbService.isInitialLoad.set(false);
+    if (cone_search && this.ocadbService.error()?.includes('Invalid search')) {
+      this.coneSearchError.set(this.ocadbService.error());
+    }
     this.displayedObservations.set(results);
     this.loadDropdowns();
   }
@@ -911,11 +909,9 @@ export class AppComponent implements OnInit {
 
   async goToPage(page: number) {
     if (page < 1 || page > this.totalPages) return;
-    const hasRa = this.coneRa() != null;
-    const hasDec = this.coneDec() != null;
-    const cone_search = (this.coneSearchExpanded() && hasRa && hasDec) ? {
-      ra: this.coneRa()!,
-      dec: this.coneDec()!,
+    const coordinates = this.coneCoordinates().trim();
+    const cone_search = (this.coneSearchExpanded() && coordinates) ? {
+      coordinates,
       arc_seconds: this.coneRadius(),
       epoch: this.coneEpoch() || '2000.0'
     } : null;
@@ -1253,22 +1249,21 @@ export class AppComponent implements OnInit {
 
   async toggleConeSearch() {
     if (this.coneSearchExpanded()) {
-      const wasActive = this.coneRa() != null || this.coneDec() != null || !!this.filters().object;
+      const wasActive = this.coneCoordinates().trim() !== '' || !!this.filters().object;
       this.coneSearchExpanded.set(false);
       if (wasActive) this.search();
     } else {
       const currentObject = this.filters().object ?? null;
-      const alreadyHasCoords = this.coneRa() != null || this.coneDec() != null;
+      const alreadyHasCoords = this.coneCoordinates().trim() !== '';
       const objectChanged = currentObject !== this._coneObjectKey;
       this.coneSearchExpanded.set(true);
       if (currentObject && (!alreadyHasCoords || objectChanged)) {
-        if (objectChanged) { this.coneRa.set(null); this.coneDec.set(null); }
+        if (objectChanged) { this.coneCoordinates.set(''); }
         const match = this.objects().find(
           o => (o.first_alias ?? o.canonized_name) === currentObject || o.canonized_name === currentObject
         );
         if (match?.ra != null && match?.dec != null) {
-          this.coneRa.set(match.ra);
-          this.coneDec.set(match.dec);
+          this.coneCoordinates.set(`${match.ra}, ${match.dec}`);
           this._coneObjectKey = currentObject;
         }
       }
@@ -1409,8 +1404,7 @@ export class AppComponent implements OnInit {
   }
 
   onObjectSelected() {
-    this.coneRa.set(null);
-    this.coneDec.set(null);
+    this.coneCoordinates.set('');
     this._coneObjectKey = null;
   }
 
@@ -1418,8 +1412,7 @@ export class AppComponent implements OnInit {
     this.objectQuery.set('');
     this.updateFilter('object', '');
     this.objectDropdownOpen.set(false);
-    this.coneRa.set(null);
-    this.coneDec.set(null);
+    this.coneCoordinates.set('');
     this._coneObjectKey = null;
   }
 
@@ -1451,8 +1444,7 @@ export class AppComponent implements OnInit {
     this.filterQuery.set('');
     this.coneSearchExpanded.set(false);
     this.dateRangeMode.set('date');
-    this.coneRa.set(null);
-    this.coneDec.set(null);
+    this.coneCoordinates.set('');
     this.coneRadius.set(60);
     this.coneEpoch.set('2000.0');
     this.coneSearchError.set(null);

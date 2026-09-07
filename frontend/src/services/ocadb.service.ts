@@ -116,8 +116,7 @@ export interface SearchFilters {
   file_types?: string[] | null;
   tags?: string[] | null;
   cone_search?: {
-    ra: number;
-    dec: number;
+    coordinates: string;
     arc_seconds: number;
     epoch?: string;
   } | null;
@@ -138,6 +137,7 @@ export class OcadbService {
   private readonly apiLog = inject(ApiLogService);
 
   loading = signal(false);
+  isInitialLoad = signal(true);
   error = signal<string | null>(null);
 
   token = signal<string | null>(null);

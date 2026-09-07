@@ -5,6 +5,8 @@ import pymongo
 from beanie import Document, Indexed
 from pydantic import BaseModel, Field, field_validator
 
+from ocadb.utils.radec import parse_radec
+
 class Point2D(BaseModel):
     """GeoJSON Point 2D geometry object"""
     type: Literal["Point"] = "Point"
@@ -66,13 +68,19 @@ class ArchDistance(BaseModel):
     _geo_meters: float = 0.0
 
     def __init__(self, **kwargs):
+        coordinates = kwargs.pop('coordinates', None)
+        if coordinates:
+            ra, dec = parse_radec(coordinates)
+            kwargs.setdefault('ra', ra)
+            kwargs.setdefault('dec', dec)
+
         super().__init__(**kwargs)
 
         # pop the corresponding args
-        self.ra = kwargs.pop('ra', 0.0)
-        self.dec = kwargs.pop('dec', 0.0)
-        self.epoch = kwargs.pop('epoch', "J2000")
-        self.arc_seconds = kwargs.pop('arc_seconds', 0.0)
+        self.ra = kwargs.get('ra', 0.0)
+        self.dec = kwargs.get('dec', 0.0)
+        self.epoch = kwargs.get('epoch', "2000.0")
+        self.arc_seconds = kwargs.get('arc_seconds', 0.0)
 
         self._sky_coord = SkyCoord(radec=(self.ra, self.dec))
         self._degrees = self.arc_seconds / 3600.0
