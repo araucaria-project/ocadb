@@ -5,11 +5,12 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { OcadbService, Observation, SearchFilters, SearchObject, SearchTag, FitsFile, StorageStatusType, ViewerConf, DEFAULT_VIEWER_CONF } from './services/ocadb.service';
 import { ApiLogService, ApiLogEntry } from './services/api-log.service';
 import { FlatpickrDirective } from './flatpickr.directive';
+import { InfoIconComponent } from './info-icon.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, FormsModule, FlatpickrDirective],
+  imports: [CommonModule, FormsModule, FlatpickrDirective, InfoIconComponent],
   templateUrl: './app.component.html'
 })
 export class AppComponent implements OnInit {
@@ -880,7 +881,8 @@ export class AppComponent implements OnInit {
     const results = await this.ocadbService.searchObservations({ ...baseFilters, cone_search }, 1, this.getSortExpr());
     this.ocadbService.isInitialLoad.set(false);
     if (cone_search && this.ocadbService.error()?.includes('Invalid search')) {
-      this.coneSearchError.set(this.ocadbService.error());
+      this.coneSearchError.set('Not a valid RA/Dec pair.');
+      this.ocadbService.error.set(null);
     }
     this.displayedObservations.set(results);
     this.loadDropdowns();

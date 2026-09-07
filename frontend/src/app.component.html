@@ -120,7 +120,7 @@
 
           <!-- Object -->
           <div [class.opacity-40]="obsNameMode" [class.pointer-events-none]="obsNameMode">
-            <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Object</label>
+            <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Object<app-info-icon text="Filter by astronomical object name. Aliases are matched automatically." /></label>
             <div class="relative" [class.opacity-40]="coneSearchExpanded()">
               <div class="relative flex items-center">
                 <input type="text"
@@ -204,7 +204,7 @@
               @if (coneSearchExpanded()) {
                 <div class="mt-2 space-y-2">
                   <div>
-                    <label class="block text-[10px] text-slate-500 mb-1">RA Dec</label>
+                    <label class="block text-[10px] text-slate-500 mb-1">RA Dec<app-info-icon text="Coordinates for cone search, e.g. '161.265, -59.684' (decimal degrees) or '10:45:03.6 -59:41:04' (sexagesimal)." /></label>
                     <div class="relative">
                       <input type="text"
                         [ngModel]="coneCoordinates()"
@@ -231,7 +231,7 @@
                   }
                   <div class="flex gap-2">
                     <div class="flex-1">
-                      <label class="block text-[10px] text-slate-500 mb-1">Radius (arcsec)</label>
+                      <label class="block text-[10px] text-slate-500 mb-1">Radius (arcsec)<app-info-icon text="Search radius around the given coordinates, in arcseconds." /></label>
                       <input type="number" step="any" min="0"
                         [ngModel]="coneRadius()"
                         (ngModelChange)="coneRadius.set($event)"
@@ -243,7 +243,7 @@
                         [style.border-color]="coneRadius() !== 60 ? 'var(--color-accent-500)' : null">
                     </div>
                     <div class="flex-1">
-                      <label class="block text-[10px] text-slate-500 mb-1">Epoch</label>
+                      <label class="block text-[10px] text-slate-500 mb-1">Epoch<app-info-icon text="Equinox/epoch of the given coordinates, e.g. 2000.0 for J2000." /></label>
                       <input type="text"
                         [ngModel]="coneEpoch()"
                         (ngModelChange)="coneEpoch.set($event)"
@@ -262,7 +262,7 @@
 
           <!-- Obs Name -->
           <div [class.opacity-40]="otherFiltersActive" [class.pointer-events-none]="otherFiltersActive">
-            <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Obs Name</label>
+            <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Obs Name<app-info-icon text="Filter by exact observation file name. Disables the other filters while active." /></label>
             <div class="relative">
               <input type="text"
                 [ngModel]="filters().obs_name ?? ''"
@@ -290,7 +290,7 @@
             <!-- Telescope + Filter -->
             <div class="flex gap-2">
               <div class="flex-1">
-              <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Telescope</label>
+              <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Telescope<app-info-icon text="Filter by the telescope that captured the observation." /></label>
               <div class="relative">
                 <button type="button"
                   (click)="telescopeDropdownOpen.set(!telescopeDropdownOpen()); telescopeHighlightedIndex.set(-1)"
@@ -335,7 +335,7 @@
               </div>
 
               <div class="flex-1">
-              <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Filter</label>
+              <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Filter<app-info-icon text="Filter by the photometric filter used. Options depend on the selected telescope." /></label>
               <div class="relative">
                 <div class="relative flex items-center">
                   <input type="text"
@@ -397,7 +397,7 @@
             <!-- Obs Type + Image Type -->
             <div class="flex gap-2">
               <div class="flex-1">
-                <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Obs Type</label>
+                <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Obs Type<app-info-icon text="Filter by observation type, e.g. science or calibration frames." /></label>
                 <div class="relative">
                   <button type="button"
                     (click)="obsTypeDropdownOpen.set(!obsTypeDropdownOpen()); obsTypeHighlightedIndex.set(-1)"
@@ -437,7 +437,7 @@
               </div>
               @if (filters().obstype === 'calib') {
                 <div class="flex-1">
-                  <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Calib Type</label>
+                  <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Calib Type<app-info-icon text="Filter by calibration frame type, e.g. bias, dark, or flat." /></label>
                   <div class="relative">
                     <button type="button"
                       (click)="imageTypDropdownOpen.set(!imageTypDropdownOpen()); imageTypHighlightedIndex.set(-1)"
@@ -483,7 +483,7 @@
             <!-- Date / OCA-JD Range -->
             <div>
               <div class="flex items-center gap-2 mb-1">
-                <label class="text-[10px] text-slate-400 uppercase tracking-wider">Range</label>
+                <label class="text-[10px] text-slate-400 uppercase tracking-wider flex items-center">Range<app-info-icon text="Restrict results to observations within this date/time or OCA Julian Date range." /></label>
                 <div class="flex rounded overflow-hidden border border-space-700 text-[10px]">
                   <button type="button"
                     (click)="switchDateRangeMode('date')"
@@ -595,7 +595,7 @@
             <!-- PI + Program -->
             <div class="flex gap-2">
               <div class="flex-1">
-                <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">PI</label>
+                <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">PI<app-info-icon text="Filter by the Principal Investigator of the observing program." /></label>
                 <div class="relative">
                   <div class="relative flex items-center">
                     <input type="text"
@@ -653,7 +653,7 @@
                 </div>
               </div>
               <div class="flex-1">
-                <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Program</label>
+                <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Program<app-info-icon text="Filter by the scientific program name." /></label>
                 <div class="relative">
                   <div class="relative flex items-center">
                     <input type="text"
@@ -714,7 +714,7 @@
 
             <!-- Tags filter -->
             <div [class.opacity-40]="filters().obs_name">
-              <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Tags</label>
+              <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Tags<app-info-icon text="Filter by access/storage tags attached to observations." /></label>
 
               <!-- Selected tags list -->
               @if (filters().tags?.length) {
