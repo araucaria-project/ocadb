@@ -22,6 +22,7 @@ from ocadb.database import Connection
 from ocadb.migrations.fits_header_migration import run_pass1, run_pass2
 from ocadb.migrations.metadata_migration import run_pass1 as run_metadata_pass1, run_pass2 as run_metadata_pass2
 from ocadb.migrations.storage_status_migration import run_pass1 as run_storage_status_pass1
+from ocadb.migrations.source_filenames_migration import run_pass1 as run_source_filenames_pass1
 from ocadb.models import Observation, FitsHeader, SkyCoord
 from ocadb.models.file import FITSFile
 from ocadb.models.search_object import SearchObject, SearchTag
@@ -903,6 +904,89 @@ async def migrate_storage_status_status(
         token: Annotated[str, Depends(AuthService.validate_token)]
 ):
     job = await _storage_status_migration_jobs().find_one({"_id": _STORAGE_STATUS_MIGRATION_JOB_ID})
+    if job is None:
+        return {"status": "idle"}
+    return job
+
+
+# --- FITSFile source_filenames migration: clear source_filenames on RAW files (see
+# ocadb/migrations/source_filenames_migration.py) ---
+#
+# Same shape/rationale as the migrations above: Mongo-persisted job state (survives
+# a Railway redeploy), moderator-gated trigger, dry-run by default. Single pass only —
+# clearing a list back to [] is not destructive, so there's no separate pass2.
+
+_SOURCE_FILENAMES_MIGRATION_JOB_ID = "source_filenames_migration"
+
+
+def _source_filenames_migration_jobs():
+    return Connection().database["migration_jobs"]  # same collection, distinct _id
+
+
+async def _run_source_filenames_migration(apply: bool) -> None:
+    jobs = _source_filenames_migration_jobs()
+
+    async def persist_progress(progress: dict) -> None:
+        await jobs.update_one(
+            {"_id": _SOURCE_FILENAMES_MIGRATION_JOB_ID},
+            {"$set": {"status": "running", "progress": progress}},
+        )
+
+    try:
+        pass1_result = await run_source_filenames_pass1(dry_run=not apply, on_progress=persist_progress)
+        await jobs.update_one(
+            {"_id": _SOURCE_FILENAMES_MIGRATION_JOB_ID},
+            {"$set": {
+                "status": "done", "apply": apply,
+                "pass1": pass1_result,
+                "finished_at": datetime.utcnow().isoformat(),
+            }},
+        )
+    except Exception as e:
+        log.error(f"source filenames migration failed: {e}")
+        await jobs.update_one(
+            {"_id": _SOURCE_FILENAMES_MIGRATION_JOB_ID},
+            {"$set": {"status": "failed", "error": str(e), "finished_at": datetime.utcnow().isoformat()}},
+        )
+
+
+@router.post("/migrate-source-filenames", response_description="Start the source_filenames migration in the background",
+             status_code=status.HTTP_202_ACCEPTED)
+async def migrate_source_filenames(
+        moderator: Annotated[str, Depends(AuthService.require_moderator)],
+        apply: bool = False,
+        force: bool = False,
+):
+    """Clear FITSFile.source_filenames back to [] for every file with file_class == RAW.
+    A bug in source_files list generation left some RAW files with a non-empty
+    source_filenames list; RAW files never have source files by definition. Defaults
+    to a dry run (report only, no writes). Pass apply=true to actually write the
+    changes — safe to re-run since files already at [] are skipped.
+
+    force=true bypasses the "already running" guard — needed if a previous run's process
+    was killed/redeployed mid-flight and left a stale "running" status behind.
+    """
+    jobs = _source_filenames_migration_jobs()
+    existing = await jobs.find_one({"_id": _SOURCE_FILENAMES_MIGRATION_JOB_ID})
+    if existing is not None and existing.get("status") == "running" and not force:
+        raise HTTPException(status_code=409, detail="source filenames migration already running (pass force=true to override)")
+
+    await jobs.update_one(
+        {"_id": _SOURCE_FILENAMES_MIGRATION_JOB_ID},
+        {"$set": {"status": "running", "apply": apply, "started_at": datetime.utcnow().isoformat(),
+                  "started_by": moderator, "progress": None}},
+        upsert=True,
+    )
+    asyncio.create_task(_run_source_filenames_migration(apply))
+    return {"status": "accepted", "apply": apply,
+            "message": "Migration started. Poll /migrate-source-filenames/status for progress."}
+
+
+@router.get("/migrate-source-filenames/status", response_description="Get source_filenames migration job status")
+async def migrate_source_filenames_status(
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    job = await _source_filenames_migration_jobs().find_one({"_id": _SOURCE_FILENAMES_MIGRATION_JOB_ID})
     if job is None:
         return {"status": "idle"}
     return job
