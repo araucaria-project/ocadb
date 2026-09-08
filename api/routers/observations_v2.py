@@ -129,6 +129,35 @@ async def get_observation_short(
         raise HTTPException(status_code=404, detail=f"Observation with ID {id} not found")
     return observation
 
+@router.get("/{id}/file-lineage", response_description="Full source-file ancestry graph for an observation")
+async def get_file_lineage(
+        id: PydanticObjectId,
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    """Full transitive ancestry of this observation's files: every file linked to the
+    observation, plus every source file they derive from (and those files' own sources,
+    recursively — chains can be multi-level, e.g. RAW -> MASTER -> ZDF, and cross-observation
+    since calibration frames are shared). See FITSFile.resolve_lineage for the walk itself.
+    """
+    observation = await Observation.get(id, fetch_links=True)
+    if observation is None:
+        raise HTTPException(status_code=404, detail=f"Observation {id} not found")
+
+    nodes, edges = await FITSFile.resolve_lineage(observation.files)
+    return {
+        "roots": [f.filename for f in observation.files],
+        "nodes": {
+            name: {
+                "file_class": f.file_class,
+                "obs_name": f.obs_name,
+                "cloud_status": f.file_status.cloud.status,
+                "cloud_ready": f.file_status.cloud.ready,
+            }
+            for name, f in nodes.items()
+        },
+        "edges": [{"from": child, "to": source} for child, source in edges],
+    }
+
 @router.put("/{id}/metadata", response_description="Update observation metadata", status_code=200)
 async def update_observation_metadata(
     id: PydanticObjectId,

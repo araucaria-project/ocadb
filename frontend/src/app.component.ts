@@ -2,10 +2,18 @@ import { Component, signal, computed, inject, OnInit, ElementRef, ViewChild, eff
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { OcadbService, Observation, SearchFilters, SearchObject, SearchTag, FitsFile, StorageStatusType, ViewerConf, DEFAULT_VIEWER_CONF } from './services/ocadb.service';
+import { OcadbService, Observation, SearchFilters, SearchObject, SearchTag, FitsFile, StorageStatusType, ViewerConf, DEFAULT_VIEWER_CONF, FileLineage } from './services/ocadb.service';
 import { ApiLogService, ApiLogEntry } from './services/api-log.service';
 import { FlatpickrDirective } from './flatpickr.directive';
 import { InfoIconComponent } from './info-icon.component';
+
+interface LineageRow {
+  filename: string;
+  depth: number;
+  isReference: boolean;
+  node: FileLineage['nodes'][string] | null;
+  usedByCount: number;
+}
 
 @Component({
   selector: 'app-root',
@@ -52,6 +60,8 @@ export class AppComponent implements OnInit {
     return m ? this.formatJsonHtml(m.metadata) : null;
   });
   selectedObservation = signal<Observation | null>(null);
+  selectedLineage = signal<FileLineage | null>(null);
+  lineageLoading = signal(false);
   showFilters = signal(true);
   showDebugPanel = signal(false);
   selectedObsIds = signal<Set<string>>(new Set());
@@ -390,6 +400,8 @@ export class AppComponent implements OnInit {
     this.selectedObservation.set(obs);
     this.filesLoading.set(true);
     this.calibrationFilesLoading.set(true);
+    this.sourceFilesView.set('list');
+    this.selectedLineage.set(null);
     if (!obs._id) return;
     const full = await this.ocadbService.fetchObservationById(obs._id);
     if (!full || this.selectedObservation()?._id !== obs._id) return;
@@ -399,6 +411,84 @@ export class AppComponent implements OnInit {
       list.map(o => o._id === full._id ? full : o)
     );
   }
+
+  sourceFilesView = signal<'list' | 'lineage'>('list');
+
+  showSourceFilesListView() {
+    this.sourceFilesView.set('list');
+  }
+
+  async showSourceFilesLineageView() {
+    this.sourceFilesView.set('lineage');
+    if (this.selectedLineage()) return; // already fetched for the current observation
+    const obs = this.selectedObservation();
+    if (!obs?._id) return;
+    this.lineageLoading.set(true);
+    const lineage = await this.ocadbService.fetchFileLineage(obs._id);
+    this.lineageLoading.set(false);
+    this.selectedLineage.set(lineage);
+  }
+
+  /** Flattens the lineage graph into an ordered, indented row list for display.
+   * A root (one of the observation's own files) gets its own top-level row only if
+   * nothing else in the graph already points to it as a source — e.g. a RAW file that's
+   * itself listed as one of its sibling ZDF's sources is just the ZDF's own RAW frame,
+   * not an independent top-level entry, so it's left nested under the ZDF instead of
+   * duplicated at the top. A source file (root or not) is fully expanded — with its own
+   * sources recursed into — the first time it's encountered anywhere in the walk; every
+   * later occurrence, i.e. it's shared by another file, is rendered as a lightweight
+   * reference row instead of being re-expanded, tagged with how many files use it. */
+  lineageRows = computed<LineageRow[]>(() => {
+    const lineage = this.selectedLineage();
+    if (!lineage) return [];
+
+    const sourcesOf = new Map<string, string[]>();
+    const usedByOf = new Map<string, string[]>();
+    for (const e of lineage.edges) {
+      if (!sourcesOf.has(e.from)) sourcesOf.set(e.from, []);
+      sourcesOf.get(e.from)!.push(e.to);
+      if (!usedByOf.has(e.to)) usedByOf.set(e.to, []);
+      usedByOf.get(e.to)!.push(e.from);
+    }
+
+    const rendered = new Set<string>();
+    const rows: LineageRow[] = [];
+
+    const makeRow = (filename: string, depth: number, isReference: boolean): LineageRow => ({
+      filename, depth, isReference,
+      node: lineage.nodes[filename] ?? null,
+      usedByCount: usedByOf.get(filename)?.length ?? 0,
+    });
+
+    const visit = (filename: string, depth: number) => {
+      for (const src of sourcesOf.get(filename) ?? []) {
+        if (rendered.has(src)) {
+          rows.push(makeRow(src, depth, true));
+          continue;
+        }
+        rendered.add(src);
+        rows.push(makeRow(src, depth, false));
+        visit(src, depth + 1);
+      }
+    };
+
+    for (const root of lineage.roots) {
+      if (usedByOf.has(root)) continue; // consumed by another node — shown nested there instead
+      rendered.add(root);
+      rows.push(makeRow(root, 0, false));
+      visit(root, 1);
+    }
+    // Safety net: a root consumed only by other roots that are themselves mutually
+    // consumed (a cycle among roots) would otherwise never get a slot — give any
+    // still-unrendered root a top-level row so nothing silently disappears.
+    for (const root of lineage.roots) {
+      if (rendered.has(root)) continue;
+      rendered.add(root);
+      rows.push(makeRow(root, 0, false));
+      visit(root, 1);
+    }
+    return rows;
+  });
 
   handleLogout() {
     this.ocadbService.logout();

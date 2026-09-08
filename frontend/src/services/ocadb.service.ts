@@ -82,6 +82,19 @@ export interface Observation {
   oca_jd?: number | null;
 }
 
+export interface FileLineageNode {
+  file_class: string;
+  obs_name: string;
+  cloud_status: StorageStatusType;
+  cloud_ready: boolean;
+}
+
+export interface FileLineage {
+  roots: string[];
+  nodes: Record<string, FileLineageNode>;
+  edges: { from: string; to: string }[];
+}
+
 export interface SearchObject {
   canonized_name: string | null;
   first_alias: string | null;
@@ -509,6 +522,16 @@ export class OcadbService {
   async fetchObservationById(id: string): Promise<Observation | null> {
     try {
       const response = await this.authenticatedFetch(`${this.v2BaseUrl}/observations/${id}/`);
+      if (!response.ok) return null;
+      return await response.json();
+    } catch {
+      return null;
+    }
+  }
+
+  async fetchFileLineage(id: string): Promise<FileLineage | null> {
+    try {
+      const response = await this.authenticatedFetch(`${this.v2BaseUrl}/observations/${id}/file-lineage`);
       if (!response.ok) return null;
       return await response.json();
     } catch {

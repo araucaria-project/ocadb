@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import pymongo
 from beanie import Document, PydanticObjectId
@@ -151,6 +151,46 @@ class FITSFile(FITSFileBase, Document):
         if not self.source_filenames:
             return []
         return await FITSFile.find({"filename": {"$in": self.source_filenames}}).to_list()
+
+    @classmethod
+    async def resolve_lineage(
+        cls, root_files: List["FITSFile"]
+    ) -> Tuple[Dict[str, "FITSFile"], List[Tuple[str, str]]]:
+        """Walk the full transitive closure of source_filenames starting from root_files.
+
+        Same frontier/collected BFS shape as generate_download_script's calibration walk
+        (api/routers/observations_v2.py) — source files can be multi-level (RAW -> MASTER
+        -> ZDF chains) and are looked up purely by filename, not scoped to any one
+        observation, matching how the producer assigns them. Unlike that endpoint, this
+        also keeps the (child_filename, source_filename) edges, not just the flat
+        filename set, since callers need the actual ancestry graph.
+
+        Returns (nodes: filename -> FITSFile, edges: list of (child_filename, source_filename)).
+        """
+        nodes: Dict[str, "FITSFile"] = {f.filename: f for f in root_files}
+        edges: List[Tuple[str, str]] = []
+
+        frontier = {f.filename for f in root_files}
+        while frontier:
+            batch = [nodes[name] for name in frontier]
+            frontier = set()
+            for f in batch:
+                for source_name in (f.source_filenames or []):
+                    edges.append((f.filename, source_name))
+                    if source_name not in nodes:
+                        frontier.add(source_name)
+
+            if not frontier:
+                break
+            new_files = await cls.find({"filename": {"$in": list(frontier)}}).to_list()
+            for nf in new_files:
+                nodes[nf.filename] = nf
+            # Filenames with no matching FITSFile document (e.g. not yet ingested) stay
+            # out of `nodes` but remain referenced by an edge — drop them from the next
+            # frontier since there's nothing further to walk from them.
+            frontier = {name for name in frontier if name in nodes}
+
+        return nodes, edges
 
     async def get_presigned_url(self, expires_in):
         s3_con = S3Connection()

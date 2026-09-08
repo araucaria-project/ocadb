@@ -1730,42 +1730,105 @@
 
             <!-- Source Files -->
             <div>
-              <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Source files</div>
+              <div class="flex items-center justify-between mb-2">
+                <div class="text-[10px] uppercase tracking-wider text-slate-500">Source files</div>
+                <div class="flex items-center gap-1 bg-space-900 border border-space-700 rounded p-0.5">
+                  <button (click)="showSourceFilesListView()"
+                    class="px-2 py-0.5 rounded text-[10px] font-medium transition-colors"
+                    [class]="sourceFilesView() === 'list' ? 'bg-space-700 text-slate-200' : 'text-slate-500 hover:text-slate-300'">
+                    Direct source files
+                  </button>
+                  <button (click)="showSourceFilesLineageView()"
+                    class="px-2 py-0.5 rounded text-[10px] font-medium transition-colors"
+                    [class]="sourceFilesView() === 'lineage' ? 'bg-space-700 text-slate-200' : 'text-slate-500 hover:text-slate-300'">
+                    Full file lineage
+                  </button>
+                </div>
+              </div>
               <div class="bg-space-950 border border-space-700 rounded-lg p-2">
-                @if (calibrationFilesLoading()) {
-                  <div class="flex flex-col items-center justify-center gap-2 py-5 text-slate-500">
-                    <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span class="text-[11px]">Getting source files</span>
-                  </div>
-                } @else if (calibrationFiles().length === 0 && calibrationMissingFiles().length === 0) {
-                  <div class="text-center text-[11px] text-slate-600 py-5">No source files</div>
+                @if (sourceFilesView() === 'list') {
+                  @if (calibrationFilesLoading()) {
+                    <div class="flex flex-col items-center justify-center gap-2 py-5 text-slate-500">
+                      <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span class="text-[11px]">Getting source files</span>
+                    </div>
+                  } @else if (calibrationFiles().length === 0 && calibrationMissingFiles().length === 0) {
+                    <div class="text-center text-[11px] text-slate-600 py-5">No source files</div>
+                  } @else {
+                    <div class="space-y-1.5">
+                      @for (file of calibrationFiles(); track file.filename) {
+                        <div class="flex items-center gap-2 bg-black/25 rounded px-3 py-2 cursor-pointer hover:bg-space-800/60 transition-colors"
+                          (click)="selectedFile.set(file)">
+                          <span class="px-1.5 py-0.5 rounded border text-[10px] font-medium shrink-0 min-w-[2.5rem] text-center bg-space-800 text-slate-400 border-slate-600/50">
+                            {{ getCalibDisplayLabel(file) }}
+                          </span>
+                          <span class="font-mono text-[11px] text-slate-400 truncate flex-1">{{ file.filename }}</span>
+                          <span class="text-[10px] shrink-0" [class]="getStorageStatusClass(file.file_status.cloud.status, file.file_status.cloud.ready)">
+                            ☁ {{ file.file_status.cloud.status }}
+                          </span>
+                        </div>
+                      }
+                      @for (filename of calibrationMissingFiles(); track filename) {
+                        <div class="flex items-center gap-2 bg-black/25 rounded px-3 py-2 opacity-60">
+                          <span class="px-1.5 py-0.5 rounded border text-[10px] font-medium shrink-0 min-w-[2.5rem] text-center bg-space-800 text-slate-500 border-slate-700/50">
+                            {{ getCalibFileLabel(filename) }}
+                          </span>
+                          <span class="font-mono text-[11px] text-slate-500 truncate flex-1">{{ filename }}</span>
+                          <span class="text-[10px] text-slate-500 shrink-0">⏳ scheduled</span>
+                        </div>
+                      }
+                    </div>
+                  }
                 } @else {
-                  <div class="space-y-1.5">
-                    @for (file of calibrationFiles(); track file.filename) {
-                      <div class="flex items-center gap-2 bg-black/25 rounded px-3 py-2 cursor-pointer hover:bg-space-800/60 transition-colors"
-                        (click)="selectedFile.set(file)">
-                        <span class="px-1.5 py-0.5 rounded border text-[10px] font-medium shrink-0 min-w-[2.5rem] text-center bg-space-800 text-slate-400 border-slate-600/50">
-                          {{ getCalibDisplayLabel(file) }}
-                        </span>
-                        <span class="font-mono text-[11px] text-slate-400 truncate flex-1">{{ file.filename }}</span>
-                        <span class="text-[10px] shrink-0" [class]="getStorageStatusClass(file.file_status.cloud.status, file.file_status.cloud.ready)">
-                          ☁ {{ file.file_status.cloud.status }}
-                        </span>
-                      </div>
-                    }
-                    @for (filename of calibrationMissingFiles(); track filename) {
-                      <div class="flex items-center gap-2 bg-black/25 rounded px-3 py-2 opacity-60">
-                        <span class="px-1.5 py-0.5 rounded border text-[10px] font-medium shrink-0 min-w-[2.5rem] text-center bg-space-800 text-slate-500 border-slate-700/50">
-                          {{ getCalibFileLabel(filename) }}
-                        </span>
-                        <span class="font-mono text-[11px] text-slate-500 truncate flex-1">{{ filename }}</span>
-                        <span class="text-[10px] text-slate-500 shrink-0">⏳ scheduled</span>
-                      </div>
-                    }
-                  </div>
+                  @if (lineageLoading()) {
+                    <div class="flex flex-col items-center justify-center gap-2 py-5 text-slate-500">
+                      <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span class="text-[11px]">Getting file lineage</span>
+                    </div>
+                  } @else if (!selectedLineage() || lineageRows().length === 0) {
+                    <div class="text-center text-[11px] text-slate-600 py-5">No file lineage available</div>
+                  } @else {
+                    <div class="space-y-1">
+                      @for (row of lineageRows(); track row.filename + '-' + $index) {
+                        <div class="flex items-center gap-2 rounded px-2 py-1.5"
+                          [class]="row.isReference ? 'bg-black/10 opacity-70' : 'bg-black/25'"
+                          [style.marginLeft.px]="row.depth * 20">
+                          @if (row.depth > 0) {
+                            <span class="text-slate-700 shrink-0 inline-block rotate-90" title="source of the row above">↲</span>
+                          }
+                          @if (row.node) {
+                            <span class="px-1.5 py-0.5 rounded border text-[10px] font-medium shrink-0 min-w-[2.5rem] text-center"
+                              [class]="getFileBadgeClassByType(row.node.file_class)">
+                              {{ getFileLabelByType(row.node.file_class) }}
+                            </span>
+                          } @else {
+                            <span class="px-1.5 py-0.5 rounded border text-[10px] font-medium shrink-0 min-w-[2.5rem] text-center bg-space-800 text-slate-500 border-slate-700/50">
+                              ?
+                            </span>
+                          }
+                          <span class="font-mono text-[11px] text-slate-400 truncate flex-1">{{ row.filename }}</span>
+                          @if (row.isReference) {
+                            <span class="text-[10px] text-amber-400/80 shrink-0" title="Shown in full above">shared, see above</span>
+                          } @else if (row.usedByCount > 1) {
+                            <span class="text-[10px] text-amber-400/80 shrink-0">shared by {{ row.usedByCount }}</span>
+                          }
+                          @if (row.node) {
+                            <span class="text-[10px] shrink-0" [class]="getStorageStatusClass(row.node.cloud_status, row.node.cloud_ready)">
+                              ☁ {{ row.node.cloud_status }}
+                            </span>
+                          } @else {
+                            <span class="text-[10px] text-slate-500 shrink-0">⏳ scheduled</span>
+                          }
+                        </div>
+                      }
+                    </div>
+                  }
                 }
               </div>
             </div>
