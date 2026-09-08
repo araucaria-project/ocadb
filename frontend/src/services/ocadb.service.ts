@@ -75,7 +75,7 @@ export interface Observation {
   files: FitsFile[];
   filetypes?: string[];
   obs_tags?: string[];
-  source_files?: string[];
+  source_files_number?: number;
   fits_header: FitsHeader;
   metadata: Record<string, any>;
   created_at?: string | null;
@@ -436,6 +436,19 @@ export class OcadbService {
       return data.obs_tags;
     } catch {
       return null;
+    }
+  }
+
+  async setSourceFilesCount(obsId: string, count: number): Promise<boolean> {
+    try {
+      const response = await this.authenticatedFetch(`${this.v2BaseUrl}/observations/${obsId}/source-files-count`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ count }),
+      });
+      return response.ok;
+    } catch {
+      return false;
     }
   }
 

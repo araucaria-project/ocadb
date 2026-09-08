@@ -251,6 +251,49 @@ async def test_remove_obs_tag(client, auth_headers, regular_user):
     assert "removeme" not in resp.json()["obs_tags"]
 
 
+# --- source-files-count correction ---
+
+async def test_set_source_files_count_requires_auth(client, beanie):
+    resp = await client.put("/api/v2/observations/000000000000000000000000/source-files-count", json={"count": 3})
+    assert resp.status_code == 401
+
+
+async def test_set_source_files_count_not_found(client, auth_headers, regular_user):
+    resp = await client.put(
+        "/api/v2/observations/000000000000000000000000/source-files-count",
+        json={"count": 3}, headers=auth_headers,
+    )
+    assert resp.status_code == 404
+
+
+async def test_set_source_files_count_updates_value(client, auth_headers, regular_user):
+    from ocadb.models.observation import Observation
+
+    create = await client.post("/api/v2/observations/", json=make_obs_payload(), headers=auth_headers)
+    obs_id = create.json()["_id"]
+
+    resp = await client.put(
+        f"/api/v2/observations/{obs_id}/source-files-count",
+        json={"count": 4}, headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["source_files_number"] == 4
+
+    obs = await Observation.get(obs_id)
+    assert obs.source_files_number == 4
+
+
+async def test_set_source_files_count_rejects_negative(client, auth_headers, regular_user):
+    create = await client.post("/api/v2/observations/", json=make_obs_payload(), headers=auth_headers)
+    obs_id = create.json()["_id"]
+
+    resp = await client.put(
+        f"/api/v2/observations/{obs_id}/source-files-count",
+        json={"count": -1}, headers=auth_headers,
+    )
+    assert resp.status_code == 422
+
+
 # --- SearchTag endpoints ---
 
 async def test_create_search_tag(client, auth_headers, regular_user):

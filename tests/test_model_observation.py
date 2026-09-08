@@ -174,6 +174,53 @@ async def test_store_file_adds_file_to_observation(beanie):
     assert FileClassification.RAW in obs.filetypes
 
 
+# --- store_file: source_files_number (approximate, max-based) ---
+
+async def test_store_file_sets_source_files_number_from_first_file(beanie):
+    from ocadb.models.file import FITSFile, FileClassification
+    from tests.conftest import make_storage_status
+    obs = Observation(obs_name="test_sfn_first", fits_header=make_fits_header())
+    assert obs.source_files_number == 0
+
+    fits_file = FITSFile(
+        filename="test.fits", file_class=FileClassification.ZDF, obs_name="test_sfn_first",
+        source_filenames=["raw1.fits", "raw2.fits"], file_status=make_storage_status(),
+    )
+    await obs.store_file(fits_file)
+    assert obs.source_files_number == 2
+
+
+async def test_store_file_takes_max_across_files(beanie):
+    """Files linked to the same observation typically reference the same source set, so
+    source_files_number tracks the largest single source_filenames list seen so far —
+    it's an approximation, not an exact union, deliberately."""
+    from ocadb.models.file import FITSFile, FileClassification
+    from tests.conftest import make_storage_status
+    obs = Observation(obs_name="test_sfn_max", fits_header=make_fits_header())
+
+    small = FITSFile(
+        filename="small.fits", file_class=FileClassification.ZDF, obs_name="test_sfn_max",
+        source_filenames=["raw1.fits"], file_status=make_storage_status(),
+    )
+    await obs.store_file(small)
+    assert obs.source_files_number == 1
+
+    big = FITSFile(
+        filename="big.fits", file_class=FileClassification.ZDF, obs_name="test_sfn_max",
+        source_filenames=["raw1.fits", "raw2.fits", "raw3.fits"], file_status=make_storage_status(),
+    )
+    await obs.store_file(big)
+    assert obs.source_files_number == 3
+
+    # a later file with fewer/no source files must not shrink the count
+    raw = FITSFile(
+        filename="raw.fits", file_class=FileClassification.RAW, obs_name="test_sfn_max",
+        source_filenames=[], file_status=make_storage_status(),
+    )
+    await obs.store_file(raw)
+    assert obs.source_files_number == 3
+
+
 # --- adopt_header_if_precedent / ZDF-wins-over-RAW priority ---
 
 async def test_raw_then_zdf_ends_with_zdf_header(beanie):

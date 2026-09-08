@@ -46,7 +46,12 @@ class Observation(ObservationBase, Document):
 
         self.obs_tags.add(fits_file.file_class)
 
-        self.source_files.update(fits_file.source_filenames)
+        # Approximate, not an exact dedup: files linked to the same observation
+        # typically reference the same source set, so the largest single list seen
+        # so far is a good enough estimate for sizing loading placeholders. The
+        # frontend corrects this to the real count once it has actually fetched
+        # the linked files' source files (see /source-files-count below).
+        self.source_files_number = max(self.source_files_number, len(fits_file.source_filenames))
 
         header = fits_header if fits_header is not None else fits_file.fits_header
         self.adopt_header_if_precedent(fits_file.file_class, header)

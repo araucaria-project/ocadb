@@ -1727,12 +1727,12 @@
             }
 
             <!-- Source Files -->
-            @if ((calibrationFilesLoading() && (selectedObservation()!.source_files?.length ?? 0) > 0) || calibrationFiles().length > 0 || calibrationMissingFiles().length > 0) {
+            @if ((calibrationFilesLoading() && (selectedObservation()!.source_files_number ?? 0) > 0) || calibrationFiles().length > 0 || calibrationMissingFiles().length > 0) {
               <div>
                 <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Source files</div>
                 <div class="space-y-1.5">
                   @if (calibrationFilesLoading()) {
-                    @for (name of calibrationSkeletonNames(selectedObservation()!); track $index) {
+                    @for (_ of calibrationSkeletonCount(selectedObservation()!); track $index) {
                       <div class="flex items-center gap-2 bg-space-950 rounded px-3 py-2 animate-pulse">
                         <span class="h-[18px] w-8 rounded bg-space-700 shrink-0"></span>
                         <span class="h-[14px] flex-1 rounded bg-space-800"></span>
