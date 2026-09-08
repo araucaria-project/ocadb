@@ -173,6 +173,11 @@ export class AppComponent implements OnInit {
 
     effect((onCleanup) => {
       const obs = this.selectedObservation();
+      // openObservation() first sets a partial observation (from the list, files
+      // unresolved) then replaces it once the full fetch resolves. Skip the partial
+      // pass entirely — acting on it would read an empty files list as "no source
+      // files" before the real one has even been fetched.
+      if (this.filesLoading()) return;
       const obsFilenames = new Set(obs?.files.map(f => f.filename) ?? []);
       const names = [...new Set(
         (obs?.files.flatMap(f => f.source_filenames ?? []) ?? []).filter(n => !obsFilenames.has(n))
@@ -186,7 +191,6 @@ export class AppComponent implements OnInit {
         this.calibrationFiles.set([]);
         this.calibrationMissingFiles.set([]);
         this.calibrationFilesLoading.set(false);
-        this.reconcileSourceFilesCount(obs, 0);
         return;
       }
 
@@ -203,7 +207,6 @@ export class AppComponent implements OnInit {
             this.calibrationFiles.set(results.filter(r => r.file !== null).map(r => r.file!));
             this.calibrationMissingFiles.set(results.filter(r => r.file === null).map(r => r.name));
             this.calibrationFilesLoading.set(false);
-            this.reconcileSourceFilesCount(obs, results.length);
           });
       };
 
@@ -1735,20 +1738,6 @@ export class AppComponent implements OnInit {
     if (['storing', 'queued', 'scheduled', 'requested'].includes(status)) return 'text-amber-400';
     if (status === 'corrupted') return 'text-red-400';
     return 'text-slate-600';
-  }
-
-  calibrationSkeletonCount(obs: Observation): unknown[] {
-    return Array.from({ length: obs.source_files_number ?? 0 });
-  }
-
-  /** source_files_number is a cheap, approximate count kept only to size the loading
-   * skeleton before the real source-file list is fetched (see backend store_file). Once
-   * that real fetch resolves, correct any drift so future modal opens size the skeleton
-   * accurately — fire-and-forget, no need to block or surface errors to the user. */
-  private reconcileSourceFilesCount(obs: Observation | null | undefined, realCount: number): void {
-    if (!obs?._id || obs.source_files_number === realCount) return;
-    obs.source_files_number = realCount;
-    this.ocadbService.setSourceFilesCount(obs._id, realCount);
   }
 
   private formatSexagesimal(value: number, isRA: boolean): string {
