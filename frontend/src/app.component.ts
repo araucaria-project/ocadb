@@ -641,12 +641,39 @@ export class AppComponent implements OnInit {
     const midY = (p0.y + p3.y) / 2;
     const p1 = { x: p0.x, y: midY };
     const p2 = { x: p3.x, y: midY };
-    const t = edge.from === this.hoveredLineageNode() ? 0.18 : 0.82;
+    // Distance along the curve is inversely proportional to zoom, so the label's
+    // on-screen distance from the node stays roughly constant (and small) instead of
+    // growing right along with the zoom level — the more you zoom in, the smaller a
+    // graph-space offset is needed to stay a comfortable, legible distance away.
+    const baseT = Math.min(0.3, Math.max(0.06, 0.16 / this.lineageZoom()));
+    const outgoing = edge.from === this.hoveredLineageNode();
+    const t = outgoing ? baseT : 1 - baseT;
     const u = 1 - t;
-    return {
-      x: u * u * u * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t * t * t * p3.x,
-      y: u * u * u * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t * t * t * p3.y,
-    };
+    const x = u * u * u * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t * t * t * p3.x;
+    const y = u * u * u * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t * t * t * p3.y;
+    // Several edges fanning in/out of the same node land their labels almost on top of
+    // each other near it — stack same-direction labels into a small vertical list instead.
+    // The label's font-size lives in the same graph-space coordinates as everything else
+    // (inside the zoomed <g>), so it visually grows with zoom too — the spacing has to be
+    // a plain graph-space constant (not divided by zoom) to grow right along with it,
+    // otherwise it falls further behind the enlarging text the more you zoom in.
+    const stackIndex = this.lineageEdgeLabelStackIndex(edge, outgoing);
+    const lineSpacing = 14;
+    return { x, y: y + stackIndex * lineSpacing * (outgoing ? 1 : -1) };
+  }
+
+  private lineageEdgeLabelStackIndex(edge: LineageGraphEdge, outgoing: boolean): number {
+    const layout = this.lineageGraphLayout();
+    const hovered = this.hoveredLineageNode();
+    if (!layout || hovered === null) return 0;
+    const sameSide = layout.edges
+      .filter(e => (e.from === hovered) === outgoing && (e.from === hovered || e.to === hovered))
+      .sort((a, b) => {
+        const ax = outgoing ? (a.points[a.points.length - 1]?.x ?? 0) : (a.points[0]?.x ?? 0);
+        const bx = outgoing ? (b.points[b.points.length - 1]?.x ?? 0) : (b.points[0]?.x ?? 0);
+        return ax - bx;
+      });
+    return sameSide.findIndex(e => e.from === edge.from && e.to === edge.to);
   }
 
   /** Whether this edge touches the currently-hovered node — used to light it up and
