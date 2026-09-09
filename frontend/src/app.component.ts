@@ -2,17 +2,30 @@ import { Component, signal, computed, inject, OnInit, ElementRef, ViewChild, eff
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { OcadbService, Observation, SearchFilters, SearchObject, SearchTag, FitsFile, StorageStatusType, ViewerConf, DEFAULT_VIEWER_CONF, FileLineage } from './services/ocadb.service';
+import { OcadbService, Observation, SearchFilters, SearchObject, SearchTag, FitsFile, StorageStatusType, StorageStatus, ViewerConf, DEFAULT_VIEWER_CONF, FileLineage } from './services/ocadb.service';
 import { ApiLogService, ApiLogEntry } from './services/api-log.service';
 import { FlatpickrDirective } from './flatpickr.directive';
 import { InfoIconComponent } from './info-icon.component';
+import { Graph, layout as dagreLayout } from '@dagrejs/dagre';
 
-interface LineageRow {
+interface LineageGraphNode {
   filename: string;
-  depth: number;
-  isReference: boolean;
   node: FileLineage['nodes'][string] | null;
-  usedByCount: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+interface LineageGraphEdge {
+  points: { x: number; y: number }[];
+}
+
+interface LineageGraphLayout {
+  nodes: LineageGraphNode[];
+  edges: LineageGraphEdge[];
+  width: number;
+  height: number;
 }
 
 @Component({
@@ -364,9 +377,44 @@ export class AppComponent implements OnInit {
   }
 
   async openLineageFile(filename: string) {
+    if (this.lineageDragMoved) return; // don't open a node the user just dragged through
     const file = await this.ocadbService.fetchFileByFilename(filename);
     if (!file) return;
     this.openSourceFile(file);
+  }
+
+  onLineageWheel(event: WheelEvent) {
+    event.preventDefault();
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const mx = event.clientX - rect.left;
+    const my = event.clientY - rect.top;
+    const oldZoom = this.lineageZoom();
+    const factor = event.deltaY < 0 ? 1.1 : 1 / 1.1;
+    const newZoom = Math.min(4, Math.max(0.2, oldZoom * factor));
+    const pan = this.lineagePan();
+    const gx = (mx - pan.x) / oldZoom;
+    const gy = (my - pan.y) / oldZoom;
+    this.lineagePan.set({ x: mx - gx * newZoom, y: my - gy * newZoom });
+    this.lineageZoom.set(newZoom);
+  }
+
+  onLineageDragStart(event: MouseEvent) {
+    this.lineageDragging = true;
+    this.lineageDragMoved = false;
+    this.lineageDragStart = { x: event.clientX, y: event.clientY };
+    this.lineagePanStart = this.lineagePan();
+  }
+
+  onLineageDragMove(event: MouseEvent) {
+    if (!this.lineageDragging) return;
+    const dx = event.clientX - this.lineageDragStart.x;
+    const dy = event.clientY - this.lineageDragStart.y;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) this.lineageDragMoved = true;
+    this.lineagePan.set({ x: this.lineagePanStart.x + dx, y: this.lineagePanStart.y + dy });
+  }
+
+  onLineageDragEnd() {
+    this.lineageDragging = false;
   }
 
   goBackFile() {
@@ -408,6 +456,7 @@ export class AppComponent implements OnInit {
     this.calibrationFilesLoading.set(true);
     this.sourceFilesView.set('list');
     this.selectedLineage.set(null);
+    this.lineageFileStatuses.set({});
     if (!obs._id) return;
     const full = await this.ocadbService.fetchObservationById(obs._id);
     if (!full || this.selectedObservation()?._id !== obs._id) return;
@@ -420,12 +469,23 @@ export class AppComponent implements OnInit {
 
   sourceFilesView = signal<'list' | 'lineage'>('list');
 
+  lineageZoom = signal(1);
+  lineagePan = signal({ x: 20, y: 20 });
+  lineageFileStatuses = signal<Record<string, StorageStatus>>({});
+  lineageStatusesLoading = signal(false);
+  private lineageDragging = false;
+  private lineageDragMoved = false;
+  private lineageDragStart = { x: 0, y: 0 };
+  private lineagePanStart = { x: 0, y: 0 };
+
   showSourceFilesListView() {
     this.sourceFilesView.set('list');
   }
 
   async showSourceFilesLineageView() {
     this.sourceFilesView.set('lineage');
+    this.lineageZoom.set(1);
+    this.lineagePan.set({ x: 20, y: 20 });
     if (this.selectedLineage()) return; // already fetched for the current observation
     const obs = this.selectedObservation();
     if (!obs?._id) return;
@@ -433,68 +493,89 @@ export class AppComponent implements OnInit {
     const lineage = await this.ocadbService.fetchFileLineage(obs._id);
     this.lineageLoading.set(false);
     this.selectedLineage.set(lineage);
+    // The tree is fully drawable from `lineage` alone (structure, badges, labels) — storage
+    // status is fetched separately afterward so the tree never waits on it, and fills in
+    // in place once it lands.
+    this.fetchLineageFileStatuses(lineage ? Object.keys(lineage.nodes) : []);
   }
 
-  /** Flattens the lineage graph into an ordered, indented row list for display.
-   * A root (one of the observation's own files) gets its own top-level row only if
-   * nothing else in the graph already points to it as a source — e.g. a RAW file that's
-   * itself listed as one of its sibling ZDF's sources is just the ZDF's own RAW frame,
-   * not an independent top-level entry, so it's left nested under the ZDF instead of
-   * duplicated at the top. A source file (root or not) is fully expanded — with its own
-   * sources recursed into — the first time it's encountered anywhere in the walk; every
-   * later occurrence, i.e. it's shared by another file, is rendered as a lightweight
-   * reference row instead of being re-expanded, tagged with how many files use it. */
-  lineageRows = computed<LineageRow[]>(() => {
-    const lineage = this.selectedLineage();
-    if (!lineage) return [];
+  private async fetchLineageFileStatuses(filenames: string[]) {
+    const unique = [...new Set(filenames)];
+    if (!unique.length) return;
+    this.lineageStatusesLoading.set(true);
+    const statuses = await this.ocadbService.fetchFileStatuses(unique);
+    this.lineageStatusesLoading.set(false);
+    if (statuses) this.lineageFileStatuses.set(statuses);
+  }
 
-    const sourcesOf = new Map<string, string[]>();
-    const usedByOf = new Map<string, string[]>();
+  /** Function label (flat/dark/zero/...) when the file's own IMAGETYP says something
+   * meaningful, otherwise its file_class type (RAW/ZDF/MASTER/...) — used for graph node
+   * labels, where every node is a first-class box regardless of tree position (unlike the
+   * old flat-list rendering, a true graph needs no root/depth special-casing here). */
+  getGraphNodeLabel(node: FileLineage['nodes'][string]): string {
+    const imagetyp = node.image_type?.toLowerCase();
+    if (imagetyp && imagetyp !== 'raw' && imagetyp !== 'object') return imagetyp;
+    return this.getFileLabelByType(node.file_class);
+  }
+
+  /** Lays out the lineage graph top-to-bottom with dagre: the observation's own files sit
+   * above the sources they were derived from, and a source shared by multiple files is a
+   * single node with multiple converging edges — exactly what a DAG layout is for, so no
+   * "shared, see above" bookkeeping is needed the way the old flat-list rendering required. */
+  lineageGraphLayout = computed<LineageGraphLayout | null>(() => {
+    const lineage = this.selectedLineage();
+    if (!lineage) return null;
+
+    const g = new Graph();
+    g.setGraph({ rankdir: 'TB', nodesep: 24, ranksep: 56, marginx: 12, marginy: 12 });
+    g.setDefaultEdgeLabel(() => ({}));
+
+    const nodeWidth = (filename: string) => Math.max(140, Math.min(260, filename.length * 6 + 36));
+    const NODE_HEIGHT = 62;
+
+    const known = new Set(Object.keys(lineage.nodes));
+    for (const filename of known) {
+      g.setNode(filename, { width: nodeWidth(filename), height: NODE_HEIGHT });
+    }
     for (const e of lineage.edges) {
-      if (!sourcesOf.has(e.from)) sourcesOf.set(e.from, []);
-      sourcesOf.get(e.from)!.push(e.to);
-      if (!usedByOf.has(e.to)) usedByOf.set(e.to, []);
-      usedByOf.get(e.to)!.push(e.from);
+      // A source_filenames entry with no matching FITSFile document (not yet ingested)
+      // still needs a node to draw the edge into — same "?" fallback as the list view.
+      for (const name of [e.from, e.to]) {
+        if (!known.has(name)) {
+          g.setNode(name, { width: nodeWidth(name), height: NODE_HEIGHT });
+          known.add(name);
+        }
+      }
+      g.setEdge(e.from, e.to);
     }
 
-    const rendered = new Set<string>();
-    const rows: LineageRow[] = [];
+    dagreLayout(g);
 
-    const makeRow = (filename: string, depth: number, isReference: boolean): LineageRow => ({
-      filename, depth, isReference,
-      node: lineage.nodes[filename] ?? null,
-      usedByCount: usedByOf.get(filename)?.length ?? 0,
+    const nodes: LineageGraphNode[] = g.nodes().map(filename => {
+      const n = g.node(filename);
+      return {
+        filename,
+        node: lineage.nodes[filename] ?? null,
+        x: n.x - n.width / 2,
+        y: n.y - n.height / 2,
+        width: n.width,
+        height: n.height,
+      };
     });
 
-    const visit = (filename: string, depth: number) => {
-      for (const src of sourcesOf.get(filename) ?? []) {
-        if (rendered.has(src)) {
-          rows.push(makeRow(src, depth, true));
-          continue;
-        }
-        rendered.add(src);
-        rows.push(makeRow(src, depth, false));
-        visit(src, depth + 1);
-      }
-    };
+    const edges: LineageGraphEdge[] = g.edges().map(e => ({
+      points: g.edge(e).points ?? [],
+    }));
 
-    for (const root of lineage.roots) {
-      if (usedByOf.has(root)) continue; // consumed by another node — shown nested there instead
-      rendered.add(root);
-      rows.push(makeRow(root, 0, false));
-      visit(root, 1);
-    }
-    // Safety net: a root consumed only by other roots that are themselves mutually
-    // consumed (a cycle among roots) would otherwise never get a slot — give any
-    // still-unrendered root a top-level row so nothing silently disappears.
-    for (const root of lineage.roots) {
-      if (rendered.has(root)) continue;
-      rendered.add(root);
-      rows.push(makeRow(root, 0, false));
-      visit(root, 1);
-    }
-    return rows;
+    const graphInfo = g.graph();
+    return { nodes, edges, width: graphInfo.width ?? 400, height: graphInfo.height ?? 200 };
   });
+
+  /** SVG path 'd' attribute for one edge, as straight segments through dagre's points. */
+  lineageEdgePath(edge: LineageGraphEdge): string {
+    if (!edge.points.length) return '';
+    return edge.points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
+  }
 
   handleLogout() {
     this.ocadbService.logout();
@@ -1803,19 +1884,6 @@ export class AppComponent implements OnInit {
     const m = /\w{5}.\d{4}_\d{5}(?:_(\w+))?\.(?:fits|fz)/i.exec(name);
     if (!m) return '—';
     return m[1] ?? 'raw';
-  }
-
-  /** Nested lineage rows are source/calibration files, same as the "Direct source files"
-   * list — label them by function (flat/dark/zero/...) the same way, instead of by
-   * file_class. Root rows are the observation's own files, so keep the file_class label
-   * (RAW/ZDF/MASTER) there — a science RAW/ZDF has no calibration "function" to show. */
-  getLineageDisplayLabel(row: LineageRow): string {
-    if (!row.node) return '?';
-    if (row.depth === 0) return this.getFileLabelByType(row.node.file_class);
-    const parsed = this.getCalibFileLabel(row.filename);
-    const imagetyp = row.node.image_type?.toLowerCase();
-    if (imagetyp && imagetyp !== 'raw') return imagetyp;
-    return parsed;
   }
 
   closeShare() {

@@ -572,6 +572,21 @@ export class OcadbService {
     }
   }
 
+  async fetchFileStatuses(filenames: string[]): Promise<Record<string, StorageStatus> | null> {
+    if (!filenames.length) return {};
+    try {
+      const response = await this.authenticatedFetch(`${this.v2BaseUrl}/files/file-status/list`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(filenames),
+      });
+      if (!response.ok) return null;
+      return await response.json();
+    } catch {
+      return null;
+    }
+  }
+
   async fetchTelescopeFilters(telescope: string): Promise<string[]> {
     if (!this.token() || !telescope) return [];
     try {
