@@ -493,6 +493,7 @@ export class AppComponent implements OnInit {
     const lineage = await this.ocadbService.fetchFileLineage(obs._id);
     this.lineageLoading.set(false);
     this.selectedLineage.set(lineage);
+    this.fitLineageView();
     // The tree is fully drawable from `lineage` alone (structure, badges, labels) — storage
     // status is fetched separately afterward so the tree never waits on it, and fills in
     // in place once it lands.
@@ -506,6 +507,24 @@ export class AppComponent implements OnInit {
     const statuses = await this.ocadbService.fetchFileStatuses(unique);
     this.lineageStatusesLoading.set(false);
     if (statuses) this.lineageFileStatuses.set(statuses);
+  }
+
+  /** Zoom/pan so the whole graph is visible on open, instead of always starting at 1x —
+   * a wide or tall tree would otherwise render as a thin sliver of itself within the fixed
+   * viewport, forcing a manual zoom-out just to see what's there. Approximates the
+   * viewport as the container's CSS cap (640px square) since there's no live DOM
+   * measurement wired up here. */
+  private fitLineageView() {
+    const layout = this.lineageGraphLayout();
+    if (!layout || !layout.width || !layout.height) return;
+    const viewport = 600; // ~640px container minus a little breathing room
+    const fitZoom = Math.min(viewport / layout.width, viewport / layout.height, 1);
+    const zoom = Math.max(0.15, fitZoom);
+    this.lineageZoom.set(zoom);
+    this.lineagePan.set({
+      x: Math.max(20, (viewport - layout.width * zoom) / 2 + 20),
+      y: 20,
+    });
   }
 
   /** Function label (flat/dark/zero/...) when the file's own IMAGETYP says something
@@ -571,10 +590,20 @@ export class AppComponent implements OnInit {
     return { nodes, edges, width: graphInfo.width ?? 400, height: graphInfo.height ?? 200 };
   });
 
-  /** SVG path 'd' attribute for one edge, as straight segments through dagre's points. */
+  /** SVG path 'd' attribute for one edge, as a smooth vertical S-curve rather than a
+   * straight line. When many siblings fan into one shared source (e.g. a dozen RAW
+   * calibration frames into one MASTER), straight diagonal lines all cross at a shallow
+   * angle and merge into an indistinguishable band. A cubic Bezier with control points
+   * held at each end's x and the midpoint's y leaves each edge vertical right at its
+   * node, so it's traceable at a glance, and only fans out in the middle. */
   lineageEdgePath(edge: LineageGraphEdge): string {
-    if (!edge.points.length) return '';
-    return edge.points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
+    const pts = edge.points;
+    if (!pts.length) return '';
+    if (pts.length === 1) return `M${pts[0].x},${pts[0].y}`;
+    const start = pts[0];
+    const end = pts[pts.length - 1];
+    const midY = (start.y + end.y) / 2;
+    return `M${start.x},${start.y} C${start.x},${midY} ${end.x},${midY} ${end.x},${end.y}`;
   }
 
   handleLogout() {
