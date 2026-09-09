@@ -488,9 +488,15 @@ export class AppComponent implements OnInit {
 
   async showSourceFilesLineageView() {
     this.sourceFilesView.set('lineage');
+    if (this.selectedLineage()) {
+      // Already fetched for the current observation — still re-fit every time this view
+      // is (re)entered, not just on the very first fetch, so toggling away and back
+      // doesn't strand the view at a stale zoom/pan.
+      this.fitLineageView();
+      return;
+    }
     this.lineageZoom.set(1);
     this.lineagePan.set({ x: 20, y: 20 });
-    if (this.selectedLineage()) return; // already fetched for the current observation
     const obs = this.selectedObservation();
     if (!obs?._id) return;
     this.lineageLoading.set(true);
@@ -513,17 +519,24 @@ export class AppComponent implements OnInit {
     if (statuses) this.lineageFileStatuses.set(statuses);
   }
 
-  /** Zoom/pan so the whole graph is visible on open, instead of always starting at 1x —
-   * a wide or tall tree would otherwise render as a thin sliver of itself within the fixed
-   * viewport, forcing a manual zoom-out just to see what's there. Approximates the
-   * viewport as the container's CSS cap (640px square) since there's no live DOM
-   * measurement wired up here. */
+  /** Zoom/pan so the graph's full width fits on open, instead of always starting at 1x —
+   * a wide tree would otherwise render as a thin sliver of itself within the fixed
+   * viewport, forcing a manual zoom-out just to see what's there. Deliberately fits WIDTH
+   * only, not height: fitting both would silently cancel out ranksep/nodesep tuning, since
+   * a taller graph would just get zoomed out further to compensate, keeping the on-screen
+   * gap-to-node ratio identical no matter what the layout params are. Extra height is
+   * reached by panning instead. Approximates the viewport as the container's CSS cap
+   * (640px square) since there's no live DOM measurement wired up here. */
   private fitLineageView() {
     const layout = this.lineageGraphLayout();
     if (!layout || !layout.width || !layout.height) return;
     const viewport = 600; // ~640px container minus a little breathing room
-    const fitZoom = Math.min(viewport / layout.width, viewport / layout.height, 1);
-    const zoom = Math.max(0.15, fitZoom);
+    const fitZoom = viewport / layout.width;
+    // Floor is deliberately high: for wide graphs (many siblings), width was already the
+    // limiting dimension, so shrinking further to fit it would swallow ranksep/nodesep
+    // right along with everything else — better to stay at a readable scale and let the
+    // user pan horizontally for the rest.
+    const zoom = Math.min(1.2, Math.max(0.75, fitZoom));
     this.lineageZoom.set(zoom);
     this.lineagePan.set({
       x: Math.max(20, (viewport - layout.width * zoom) / 2 + 20),
@@ -550,7 +563,7 @@ export class AppComponent implements OnInit {
     if (!lineage) return null;
 
     const g = new Graph();
-    g.setGraph({ rankdir: 'TB', nodesep: 24, ranksep: 56, marginx: 12, marginy: 12 });
+    g.setGraph({ rankdir: 'TB', nodesep: 24, ranksep: 180, marginx: 12, marginy: 12 });
     g.setDefaultEdgeLabel(() => ({}));
 
     const nodeWidth = (filename: string) => Math.max(140, Math.min(260, filename.length * 6 + 36));
