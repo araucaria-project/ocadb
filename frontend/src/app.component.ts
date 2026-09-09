@@ -18,6 +18,8 @@ interface LineageGraphNode {
 }
 
 interface LineageGraphEdge {
+  from: string;
+  to: string;
   points: { x: number; y: number }[];
 }
 
@@ -457,6 +459,7 @@ export class AppComponent implements OnInit {
     this.sourceFilesView.set('list');
     this.selectedLineage.set(null);
     this.lineageFileStatuses.set({});
+    this.hoveredLineageNode.set(null);
     if (!obs._id) return;
     const full = await this.ocadbService.fetchObservationById(obs._id);
     if (!full || this.selectedObservation()?._id !== obs._id) return;
@@ -473,6 +476,7 @@ export class AppComponent implements OnInit {
   lineagePan = signal({ x: 20, y: 20 });
   lineageFileStatuses = signal<Record<string, StorageStatus>>({});
   lineageStatusesLoading = signal(false);
+  hoveredLineageNode = signal<string | null>(null);
   private lineageDragging = false;
   private lineageDragMoved = false;
   private lineageDragStart = { x: 0, y: 0 };
@@ -583,6 +587,8 @@ export class AppComponent implements OnInit {
     });
 
     const edges: LineageGraphEdge[] = g.edges().map(e => ({
+      from: e.v,
+      to: e.w,
       points: g.edge(e).points ?? [],
     }));
 
@@ -604,6 +610,32 @@ export class AppComponent implements OnInit {
     const end = pts[pts.length - 1];
     const midY = (start.y + end.y) / 2;
     return `M${start.x},${start.y} C${start.x},${midY} ${end.x},${midY} ${end.x},${end.y}`;
+  }
+
+  /** Label position near the hovered end of the edge (not the midpoint) — so it's
+   * visible right next to the rectangle the user is actually pointing at, rather than
+   * possibly off-screen at the other end of a long connection when zoomed in. */
+  lineageEdgeLabelPosition(edge: LineageGraphEdge): { x: number; y: number } {
+    const pts = edge.points;
+    if (!pts.length) return { x: 0, y: 0 };
+    const start = pts[0];
+    const end = pts[pts.length - 1];
+    const t = edge.from === this.hoveredLineageNode() ? 0.18 : 0.82;
+    return { x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t };
+  }
+
+  /** Whether this edge touches the currently-hovered node — used to light it up and
+   * dim everything else so the connection is unambiguous at a glance. */
+  isLineageEdgeHighlighted(edge: LineageGraphEdge): boolean {
+    const hovered = this.hoveredLineageNode();
+    return hovered !== null && (edge.from === hovered || edge.to === hovered);
+  }
+
+  /** The OTHER endpoint's filename for an edge touching the hovered node — edges point
+   * from a derived file to the source it came from, so label it accordingly. */
+  lineageEdgeOtherEndLabel(edge: LineageGraphEdge): string {
+    const hovered = this.hoveredLineageNode();
+    return edge.from === hovered ? `${edge.to} →` : `→ ${edge.from}`;
   }
 
   handleLogout() {
