@@ -363,6 +363,12 @@ export class AppComponent implements OnInit {
     this.selectedFile.set(file);
   }
 
+  async openLineageFile(filename: string) {
+    const file = await this.ocadbService.fetchFileByFilename(filename);
+    if (!file) return;
+    this.openSourceFile(file);
+  }
+
   goBackFile() {
     const history = this.fileHistory();
     if (history.length > 0) {
@@ -1797,6 +1803,19 @@ export class AppComponent implements OnInit {
     const m = /\w{5}.\d{4}_\d{5}(?:_(\w+))?\.(?:fits|fz)/i.exec(name);
     if (!m) return '—';
     return m[1] ?? 'raw';
+  }
+
+  /** Nested lineage rows are source/calibration files, same as the "Direct source files"
+   * list — label them by function (flat/dark/zero/...) the same way, instead of by
+   * file_class. Root rows are the observation's own files, so keep the file_class label
+   * (RAW/ZDF/MASTER) there — a science RAW/ZDF has no calibration "function" to show. */
+  getLineageDisplayLabel(row: LineageRow): string {
+    if (!row.node) return '?';
+    if (row.depth === 0) return this.getFileLabelByType(row.node.file_class);
+    const parsed = this.getCalibFileLabel(row.filename);
+    const imagetyp = row.node.image_type?.toLowerCase();
+    if (imagetyp && imagetyp !== 'raw') return imagetyp;
+    return parsed;
   }
 
   closeShare() {

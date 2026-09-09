@@ -87,6 +87,7 @@ export interface FileLineageNode {
   obs_name: string;
   cloud_status: StorageStatusType;
   cloud_ready: boolean;
+  image_type: string | null;
 }
 
 export interface FileLineage {

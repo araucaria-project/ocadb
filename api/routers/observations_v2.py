@@ -152,6 +152,7 @@ async def get_file_lineage(
                 "obs_name": f.obs_name,
                 "cloud_status": f.file_status.cloud.status,
                 "cloud_ready": f.file_status.cloud.ready,
+                "image_type": f.image_type,
             }
             for name, f in nodes.items()
         },

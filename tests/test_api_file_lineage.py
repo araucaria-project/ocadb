@@ -12,8 +12,8 @@ def make_obs_payload(obs_name: str = "lineage_obs"):
     }
 
 
-def make_file_payload(filename: str, obs_name: str, file_class: str = "raw", source_filenames=None):
-    header = make_fits_header()
+def make_file_payload(filename: str, obs_name: str, file_class: str = "raw", source_filenames=None, **header_overrides):
+    header = make_fits_header(**header_overrides)
     return {
         "filename": filename,
         "file_class": file_class,
@@ -35,10 +35,10 @@ async def create_obs(client, headers, obs_name: str) -> str:
     return resp.json()["_id"]
 
 
-async def create_file(client, headers, filename: str, obs_name: str, file_class: str = "raw", source_filenames=None):
+async def create_file(client, headers, filename: str, obs_name: str, file_class: str = "raw", source_filenames=None, **header_overrides):
     resp = await client.post(
         "/api/v2/files/",
-        json=make_file_payload(filename, obs_name, file_class, source_filenames),
+        json=make_file_payload(filename, obs_name, file_class, source_filenames, **header_overrides),
         headers=headers,
     )
     assert resp.status_code == 201
@@ -81,6 +81,18 @@ async def test_lineage_walks_multi_level_chain(client, auth_headers, regular_use
     edges = {(e["from"], e["to"]) for e in body["edges"]}
     assert ("master1.fits", "raw1.fits") in edges
     assert ("zdf1.fits", "master1.fits") in edges
+
+
+async def test_lineage_node_includes_image_type(client, auth_headers, regular_user):
+    """image_type (from the fits_header IMAGETYP at ingest) is what the frontend uses to
+    label calibration nodes by function (flat/dark/zero) rather than just file_class."""
+    obs_id = await create_obs(client, auth_headers, "lineage_image_type")
+    await create_file(client, auth_headers, "master_flat.fits", "lineage_image_type", file_class="master",
+                       IMAGETYP="flat")
+
+    resp = await client.get(LINEAGE_URL.format(id=obs_id), headers=auth_headers)
+    assert resp.status_code == 200
+    assert resp.json()["nodes"]["master_flat.fits"]["image_type"] == "flat"
 
 
 async def test_lineage_resolves_source_not_linked_to_this_observation(client, auth_headers, regular_user):

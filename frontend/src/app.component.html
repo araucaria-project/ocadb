@@ -1797,15 +1797,16 @@
                     <div class="space-y-1">
                       @for (row of lineageRows(); track row.filename + '-' + $index) {
                         <div class="flex items-center gap-2 rounded px-2 py-1.5"
-                          [class]="row.isReference ? 'bg-black/10 opacity-70' : 'bg-black/25'"
-                          [style.marginLeft.px]="row.depth * 20">
+                          [class]="(row.isReference ? 'bg-black/10 opacity-70' : 'bg-black/25') + (row.node ? ' cursor-pointer hover:bg-space-800/60 transition-colors' : '')"
+                          [style.marginLeft.px]="row.depth * 20"
+                          (click)="row.node && openLineageFile(row.filename)">
                           @if (row.depth > 0) {
                             <span class="text-slate-700 shrink-0 inline-block rotate-90" title="source of the row above">↲</span>
                           }
                           @if (row.node) {
                             <span class="px-1.5 py-0.5 rounded border text-[10px] font-medium shrink-0 min-w-[2.5rem] text-center"
                               [class]="getFileBadgeClassByType(row.node.file_class)">
-                              {{ getFileLabelByType(row.node.file_class) }}
+                              {{ getLineageDisplayLabel(row) }}
                             </span>
                           } @else {
                             <span class="px-1.5 py-0.5 rounded border text-[10px] font-medium shrink-0 min-w-[2.5rem] text-center bg-space-800 text-slate-500 border-slate-700/50">
