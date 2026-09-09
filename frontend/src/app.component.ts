@@ -7,6 +7,7 @@ import { ApiLogService, ApiLogEntry } from './services/api-log.service';
 import { FlatpickrDirective } from './flatpickr.directive';
 import { InfoIconComponent } from './info-icon.component';
 import { Graph, layout as dagreLayout } from '@dagrejs/dagre';
+import { buildSearchParams, parseSearchParams, UrlSearchState, UrlViewState } from './url-state';
 
 interface LineageGraphNode {
   filename: string;
@@ -358,10 +359,122 @@ export class AppComponent implements OnInit {
     this.hasSelectionBelow.set(below);
   }
 
+  /** Guards every URL->state restore (initial load + popstate) against re-triggering
+   * the very URL write it's applying — the methods below check this before calling
+   * history.pushState/replaceState. */
+  private restoringFromUrl = false;
+
   ngOnInit() {
     if (this.ocadbService.isAuthenticated()) {
-      this.search();
+      this.restoreStateFromUrl();
     }
+    window.addEventListener('popstate', () => {
+      if (this.ocadbService.isAuthenticated()) this.restoreStateFromUrl();
+    });
+  }
+
+  /** Applies whatever search filters/sort/page and observation/file modal state the
+   * current URL encodes — used both on initial load and on every popstate (Back/Forward).
+   * Falls back to a plain empty-filters search when the URL has no state, matching the
+   * app's previous unconditional `search()`-on-load behavior. */
+  private async restoreStateFromUrl() {
+    this.restoringFromUrl = true;
+    try {
+      const { search: s, view } = parseSearchParams(window.location.search);
+      this.filters.set(s.filters);
+      this.sortExpr.set(s.sortExpr);
+      // object/pi/sciprog/filter each have their own display-text signal driving the
+      // autocomplete <input>'s [ngModel], separate from the filters() value the actual
+      // search reads — restoring only `filters` leaves those boxes blank even though the
+      // search itself is correctly scoped.
+      this.objectQuery.set(s.filters.object ?? '');
+      this.piQuery.set(s.filters.pi ?? '');
+      this.sciprogQuery.set(s.filters.sciprog ?? '');
+      this.filterQuery.set(s.filters.filter?.[0] ?? '');
+      if (s.cone) {
+        this.coneSearchExpanded.set(true);
+        this.coneCoordinates.set(s.cone.coordinates);
+        this.coneRadius.set(s.cone.radius);
+        this.coneEpoch.set(s.cone.epoch);
+      }
+
+      this.hasSearched.set(true);
+      this.showFilters.set(false);
+      if (s.page > 1) {
+        // Not goToPage(): its guard rejects any page > totalPages, and `total` isn't
+        // known yet on a cold load, so totalPages would wrongly read as 1.
+        await this.fetchObservationsPage(s.page);
+        // search() would normally have populated these (telescopes, tags, objects, ...)
+        // on the app's very first load — a cold load landing directly on page > 1 has to
+        // do it itself, or the whole "Search tags" UI (gated on availableTags().length)
+        // just silently never appears.
+        await this.loadDropdowns();
+      } else {
+        await this.search();
+      }
+
+      if (view.obsName) {
+        await this.openObservationByName(view.obsName);
+        if (view.fileName) {
+          const file = await this.ocadbService.fetchFileByFilename(view.fileName);
+          if (file) this.selectedFile.set(file);
+        } else {
+          this.selectedFile.set(null);
+        }
+      } else if (view.fileName) {
+        const file = await this.ocadbService.fetchFileByFilename(view.fileName);
+        this.selectedObservation.set(null);
+        this.selectedFile.set(file);
+      } else {
+        this.selectedObservation.set(null);
+        this.selectedFile.set(null);
+      }
+    } finally {
+      this.restoringFromUrl = false;
+    }
+  }
+
+  /** Builds the query string for the current filters/sort/page plus whatever modal
+   * happens to be open, so search-state writes never clobber an open modal's params
+   * (and vice versa) — both syncSearchUrl() and syncModalUrl() are just this plus a
+   * choice of replaceState vs pushState. */
+  private currentUrlQueryString(): string {
+    const searchState: UrlSearchState = {
+      filters: this.filters(),
+      cone: (this.coneSearchExpanded() && this.coneCoordinates().trim())
+        ? { coordinates: this.coneCoordinates().trim(), radius: this.coneRadius(), epoch: this.coneEpoch() || '2000.0' }
+        : null,
+      sortExpr: this.sortExpr(),
+      page: this.ocadbService.pagination().page,
+    };
+    const viewState: UrlViewState = {
+      obsName: this.selectedObservation()?.obs_name ?? null,
+      fileName: this.selectedFile()?.filename ?? null,
+    };
+    return buildSearchParams(searchState, viewState).toString();
+  }
+
+  /** Reflects current filters/sort/page into the URL via replaceState — no new
+   * Back-button stop, since filter tweaks are refinements of the same search, not a
+   * distinct navigable action. */
+  private syncSearchUrl() {
+    if (this.restoringFromUrl) return;
+    const qs = this.currentUrlQueryString();
+    window.history.replaceState(null, '', qs ? `${window.location.pathname}?${qs}` : window.location.pathname);
+  }
+
+  /** Reflects which observation/file modal is open into the URL via pushState — a real
+   * Back-button stop, since opening/closing a modal is a distinct navigable action.
+   * Skips the push if the resulting obs/file params haven't actually changed, since
+   * openObservation() sets selectedObservation twice (partial, then full) for the same
+   * logical observation and both calls land here. */
+  private syncModalUrl() {
+    if (this.restoringFromUrl) return;
+    const qs = this.currentUrlQueryString();
+    const current = new URLSearchParams(window.location.search);
+    const next = new URLSearchParams(qs);
+    if (current.get('obs') === next.get('obs') && current.get('file') === next.get('file')) return;
+    window.history.pushState(null, '', qs ? `${window.location.pathname}?${qs}` : window.location.pathname);
   }
 
   async handleLogin(event: Event) {
@@ -376,6 +489,7 @@ export class AppComponent implements OnInit {
     const current = this.selectedFile();
     if (current) this.fileHistory.update(h => [...h, current]);
     this.selectedFile.set(file);
+    this.syncModalUrl();
   }
 
   async openLineageFile(filename: string) {
@@ -428,6 +542,7 @@ export class AppComponent implements OnInit {
     } else {
       this.selectedFile.set(null);
     }
+    this.syncModalUrl();
   }
 
   testSpinner() {
@@ -438,6 +553,25 @@ export class AppComponent implements OnInit {
   closeFileViewer() {
     this.selectedFile.set(null);
     this.fileHistory.set([]);
+    this.syncModalUrl();
+  }
+
+  /** Closes both the file and observation modals in one go — used by the file modal's
+   * explicit X button, as distinct from closeFileViewer() (backdrop click / implicit
+   * goBackFile() fallback), which only closes the file and reveals the observation
+   * modal underneath if one is open. */
+  closeFileAndObservation() {
+    this.selectedFile.set(null);
+    this.fileHistory.set([]);
+    this.selectedObservation.set(null);
+    this.syncModalUrl();
+  }
+
+  /** Closes the observation modal — used in place of the inline `selectedObservation.set(null)`
+   * calls in the template so the URL stays in sync. */
+  closeObservation() {
+    this.selectedObservation.set(null);
+    this.syncModalUrl();
   }
 
   async openMetadata(obs: Observation) {
@@ -460,6 +594,7 @@ export class AppComponent implements OnInit {
     this.selectedLineage.set(null);
     this.lineageFileStatuses.set({});
     this.hoveredLineageNode.set(null);
+    this.syncModalUrl();
     if (!obs._id) return;
     const full = await this.ocadbService.fetchObservationById(obs._id);
     if (!full || this.selectedObservation()?._id !== obs._id) return;
@@ -467,6 +602,29 @@ export class AppComponent implements OnInit {
     this.filesLoading.set(false);
     this.displayedObservations.update(list =>
       list.map(o => o._id === full._id ? full : o)
+    );
+    this.syncModalUrl();
+  }
+
+  /** Same as openObservation(), but resolves by obs_name instead of a pre-fetched
+   * Observation object — used to restore an observation modal from a shared URL, where
+   * only the name is known. */
+  async openObservationByName(name: string) {
+    this.filesLoading.set(true);
+    this.calibrationFilesLoading.set(true);
+    this.sourceFilesView.set('list');
+    this.selectedLineage.set(null);
+    this.lineageFileStatuses.set({});
+    this.hoveredLineageNode.set(null);
+    const full = await this.ocadbService.fetchObservationByName(name);
+    if (!full) {
+      this.filesLoading.set(false);
+      return;
+    }
+    this.selectedObservation.set(full);
+    this.filesLoading.set(false);
+    this.displayedObservations.update(list =>
+      list.some(o => o._id === full._id) ? list.map(o => o._id === full._id ? full : o) : list
     );
   }
 
@@ -651,10 +809,7 @@ export class AppComponent implements OnInit {
     // stays exactly on its own line no matter how spread out the fan is. "row" only adds
     // a small perpendicular nudge, to separate labels that land at a similar point along
     // their (different) curves.
-    const stackIndex = this.lineageEdgeLabelStackIndex(edge, outgoing);
-    const rowsPerColumn = 4;
-    const row = stackIndex % rowsPerColumn;
-    const column = Math.floor(stackIndex / rowsPerColumn);
+    const { row, column } = this.lineageLabelSlots().get(`${edge.from} ${edge.to}`) ?? { row: 0, column: 0 };
 
     // Distance along the curve is inversely proportional to zoom, so the label's
     // on-screen distance from the node stays roughly constant (and small) instead of
@@ -674,19 +829,33 @@ export class AppComponent implements OnInit {
     return { x, y: y + row * lineSpacing * (outgoing ? 1 : -1) };
   }
 
-  private lineageEdgeLabelStackIndex(edge: LineageGraphEdge, outgoing: boolean): number {
+  /** row/column slot for every currently-highlighted edge's label, keyed by "from to" —
+   * computed once per hover in a single pass (rather than each label re-filtering/sorting
+   * the edge list independently) so every label agrees on the same layout, with no chance
+   * of two calls disagreeing about a shared node's position. Outgoing and incoming edges
+   * are numbered in their own separate sequence, in stable backend response order (not
+   * geometry — x positions can end up identical or nearly so for edges that share an
+   * attachment point on the node, which made sorting by x an unreliable tiebreaker). */
+  lineageLabelSlots = computed<Map<string, { row: number; column: number }>>(() => {
     const layout = this.lineageGraphLayout();
     const hovered = this.hoveredLineageNode();
-    if (!layout || hovered === null) return 0;
-    const sameSide = layout.edges
-      .filter(e => (e.from === hovered) === outgoing && (e.from === hovered || e.to === hovered))
-      .sort((a, b) => {
-        const ax = outgoing ? (a.points[a.points.length - 1]?.x ?? 0) : (a.points[0]?.x ?? 0);
-        const bx = outgoing ? (b.points[b.points.length - 1]?.x ?? 0) : (b.points[0]?.x ?? 0);
-        return ax - bx;
-      });
-    return sameSide.findIndex(e => e.from === edge.from && e.to === edge.to);
-  }
+    const slots = new Map<string, { row: number; column: number }>();
+    if (!layout || hovered === null) return slots;
+    const rowsPerColumn = 4;
+
+    let outIndex = 0;
+    let inIndex = 0;
+    for (const e of layout.edges) {
+      if (e.from === hovered) {
+        slots.set(`${e.from} ${e.to}`, { row: outIndex % rowsPerColumn, column: Math.floor(outIndex / rowsPerColumn) });
+        outIndex++;
+      } else if (e.to === hovered) {
+        slots.set(`${e.from} ${e.to}`, { row: inIndex % rowsPerColumn, column: Math.floor(inIndex / rowsPerColumn) });
+        inIndex++;
+      }
+    }
+    return slots;
+  });
 
   /** Whether this edge touches the currently-hovered node — used to light it up and
    * dim everything else so the connection is unambiguous at a glance. */
@@ -1171,6 +1340,7 @@ export class AppComponent implements OnInit {
       this.displayedObservations.set(results);
       this.ocadbService.pagination.update(p => ({ ...p, total: results.length, page: 1 }));
       this.loadDropdowns();
+      this.syncSearchUrl();
       return;
     }
 
@@ -1193,6 +1363,7 @@ export class AppComponent implements OnInit {
     }
     this.displayedObservations.set(results);
     this.loadDropdowns();
+    this.syncSearchUrl();
   }
 
   get totalPages(): number {
@@ -1218,6 +1389,15 @@ export class AppComponent implements OnInit {
 
   async goToPage(page: number) {
     if (page < 1 || page > this.totalPages) return;
+    await this.fetchObservationsPage(page);
+    this.syncSearchUrl();
+  }
+
+  /** The actual page fetch, shared by goToPage() (which guards against an out-of-range
+   * page using the already-known totalPages) and restoreStateFromUrl() (which can't use
+   * that guard on a cold load — `total` isn't known yet, so totalPages would wrongly
+   * read as 1 and reject any page > 1 from the URL). */
+  private async fetchObservationsPage(page: number) {
     const coordinates = this.coneCoordinates().trim();
     const cone_search = (this.coneSearchExpanded() && coordinates) ? {
       coordinates,
