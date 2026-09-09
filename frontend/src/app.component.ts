@@ -627,14 +627,26 @@ export class AppComponent implements OnInit {
 
   /** Label position near the hovered end of the edge (not the midpoint) — so it's
    * visible right next to the rectangle the user is actually pointing at, rather than
-   * possibly off-screen at the other end of a long connection when zoomed in. */
+   * possibly off-screen at the other end of a long connection when zoomed in. Evaluated
+   * on the SAME cubic Bezier that lineageEdgePath() actually draws (not a straight-line
+   * lerp between the endpoints) — those two paths diverge, especially near each node
+   * since the curve's control points are vertically offset, and the gap only grows with
+   * ranksep, so a straight-line approximation drifts further off the visible line the
+   * more spaced out the graph is. */
   lineageEdgeLabelPosition(edge: LineageGraphEdge): { x: number; y: number } {
     const pts = edge.points;
     if (!pts.length) return { x: 0, y: 0 };
-    const start = pts[0];
-    const end = pts[pts.length - 1];
+    const p0 = pts[0];
+    const p3 = pts[pts.length - 1];
+    const midY = (p0.y + p3.y) / 2;
+    const p1 = { x: p0.x, y: midY };
+    const p2 = { x: p3.x, y: midY };
     const t = edge.from === this.hoveredLineageNode() ? 0.18 : 0.82;
-    return { x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t };
+    const u = 1 - t;
+    return {
+      x: u * u * u * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t * t * t * p3.x,
+      y: u * u * u * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t * t * t * p3.y,
+    };
   }
 
   /** Whether this edge touches the currently-hovered node — used to light it up and
