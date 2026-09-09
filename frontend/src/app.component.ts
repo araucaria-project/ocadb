@@ -659,7 +659,14 @@ export class AppComponent implements OnInit {
     // otherwise it falls further behind the enlarging text the more you zoom in.
     const stackIndex = this.lineageEdgeLabelStackIndex(edge, outgoing);
     const lineSpacing = 14;
-    return { x, y: y + stackIndex * lineSpacing * (outgoing ? 1 : -1) };
+    // Labels aren't infinitely wide — with a dozen+ edges fanning into one node, stacking
+    // them all in a single column drifts the last ones far off past unrelated rows below.
+    // Wrap into a new column, restarting from the top, every few rows instead.
+    const rowsPerColumn = 4;
+    const row = stackIndex % rowsPerColumn;
+    const column = Math.floor(stackIndex / rowsPerColumn);
+    const columnWidth = 95;
+    return { x: x + column * columnWidth, y: y + row * lineSpacing * (outgoing ? 1 : -1) };
   }
 
   private lineageEdgeLabelStackIndex(edge: LineageGraphEdge, outgoing: boolean): number {
