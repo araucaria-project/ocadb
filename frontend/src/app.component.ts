@@ -641,32 +641,37 @@ export class AppComponent implements OnInit {
     const midY = (p0.y + p3.y) / 2;
     const p1 = { x: p0.x, y: midY };
     const p2 = { x: p3.x, y: midY };
+    const outgoing = edge.from === this.hoveredLineageNode();
+
+    // Several edges fanning in/out of the same node land their labels almost on top of
+    // each other near it. Rather than nudging the label off to a fixed pixel offset
+    // (which drifts away from whichever curve it's meant to annotate — every edge fans
+    // out to a different x, so the same flat offset lines up with some and not others),
+    // each "column" instead samples further along THIS edge's own curve, so the label
+    // stays exactly on its own line no matter how spread out the fan is. "row" only adds
+    // a small perpendicular nudge, to separate labels that land at a similar point along
+    // their (different) curves.
+    const stackIndex = this.lineageEdgeLabelStackIndex(edge, outgoing);
+    const rowsPerColumn = 4;
+    const row = stackIndex % rowsPerColumn;
+    const column = Math.floor(stackIndex / rowsPerColumn);
+
     // Distance along the curve is inversely proportional to zoom, so the label's
     // on-screen distance from the node stays roughly constant (and small) instead of
     // growing right along with the zoom level — the more you zoom in, the smaller a
     // graph-space offset is needed to stay a comfortable, legible distance away.
     const baseT = Math.min(0.3, Math.max(0.06, 0.16 / this.lineageZoom()));
-    const outgoing = edge.from === this.hoveredLineageNode();
-    const t = outgoing ? baseT : 1 - baseT;
+    const tMag = Math.min(0.46, baseT + column * 0.05);
+    const t = outgoing ? tMag : 1 - tMag;
     const u = 1 - t;
     const x = u * u * u * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t * t * t * p3.x;
     const y = u * u * u * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t * t * t * p3.y;
-    // Several edges fanning in/out of the same node land their labels almost on top of
-    // each other near it — stack same-direction labels into a small vertical list instead.
+
     // The label's font-size lives in the same graph-space coordinates as everything else
-    // (inside the zoomed <g>), so it visually grows with zoom too — the spacing has to be
-    // a plain graph-space constant (not divided by zoom) to grow right along with it,
-    // otherwise it falls further behind the enlarging text the more you zoom in.
-    const stackIndex = this.lineageEdgeLabelStackIndex(edge, outgoing);
+    // (inside the zoomed <g>), so it visually grows with zoom too — this nudge has to be
+    // a plain graph-space constant (not divided by zoom) to grow right along with it.
     const lineSpacing = 14;
-    // Labels aren't infinitely wide — with a dozen+ edges fanning into one node, stacking
-    // them all in a single column drifts the last ones far off past unrelated rows below.
-    // Wrap into a new column, restarting from the top, every few rows instead.
-    const rowsPerColumn = 4;
-    const row = stackIndex % rowsPerColumn;
-    const column = Math.floor(stackIndex / rowsPerColumn);
-    const columnWidth = 95;
-    return { x: x + column * columnWidth, y: y + row * lineSpacing * (outgoing ? 1 : -1) };
+    return { x, y: y + row * lineSpacing * (outgoing ? 1 : -1) };
   }
 
   private lineageEdgeLabelStackIndex(edge: LineageGraphEdge, outgoing: boolean): number {
