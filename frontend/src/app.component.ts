@@ -61,6 +61,10 @@ export class AppComponent implements OnInit {
   shareLoading = signal(false);
   shareCopied = signal(false);
   selectedMetadata = signal<{ obs_name: string; metadata: Record<string, any> } | null>(null);
+  /** Set when a shared URL's ?obs=<name> doesn't resolve to any observation — surfaced
+   * as a small dialog rather than silently falling back to the plain default search, so
+   * a stale/typo'd link doesn't look like it just did nothing. */
+  observationNotFoundName = signal<string | null>(null);
   selectedMetadataHtml = computed(() => {
     const m = this.selectedMetadata();
     return m ? this.formatJsonHtml(m.metadata) : null;
@@ -420,9 +424,11 @@ export class AppComponent implements OnInit {
         const file = await this.ocadbService.fetchFileByFilename(view.fileName);
         this.selectedObservation.set(null);
         this.selectedFile.set(file);
+        this.observationNotFoundName.set(null);
       } else {
         this.selectedObservation.set(null);
         this.selectedFile.set(null);
+        this.observationNotFoundName.set(null);
       }
     } finally {
       this.restoringFromUrl = false;
@@ -470,6 +476,13 @@ export class AppComponent implements OnInit {
     const next = new URLSearchParams(qs);
     if (current.get('obs') === next.get('obs') && current.get('file') === next.get('file')) return;
     window.history.pushState(null, '', qs ? `${window.location.pathname}?${qs}` : window.location.pathname);
+  }
+
+  /** Dismisses the "observation not found" dialog and strips the stale obs= param from
+   * the URL, so reloading doesn't immediately re-trigger the same dialog. */
+  dismissObservationNotFound() {
+    this.observationNotFoundName.set(null);
+    this.syncModalUrl();
   }
 
   async handleLogin(event: Event) {
@@ -552,6 +565,7 @@ export class AppComponent implements OnInit {
 
   async openObservation(obs: Observation) {
     this.selectedObservation.set(obs);
+    this.observationNotFoundName.set(null);
     this.filesLoading.set(true);
     this.calibrationFilesLoading.set(true);
     this.sourceFilesView.set('list');
@@ -585,8 +599,10 @@ export class AppComponent implements OnInit {
     const full = await this.ocadbService.fetchObservationByName(name);
     if (!full) {
       this.filesLoading.set(false);
+      this.observationNotFoundName.set(name);
       return;
     }
+    this.observationNotFoundName.set(null);
     this.selectedObservation.set(full);
     this.filesLoading.set(false);
     this.displayedObservations.update(list =>
