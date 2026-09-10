@@ -214,7 +214,13 @@ async def get_observation_by_obs_name(
 
     if not observations:
         raise HTTPException(status_code=404, detail=f"Observation with name {observation_name} not found")
-    return observations[0]
+
+    # The aggregation above doesn't resolve `files: List[Link[FITSFile]]` the way
+    # Observation.get(..., fetch_links=True) does (GET /{id}/ below) — without this,
+    # `files` comes back empty/unresolved, so callers of this endpoint (URL restore,
+    # obs-name search mode) would see empty Files/Source files sections in the UI.
+    full = await Observation.get(observations[0].id, fetch_links=True)
+    return full if full is not None else observations[0]
 
 @router.get("/by-object/{object_name}/", response_description="List Observations by object name", response_model=dict[str, Union[List[Observation], Any]])
 async def list_observations_by_object(

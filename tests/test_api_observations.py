@@ -122,6 +122,37 @@ async def test_get_by_observation_name_not_found(client, auth_headers, regular_u
     assert resp.status_code == 404
 
 
+async def test_get_by_observation_name_resolves_linked_files(client, auth_headers, regular_user):
+    """The aggregation pipeline behind by-observation-name doesn't resolve
+    files: List[Link[FITSFile]] the way GET /{id}/ (fetch_links=True) does — without a
+    fix, files comes back empty even though the observation has linked files."""
+    header = make_fits_header()
+    await client.post("/api/v2/observations/", json=make_obs_payload(obs_name="obs_with_linked_file"), headers=auth_headers)
+    await client.post(
+        "/api/v2/files/",
+        json={
+            "filename": "linked.fits",
+            "file_class": "raw",
+            "obs_name": "obs_with_linked_file",
+            "file_status": {
+                "observatory": {"ready": False, "check_needed": False, "status": "not_stored"},
+                "hub": {"ready": False, "check_needed": False, "status": "not_stored"},
+                "cloud": {"ready": False, "check_needed": False, "status": "not_stored"},
+            },
+            "fits_header": header.model_dump(by_alias=True),
+            "access_tags": [],
+            "source_filenames": [],
+        },
+        headers=auth_headers,
+    )
+
+    resp = await client.get("/api/v2/observations/by-observation-name/obs_with_linked_file/", headers=auth_headers)
+    assert resp.status_code == 200
+    files = resp.json()["files"]
+    assert len(files) == 1
+    assert files[0]["filename"] == "linked.fits"
+
+
 # --- Search by object ---
 
 async def test_list_by_object_name(client, auth_headers, regular_user):

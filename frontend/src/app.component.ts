@@ -6,30 +6,20 @@ import { OcadbService, Observation, SearchFilters, SearchObject, SearchTag, Fits
 import { ApiLogService, ApiLogEntry } from './services/api-log.service';
 import { FlatpickrDirective } from './flatpickr.directive';
 import { InfoIconComponent } from './info-icon.component';
-import { Graph, layout as dagreLayout } from '@dagrejs/dagre';
 import { buildSearchParams, parseSearchParams, UrlSearchState, UrlViewState } from './url-state';
+import cytoscape from 'cytoscape';
+import fcose from 'cytoscape-fcose';
 
-interface LineageGraphNode {
-  filename: string;
-  node: FileLineage['nodes'][string] | null;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
+cytoscape.use(fcose);
 
-interface LineageGraphEdge {
-  from: string;
-  to: string;
-  points: { x: number; y: number }[];
-}
-
-interface LineageGraphLayout {
-  nodes: LineageGraphNode[];
-  edges: LineageGraphEdge[];
-  width: number;
-  height: number;
-}
+// Node fill/border/text per file_class, for the Cytoscape canvas (Tailwind classes
+// used elsewhere in the app aren't usable on <canvas>-rendered elements).
+const LINEAGE_NODE_COLORS: Record<string, { bg: string; border: string; text: string }> = {
+  raw: { bg: '#451a03', border: '#d97706', text: '#fbbf24' },
+  zdf: { bg: '#022c22', border: '#059669', text: '#34d399' },
+  master: { bg: '#082f49', border: '#0284c7', text: '#38bdf8' },
+  default: { bg: '#1f253d', border: '#475569', text: '#94a3b8' },
+};
 
 @Component({
   selector: 'app-root',
@@ -493,44 +483,9 @@ export class AppComponent implements OnInit {
   }
 
   async openLineageFile(filename: string) {
-    if (this.lineageDragMoved) return; // don't open a node the user just dragged through
     const file = await this.ocadbService.fetchFileByFilename(filename);
     if (!file) return;
     this.openSourceFile(file);
-  }
-
-  onLineageWheel(event: WheelEvent) {
-    event.preventDefault();
-    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    const mx = event.clientX - rect.left;
-    const my = event.clientY - rect.top;
-    const oldZoom = this.lineageZoom();
-    const factor = event.deltaY < 0 ? 1.1 : 1 / 1.1;
-    const newZoom = Math.min(4, Math.max(0.2, oldZoom * factor));
-    const pan = this.lineagePan();
-    const gx = (mx - pan.x) / oldZoom;
-    const gy = (my - pan.y) / oldZoom;
-    this.lineagePan.set({ x: mx - gx * newZoom, y: my - gy * newZoom });
-    this.lineageZoom.set(newZoom);
-  }
-
-  onLineageDragStart(event: MouseEvent) {
-    this.lineageDragging = true;
-    this.lineageDragMoved = false;
-    this.lineageDragStart = { x: event.clientX, y: event.clientY };
-    this.lineagePanStart = this.lineagePan();
-  }
-
-  onLineageDragMove(event: MouseEvent) {
-    if (!this.lineageDragging) return;
-    const dx = event.clientX - this.lineageDragStart.x;
-    const dy = event.clientY - this.lineageDragStart.y;
-    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) this.lineageDragMoved = true;
-    this.lineagePan.set({ x: this.lineagePanStart.x + dx, y: this.lineagePanStart.y + dy });
-  }
-
-  onLineageDragEnd() {
-    this.lineageDragging = false;
   }
 
   goBackFile() {
@@ -593,7 +548,8 @@ export class AppComponent implements OnInit {
     this.sourceFilesView.set('list');
     this.selectedLineage.set(null);
     this.lineageFileStatuses.set({});
-    this.hoveredLineageNode.set(null);
+    this.cy?.destroy();
+    this.cy = null;
     this.syncModalUrl();
     if (!obs._id) return;
     const full = await this.ocadbService.fetchObservationById(obs._id);
@@ -615,7 +571,8 @@ export class AppComponent implements OnInit {
     this.sourceFilesView.set('list');
     this.selectedLineage.set(null);
     this.lineageFileStatuses.set({});
-    this.hoveredLineageNode.set(null);
+    this.cy?.destroy();
+    this.cy = null;
     const full = await this.ocadbService.fetchObservationByName(name);
     if (!full) {
       this.filesLoading.set(false);
@@ -630,15 +587,11 @@ export class AppComponent implements OnInit {
 
   sourceFilesView = signal<'list' | 'lineage'>('list');
 
-  lineageZoom = signal(1);
-  lineagePan = signal({ x: 20, y: 20 });
   lineageFileStatuses = signal<Record<string, StorageStatus>>({});
   lineageStatusesLoading = signal(false);
-  hoveredLineageNode = signal<string | null>(null);
-  private lineageDragging = false;
-  private lineageDragMoved = false;
-  private lineageDragStart = { x: 0, y: 0 };
-  private lineagePanStart = { x: 0, y: 0 };
+
+  @ViewChild('lineageCyContainer') lineageCyContainerRef?: ElementRef<HTMLDivElement>;
+  private cy: cytoscape.Core | null = null;
 
   showSourceFilesListView() {
     this.sourceFilesView.set('list');
@@ -647,21 +600,19 @@ export class AppComponent implements OnInit {
   async showSourceFilesLineageView() {
     this.sourceFilesView.set('lineage');
     if (this.selectedLineage()) {
-      // Already fetched for the current observation — still re-fit every time this view
-      // is (re)entered, not just on the very first fetch, so toggling away and back
-      // doesn't strand the view at a stale zoom/pan.
-      this.fitLineageView();
+      // Already fetched for the current observation — the container div was torn down
+      // and rebuilt while this view was hidden, so the old cy instance's canvas is gone
+      // even though the data hasn't changed. Just re-render into the fresh container.
+      setTimeout(() => this.renderLineageGraph());
       return;
     }
-    this.lineageZoom.set(1);
-    this.lineagePan.set({ x: 20, y: 20 });
     const obs = this.selectedObservation();
     if (!obs?._id) return;
     this.lineageLoading.set(true);
     const lineage = await this.ocadbService.fetchFileLineage(obs._id);
     this.lineageLoading.set(false);
     this.selectedLineage.set(lineage);
-    this.fitLineageView();
+    setTimeout(() => this.renderLineageGraph());
     // The tree is fully drawable from `lineage` alone (structure, badges, labels) — storage
     // status is fetched separately afterward so the tree never waits on it, and fills in
     // in place once it lands.
@@ -674,201 +625,196 @@ export class AppComponent implements OnInit {
     this.lineageStatusesLoading.set(true);
     const statuses = await this.ocadbService.fetchFileStatuses(unique);
     this.lineageStatusesLoading.set(false);
-    if (statuses) this.lineageFileStatuses.set(statuses);
-  }
-
-  /** Zoom/pan so the graph's full width fits on open, instead of always starting at 1x —
-   * a wide tree would otherwise render as a thin sliver of itself within the fixed
-   * viewport, forcing a manual zoom-out just to see what's there. Deliberately fits WIDTH
-   * only, not height: fitting both would silently cancel out ranksep/nodesep tuning, since
-   * a taller graph would just get zoomed out further to compensate, keeping the on-screen
-   * gap-to-node ratio identical no matter what the layout params are. Extra height is
-   * reached by panning instead. Approximates the viewport as the container's CSS cap
-   * (640px square) since there's no live DOM measurement wired up here. */
-  private fitLineageView() {
-    const layout = this.lineageGraphLayout();
-    if (!layout || !layout.width || !layout.height) return;
-    const viewport = 600; // ~640px container minus a little breathing room
-    const fitZoom = viewport / layout.width;
-    // Floor is deliberately high: for wide graphs (many siblings), width was already the
-    // limiting dimension, so shrinking further to fit it would swallow ranksep/nodesep
-    // right along with everything else — better to stay at a readable scale and let the
-    // user pan horizontally for the rest.
-    const zoom = Math.min(1.2, Math.max(0.75, fitZoom));
-    this.lineageZoom.set(zoom);
-    this.lineagePan.set({
-      x: Math.max(20, (viewport - layout.width * zoom) / 2 + 20),
-      y: 20,
-    });
+    if (!statuses) return;
+    this.lineageFileStatuses.set(statuses);
+    // Patch the already-rendered graph in place rather than re-laying-out from scratch —
+    // fcose is a physics-based layout, so re-running it on every status arrival would
+    // reshuffle node positions the user is already looking at.
+    if (!this.cy) return;
+    for (const [filename, status] of Object.entries(statuses)) {
+      this.cy.getElementById(filename).data('cloudStatus', status.cloud.status);
+    }
   }
 
   /** Function label (flat/dark/zero/...) when the file's own IMAGETYP says something
    * meaningful, otherwise its file_class type (RAW/ZDF/MASTER/...) — used for graph node
    * labels, where every node is a first-class box regardless of tree position (unlike the
    * old flat-list rendering, a true graph needs no root/depth special-casing here). */
+  objectKeys(obj: Record<string, unknown>): string[] {
+    return Object.keys(obj);
+  }
+
   getGraphNodeLabel(node: FileLineage['nodes'][string]): string {
     const imagetyp = node.image_type?.toLowerCase();
     if (imagetyp && imagetyp !== 'raw' && imagetyp !== 'object') return imagetyp;
     return this.getFileLabelByType(node.file_class);
   }
 
-  /** Lays out the lineage graph top-to-bottom with dagre: the observation's own files sit
-   * above the sources they were derived from, and a source shared by multiple files is a
-   * single node with multiple converging edges — exactly what a DAG layout is for, so no
-   * "shared, see above" bookkeeping is needed the way the old flat-list rendering required. */
-  lineageGraphLayout = computed<LineageGraphLayout | null>(() => {
+  /** Builds a fresh Cytoscape instance from selectedLineage() into #lineageCyContainer,
+   * laid out with fcose (a force-directed "compound spring embedder"). Unlike the
+   * previous dagre/layered layout, fcose doesn't cram every same-depth sibling into one
+   * row — nodes repel each other and spread into whatever 2D space is available, so a
+   * master file with 20 calibration sources fans out organically instead of becoming an
+   * unreadable wide strip. */
+  private renderLineageGraph() {
+    const container = this.lineageCyContainerRef?.nativeElement;
     const lineage = this.selectedLineage();
-    if (!lineage) return null;
+    if (!container || !lineage) return;
 
-    const g = new Graph();
-    g.setGraph({ rankdir: 'TB', nodesep: 24, ranksep: 180, marginx: 12, marginy: 12 });
-    g.setDefaultEdgeLabel(() => ({}));
+    this.cy?.destroy();
 
-    const nodeWidth = (filename: string) => Math.max(140, Math.min(260, filename.length * 6 + 36));
-    const NODE_HEIGHT = 62;
-
-    const known = new Set(Object.keys(lineage.nodes));
-    for (const filename of known) {
-      g.setNode(filename, { width: nodeWidth(filename), height: NODE_HEIGHT });
+    const nodeIds = new Set(Object.keys(lineage.nodes));
+    const elements: cytoscape.ElementDefinition[] = [];
+    for (const filename of nodeIds) {
+      const node = lineage.nodes[filename];
+      elements.push({
+        data: {
+          id: filename,
+          filename,
+          resolved: true,
+          badgeLabel: this.getGraphNodeLabel(node),
+          fileClass: node.file_class,
+          cloudStatus: this.lineageFileStatuses()[filename]?.cloud.status ?? node.cloud_status,
+        },
+      });
     }
     for (const e of lineage.edges) {
-      // A source_filenames entry with no matching FITSFile document (not yet ingested)
-      // still needs a node to draw the edge into — same "?" fallback as the list view.
       for (const name of [e.from, e.to]) {
-        if (!known.has(name)) {
-          g.setNode(name, { width: nodeWidth(name), height: NODE_HEIGHT });
-          known.add(name);
+        if (!nodeIds.has(name)) {
+          // A source_filenames entry with no matching FITSFile document (not yet
+          // ingested) still needs a node to draw the edge into — same "?" fallback as
+          // the list view.
+          nodeIds.add(name);
+          elements.push({ data: { id: name, filename: name, resolved: false, badgeLabel: '?' } });
         }
       }
-      g.setEdge(e.from, e.to);
+      elements.push({ data: { id: `${e.from}->${e.to}`, source: e.from, target: e.to } });
     }
 
-    dagreLayout(g);
-
-    const nodes: LineageGraphNode[] = g.nodes().map(filename => {
-      const n = g.node(filename);
-      return {
-        filename,
-        node: lineage.nodes[filename] ?? null,
-        x: n.x - n.width / 2,
-        y: n.y - n.height / 2,
-        width: n.width,
-        height: n.height,
-      };
+    this.cy = cytoscape({
+      container,
+      elements,
+      userZoomingEnabled: true,
+      userPanningEnabled: true,
+      boxSelectionEnabled: false,
+      style: [
+        {
+          selector: 'node',
+          style: {
+            'shape': 'round-rectangle',
+            'width': 140,
+            'height': 56,
+            'background-color': (n: any) => (LINEAGE_NODE_COLORS[n.data('fileClass')] ?? LINEAGE_NODE_COLORS['default']).bg,
+            'border-width': 1.5,
+            'border-color': (n: any) => (LINEAGE_NODE_COLORS[n.data('fileClass')] ?? LINEAGE_NODE_COLORS['default']).border,
+            'label': (n: any) => `${n.data('badgeLabel')}\n${n.data('filename')}${n.data('cloudStatus') ? '\n☁ ' + n.data('cloudStatus') : ''}`,
+            'color': (n: any) => (LINEAGE_NODE_COLORS[n.data('fileClass')] ?? LINEAGE_NODE_COLORS['default']).text,
+            'font-family': 'monospace',
+            'font-size': 9,
+            'text-wrap': 'wrap',
+            'text-max-width': '120px',
+            'text-valign': 'center',
+            'text-halign': 'center',
+            'text-overflow-wrap': 'anywhere',
+          },
+        },
+        { selector: 'node[!resolved]', style: { 'border-style': 'dashed' } },
+        { selector: 'node.cy-hover', style: { 'cursor': 'pointer' } as any },
+        {
+          selector: 'edge',
+          style: {
+            'curve-style': 'bezier',
+            'width': 1.5,
+            'line-color': '#475569',
+            'target-arrow-color': '#475569',
+            'target-arrow-shape': 'triangle',
+            'arrow-scale': 0.9,
+            // Labels sit near whichever endpoint the user is actually hovering over
+            // (source-label near the edge's source node, target-label near its target),
+            // rather than at the edge midpoint — with many edges fanning through the
+            // middle of the graph, midpoint labels for different edges land on top of
+            // each other far from the rectangle the user is pointing at.
+            'source-label': 'data(sourceLabel)',
+            'target-label': 'data(targetLabel)',
+            'source-text-offset': 24,
+            'target-text-offset': 24,
+            'font-family': 'monospace',
+            'font-size': 8,
+            'color': '#e2e8f0',
+            'text-background-color': '#0b0d17',
+            'text-background-opacity': 1,
+            'text-background-padding': '2px',
+          },
+        },
+        {
+          selector: '.lineage-faded',
+          style: { 'opacity': 0.2 },
+        },
+        {
+          // Scoped to edges specifically — 'width' is a valid property on both nodes
+          // (box width) and edges (line width), so an unscoped '.lineage-highlighted'
+          // selector here was also shrinking the hovered node's own box down to 2.5px,
+          // which is what made it look like the hovered rectangle vanished/blinked.
+          selector: 'edge.lineage-highlighted',
+          style: {
+            'line-color': '#38bdf8',
+            'target-arrow-color': '#38bdf8',
+            'width': 2.5,
+            'opacity': 1,
+          },
+        },
+        {
+          selector: 'node.lineage-highlighted',
+          style: { 'border-width': 2.5, 'border-color': '#38bdf8', 'opacity': 1 } as any,
+        },
+      ],
+      layout: {
+        name: 'fcose',
+        quality: 'default',
+        animate: false,
+        // Without this, fcose spaces nodes using only their fixed width/height (140x56)
+        // and ignores that the label itself (badge + filename + status, wrapped to 3
+        // lines) can render right up to — or past — those bounds, so boxes end up
+        // overlapping and their edges appear to converge on a single jumbled point
+        // instead of fanning out cleanly.
+        nodeDimensionsIncludeLabels: true,
+        nodeSeparation: 160,
+        idealEdgeLength: 150,
+        nodeRepulsion: 10000,
+      } as any,
     });
 
-    const edges: LineageGraphEdge[] = g.edges().map(e => ({
-      from: e.v,
-      to: e.w,
-      points: g.edge(e).points ?? [],
-    }));
+    this.cy.on('tap', 'node', evt => {
+      const n = evt.target;
+      if (n.data('resolved')) this.openLineageFile(n.id());
+    });
 
-    const graphInfo = g.graph();
-    return { nodes, edges, width: graphInfo.width ?? 400, height: graphInfo.height ?? 200 };
-  });
+    this.cy.on('mouseover', 'node', evt => {
+      const n = evt.target;
+      const neighborhood = n.closedNeighborhood();
+      this.cy!.elements().difference(neighborhood).addClass('lineage-faded');
+      neighborhood.addClass('lineage-highlighted');
+      n.connectedEdges().forEach((edge: any) => {
+        const isSource = edge.data('source') === n.id();
+        const otherEnd = isSource ? edge.data('target') : edge.data('source');
+        if (isSource) {
+          edge.data('sourceLabel', `${otherEnd} →`);
+          edge.data('targetLabel', '');
+        } else {
+          edge.data('sourceLabel', '');
+          edge.data('targetLabel', `→ ${otherEnd}`);
+        }
+      });
+    });
+    this.cy.on('mouseout', 'node', () => {
+      this.cy!.elements().removeClass('lineage-faded lineage-highlighted');
+      this.cy!.edges().forEach((edge: any) => {
+        edge.data('sourceLabel', '');
+        edge.data('targetLabel', '');
+      });
+    });
 
-  /** SVG path 'd' attribute for one edge, as a smooth vertical S-curve rather than a
-   * straight line. When many siblings fan into one shared source (e.g. a dozen RAW
-   * calibration frames into one MASTER), straight diagonal lines all cross at a shallow
-   * angle and merge into an indistinguishable band. A cubic Bezier with control points
-   * held at each end's x and the midpoint's y leaves each edge vertical right at its
-   * node, so it's traceable at a glance, and only fans out in the middle. */
-  lineageEdgePath(edge: LineageGraphEdge): string {
-    const pts = edge.points;
-    if (!pts.length) return '';
-    if (pts.length === 1) return `M${pts[0].x},${pts[0].y}`;
-    const start = pts[0];
-    const end = pts[pts.length - 1];
-    const midY = (start.y + end.y) / 2;
-    return `M${start.x},${start.y} C${start.x},${midY} ${end.x},${midY} ${end.x},${end.y}`;
-  }
-
-  /** Label position near the hovered end of the edge (not the midpoint) — so it's
-   * visible right next to the rectangle the user is actually pointing at, rather than
-   * possibly off-screen at the other end of a long connection when zoomed in. Evaluated
-   * on the SAME cubic Bezier that lineageEdgePath() actually draws (not a straight-line
-   * lerp between the endpoints) — those two paths diverge, especially near each node
-   * since the curve's control points are vertically offset, and the gap only grows with
-   * ranksep, so a straight-line approximation drifts further off the visible line the
-   * more spaced out the graph is. */
-  lineageEdgeLabelPosition(edge: LineageGraphEdge): { x: number; y: number } {
-    const pts = edge.points;
-    if (!pts.length) return { x: 0, y: 0 };
-    const p0 = pts[0];
-    const p3 = pts[pts.length - 1];
-    const midY = (p0.y + p3.y) / 2;
-    const p1 = { x: p0.x, y: midY };
-    const p2 = { x: p3.x, y: midY };
-    const outgoing = edge.from === this.hoveredLineageNode();
-
-    // Several edges fanning in/out of the same node land their labels almost on top of
-    // each other near it. Rather than nudging the label off to a fixed pixel offset
-    // (which drifts away from whichever curve it's meant to annotate — every edge fans
-    // out to a different x, so the same flat offset lines up with some and not others),
-    // each "column" instead samples further along THIS edge's own curve, so the label
-    // stays exactly on its own line no matter how spread out the fan is. "row" only adds
-    // a small perpendicular nudge, to separate labels that land at a similar point along
-    // their (different) curves.
-    const { row, column } = this.lineageLabelSlots().get(`${edge.from} ${edge.to}`) ?? { row: 0, column: 0 };
-
-    // Distance along the curve is inversely proportional to zoom, so the label's
-    // on-screen distance from the node stays roughly constant (and small) instead of
-    // growing right along with the zoom level — the more you zoom in, the smaller a
-    // graph-space offset is needed to stay a comfortable, legible distance away.
-    const baseT = Math.min(0.3, Math.max(0.06, 0.16 / this.lineageZoom()));
-    const tMag = Math.min(0.46, baseT + column * 0.05);
-    const t = outgoing ? tMag : 1 - tMag;
-    const u = 1 - t;
-    const x = u * u * u * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t * t * t * p3.x;
-    const y = u * u * u * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t * t * t * p3.y;
-
-    // The label's font-size lives in the same graph-space coordinates as everything else
-    // (inside the zoomed <g>), so it visually grows with zoom too — this nudge has to be
-    // a plain graph-space constant (not divided by zoom) to grow right along with it.
-    const lineSpacing = 14;
-    return { x, y: y + row * lineSpacing * (outgoing ? 1 : -1) };
-  }
-
-  /** row/column slot for every currently-highlighted edge's label, keyed by "from to" —
-   * computed once per hover in a single pass (rather than each label re-filtering/sorting
-   * the edge list independently) so every label agrees on the same layout, with no chance
-   * of two calls disagreeing about a shared node's position. Outgoing and incoming edges
-   * are numbered in their own separate sequence, in stable backend response order (not
-   * geometry — x positions can end up identical or nearly so for edges that share an
-   * attachment point on the node, which made sorting by x an unreliable tiebreaker). */
-  lineageLabelSlots = computed<Map<string, { row: number; column: number }>>(() => {
-    const layout = this.lineageGraphLayout();
-    const hovered = this.hoveredLineageNode();
-    const slots = new Map<string, { row: number; column: number }>();
-    if (!layout || hovered === null) return slots;
-    const rowsPerColumn = 4;
-
-    let outIndex = 0;
-    let inIndex = 0;
-    for (const e of layout.edges) {
-      if (e.from === hovered) {
-        slots.set(`${e.from} ${e.to}`, { row: outIndex % rowsPerColumn, column: Math.floor(outIndex / rowsPerColumn) });
-        outIndex++;
-      } else if (e.to === hovered) {
-        slots.set(`${e.from} ${e.to}`, { row: inIndex % rowsPerColumn, column: Math.floor(inIndex / rowsPerColumn) });
-        inIndex++;
-      }
-    }
-    return slots;
-  });
-
-  /** Whether this edge touches the currently-hovered node — used to light it up and
-   * dim everything else so the connection is unambiguous at a glance. */
-  isLineageEdgeHighlighted(edge: LineageGraphEdge): boolean {
-    const hovered = this.hoveredLineageNode();
-    return hovered !== null && (edge.from === hovered || edge.to === hovered);
-  }
-
-  /** The OTHER endpoint's filename for an edge touching the hovered node — edges point
-   * from a derived file to the source it came from, so label it accordingly. */
-  lineageEdgeOtherEndLabel(edge: LineageGraphEdge): string {
-    const hovered = this.hoveredLineageNode();
-    return edge.from === hovered ? `${edge.to} →` : `→ ${edge.from}`;
+    this.cy.ready(() => this.cy!.fit(undefined, 24));
   }
 
   handleLogout() {

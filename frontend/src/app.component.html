@@ -1791,68 +1791,10 @@
                       </svg>
                       <span class="text-[11px]">Getting file lineage</span>
                     </div>
-                  } @else if (!lineageGraphLayout() || lineageGraphLayout()!.nodes.length === 0) {
+                  } @else if (!selectedLineage() || !objectKeys(selectedLineage()!.nodes).length) {
                     <div class="text-center text-[11px] text-slate-600 py-5">No file lineage available</div>
                   } @else {
-                    <div class="relative w-full max-w-[640px] mx-auto aspect-square overflow-hidden rounded select-none cursor-grab active:cursor-grabbing"
-                      (wheel)="onLineageWheel($event)"
-                      (mousedown)="onLineageDragStart($event)"
-                      (mousemove)="onLineageDragMove($event)"
-                      (mouseup)="onLineageDragEnd()"
-                      (mouseleave)="onLineageDragEnd()">
-                      <svg width="100%" height="100%">
-                        <defs>
-                          <marker id="lineageArrow" viewBox="0 0 10 10" refX="9" refY="5"
-                            markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                            <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
-                          </marker>
-                          <marker id="lineageArrowActive" viewBox="0 0 10 10" refX="9" refY="5"
-                            markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                            <path d="M0,0 L10,5 L0,10 z" fill="#38bdf8"/>
-                          </marker>
-                        </defs>
-                        <g [attr.transform]="'translate(' + lineagePan().x + ',' + lineagePan().y + ') scale(' + lineageZoom() + ')'">
-                          @for (edge of lineageGraphLayout()!.edges; track $index) {
-                            <path [attr.d]="lineageEdgePath(edge)" fill="none"
-                              [attr.stroke]="isLineageEdgeHighlighted(edge) ? '#38bdf8' : '#475569'"
-                              [attr.stroke-width]="isLineageEdgeHighlighted(edge) ? 2.5 : 1.5"
-                              [attr.opacity]="!hoveredLineageNode() || isLineageEdgeHighlighted(edge) ? 1 : 0.25"
-                              [attr.marker-start]="isLineageEdgeHighlighted(edge) ? 'url(#lineageArrowActive)' : 'url(#lineageArrow)'"
-                              class="transition-all"/>
-                            @if (isLineageEdgeHighlighted(edge)) {
-                              <text [attr.x]="lineageEdgeLabelPosition(edge).x" [attr.y]="lineageEdgeLabelPosition(edge).y"
-                                text-anchor="middle" font-size="9" fill="#e2e8f0" stroke="#0b0d17" stroke-width="3"
-                                paint-order="stroke" style="font-family: monospace;">
-                                {{ lineageEdgeOtherEndLabel(edge) }}
-                              </text>
-                            }
-                          }
-                          @for (n of lineageGraphLayout()!.nodes; track n.filename) {
-                            <foreignObject [attr.x]="n.x" [attr.y]="n.y" [attr.width]="n.width" [attr.height]="n.height">
-                              <div xmlns="http://www.w3.org/1999/xhtml"
-                                class="w-full h-full flex flex-col items-center justify-center gap-0.5 rounded border px-1.5 overflow-hidden"
-                                [class]="(n.node ? getFileBadgeClassByType(n.node.file_class) : 'bg-space-800 text-slate-500 border-slate-700/50') + (n.node ? ' cursor-pointer hover:brightness-125 transition-all' : '')"
-                                [title]="n.filename"
-                                (click)="n.node && openLineageFile(n.filename)"
-                                (mouseenter)="hoveredLineageNode.set(n.filename)"
-                                (mouseleave)="hoveredLineageNode.set(null)">
-                                <span class="text-[9px] font-bold uppercase tracking-wide leading-none">
-                                  {{ n.node ? getGraphNodeLabel(n.node) : '?' }}
-                                </span>
-                                <span class="font-mono text-[10px] leading-none truncate w-full text-center">{{ n.filename }}</span>
-                                @if (lineageFileStatuses()[n.filename]; as status) {
-                                  <span class="text-[9px] leading-none" [class]="getStorageStatusClass(status.cloud.status, status.cloud.ready)">
-                                    ☁ {{ status.cloud.status }}
-                                  </span>
-                                } @else if (lineageStatusesLoading()) {
-                                  <span class="text-[9px] leading-none text-slate-600">…</span>
-                                }
-                              </div>
-                            </foreignObject>
-                          }
-                        </g>
-                      </svg>
-                    </div>
+                    <div #lineageCyContainer class="relative w-full max-w-[640px] mx-auto aspect-square overflow-hidden rounded"></div>
                   }
                 }
               </div>
