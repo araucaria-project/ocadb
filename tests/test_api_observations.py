@@ -1,6 +1,7 @@
 """Integration tests for /api/v2/observations endpoints."""
 import pytest
 from tests.conftest import make_fits_header
+from ocadb.models.download_script_event import DownloadScriptEvent
 
 
 def make_obs_payload(obs_name: str = "obs_test_001", **header_overrides):
@@ -151,6 +152,50 @@ async def test_get_by_observation_name_resolves_linked_files(client, auth_header
     files = resp.json()["files"]
     assert len(files) == 1
     assert files[0]["filename"] == "linked.fits"
+
+
+# --- POST /api/v2/observations/download-script ---
+
+async def test_download_script_logs_event(client, auth_headers, regular_user):
+    header = make_fits_header()
+    create = await client.post(
+        "/api/v2/observations/", json=make_obs_payload(obs_name="dl_script_obs"), headers=auth_headers
+    )
+    obs_id = create.json()["_id"]
+    await client.post(
+        "/api/v2/files/",
+        json={
+            "filename": "dl_script_obs.fits",
+            "file_class": "raw",
+            "obs_name": "dl_script_obs",
+            "file_status": {
+                "observatory": {"ready": False, "check_needed": False, "status": "not_stored"},
+                "hub": {"ready": False, "check_needed": False, "status": "not_stored"},
+                "cloud": {"ready": False, "check_needed": False, "status": "not_stored"},
+            },
+            "fits_header": header.model_dump(by_alias=True),
+            "access_tags": [],
+            "source_filenames": [],
+        },
+        headers=auth_headers,
+    )
+
+    resp = await client.post(
+        "/api/v2/observations/download-script",
+        json={"obs_ids": [obs_id], "include_calibration": False, "file_types": None},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    assert b"dl_script_obs.fits" in resp.content
+
+    events = await DownloadScriptEvent.find(DownloadScriptEvent.username == regular_user.username).to_list()
+    assert len(events) == 1
+    event = events[0]
+    assert event.obs_ids == [obs_id]
+    assert event.obs_names == ["dl_script_obs"]
+    assert event.filenames == ["dl_script_obs.fits"]
+    assert event.file_count == 1
+    assert event.include_calibration is False
 
 
 # --- Search by object ---

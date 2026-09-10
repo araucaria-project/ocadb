@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, status, Body, Depends
 from fastapi.responses import Response
 from beanie import PydanticObjectId, exceptions
 from typing import List, Annotated, Dict, Any, Tuple, Optional, Union
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dateutil import parser
 from pyaraucaria.fits import fits_header
 from pyaraucaria.lookup_objects import name_canonizator
@@ -25,6 +25,7 @@ from ocadb.migrations.storage_status_migration import run_pass1 as run_storage_s
 from ocadb.migrations.source_filenames_migration import run_pass1 as run_source_filenames_pass1
 from ocadb.migrations.source_files_number_migration import run_pass1 as run_source_files_number_pass1
 from ocadb.models import Observation, FitsHeader, SkyCoord
+from ocadb.models.download_script_event import DownloadScriptEvent
 from ocadb.models.file import FITSFile
 from ocadb.models.search_object import SearchObject, SearchTag
 from ocadb.models.geo import ArchDistance
@@ -1194,6 +1195,20 @@ async def generate_download_script(
     data_block = "\n".join(filenames)
     script_username = request.username or user.username
     script = render_download_script(data_block, username=script_username)
+
+    # Logged (and awaited) before the script is handed back — the event must be
+    # recorded before the user ever gets the download, not best-effort afterward.
+    await DownloadScriptEvent(
+        username=user.username,
+        requested_at=datetime.now(timezone.utc),
+        obs_ids=request.obs_ids,
+        obs_names=[obs.obs_name for obs in observations],
+        include_calibration=request.include_calibration,
+        file_types=request.file_types,
+        filenames=filenames,
+        file_count=len(filenames),
+        script_username=script_username,
+    ).insert()
 
     return Response(
         content=script,

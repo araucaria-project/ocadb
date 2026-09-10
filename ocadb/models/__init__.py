@@ -4,6 +4,7 @@ from .geo import SkyCoord, SkyCoordPolygon
 from .user import User, UserInDB
 from .observation import Observation, FitsHeader
 from .refresh_token import RefreshTokenDocument
+from .download_script_event import DownloadScriptEvent
 
 from .geo import document_models as geo_document_models
 from .object import document_models as object_document_models
@@ -15,5 +16,6 @@ from .search_object import document_models as search_object_models
 user_document_models = [UserInDB]
 
 refresh_token_document_models = [RefreshTokenDocument]
+download_script_event_document_models = [DownloadScriptEvent]
 
-document_models = geo_document_models + object_document_models + user_document_models + observation_document_models + file_document_models + refresh_token_document_models + search_object_models
+document_models = geo_document_models + object_document_models + user_document_models + observation_document_models + file_document_models + refresh_token_document_models + search_object_models + download_script_event_document_models
