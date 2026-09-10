@@ -1493,7 +1493,7 @@
     <!-- Observation Detail Modal -->
     @if (selectedObservation()) {
       <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-        <div class="relative bg-space-900 border border-space-700 rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col m-4">
+        <div class="relative bg-space-900 border border-space-700 rounded-xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col m-4">
 
           <!-- Header -->
           <div class="p-4 border-b border-space-800 shrink-0">
@@ -1692,6 +1692,48 @@
               </div>
             </div>
 
+            <!-- Full FITS Header -->
+            <div>
+              <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">FITS Header</div>
+              <div class="bg-space-950 rounded p-3 font-mono text-[11px] max-h-64 overflow-y-auto space-y-0.5">
+                @for (entry of headerEntries2(selectedObservation()!.fits_header); track entry[0]) {
+                  <div class="group flex items-baseline gap-4">
+                    <span class="whitespace-nowrap w-28 shrink-0"
+                      [class.text-amber-400]="pinnedFields().has(entry[0])"
+                      [class.text-blue-400]="!pinnedFields().has(entry[0])">{{ entry[0] }}</span>
+                    <span class="text-slate-300 break-all flex-1">{{ entry[1] }}</span>
+                    <button class="shrink-0 transition-colors"
+                      [class.text-amber-400]="pinnedFields().has(entry[0])"
+                      [class.text-slate-600]="!pinnedFields().has(entry[0])"
+                      [class.hover:text-amber-300]="pinnedFields().has(entry[0])"
+                      [class.hover:text-slate-400]="!pinnedFields().has(entry[0])"
+                      [title]="pinnedFields().has(entry[0]) ? 'Unpin field' : 'Pin field'"
+                      (click)="togglePin(entry[0])">
+                      <svg class="w-3 h-3" viewBox="0 0 24 24"
+                        [attr.fill]="pinnedFields().has(entry[0]) ? 'currentColor' : 'none'"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/>
+                      </svg>
+                    </button>
+                  </div>
+                }
+                @for (key of missingPinnedFields(selectedObservation()!.fits_header); track key) {
+                  <div class="flex items-baseline gap-4 opacity-40">
+                    <span class="whitespace-nowrap w-28 shrink-0 text-amber-400">{{ key }}</span>
+                    <span class="text-slate-500 italic flex-1">not in header</span>
+                    <button class="shrink-0 text-amber-400 hover:text-amber-300 transition-colors"
+                      title="Unpin field"
+                      (click)="togglePin(key)">
+                      <svg class="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/>
+                      </svg>
+                    </button>
+                  </div>
+                }
+              </div>
+            </div>
+
             <!-- Files -->
             <div>
               <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Observation files</div>
@@ -1794,48 +1836,6 @@
                   } @else {
                     <div #lineageCyContainer class="relative w-full max-w-[640px] mx-auto aspect-square overflow-hidden rounded"></div>
                   }
-                }
-              </div>
-            </div>
-
-            <!-- Full FITS Header -->
-            <div>
-              <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">FITS Header</div>
-              <div class="bg-space-950 rounded p-3 font-mono text-[11px] max-h-64 overflow-y-auto space-y-0.5">
-                @for (entry of headerEntries2(selectedObservation()!.fits_header); track entry[0]) {
-                  <div class="group flex items-baseline gap-4">
-                    <span class="whitespace-nowrap w-28 shrink-0"
-                      [class.text-amber-400]="pinnedFields().has(entry[0])"
-                      [class.text-blue-400]="!pinnedFields().has(entry[0])">{{ entry[0] }}</span>
-                    <span class="text-slate-300 break-all flex-1">{{ entry[1] }}</span>
-                    <button class="shrink-0 transition-colors"
-                      [class.text-amber-400]="pinnedFields().has(entry[0])"
-                      [class.text-slate-600]="!pinnedFields().has(entry[0])"
-                      [class.hover:text-amber-300]="pinnedFields().has(entry[0])"
-                      [class.hover:text-slate-400]="!pinnedFields().has(entry[0])"
-                      [title]="pinnedFields().has(entry[0]) ? 'Unpin field' : 'Pin field'"
-                      (click)="togglePin(entry[0])">
-                      <svg class="w-3 h-3" viewBox="0 0 24 24"
-                        [attr.fill]="pinnedFields().has(entry[0]) ? 'currentColor' : 'none'"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/>
-                      </svg>
-                    </button>
-                  </div>
-                }
-                @for (key of missingPinnedFields(selectedObservation()!.fits_header); track key) {
-                  <div class="flex items-baseline gap-4 opacity-40">
-                    <span class="whitespace-nowrap w-28 shrink-0 text-amber-400">{{ key }}</span>
-                    <span class="text-slate-500 italic flex-1">not in header</span>
-                    <button class="shrink-0 text-amber-400 hover:text-amber-300 transition-colors"
-                      title="Unpin field"
-                      (click)="togglePin(key)">
-                      <svg class="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/>
-                      </svg>
-                    </button>
-                  </div>
                 }
               </div>
             </div>
