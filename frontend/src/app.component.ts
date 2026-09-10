@@ -476,7 +476,11 @@ export class AppComponent implements OnInit {
     event.preventDefault();
     const success = await this.ocadbService.login(this.loginData.username, this.loginData.password);
     if (success) {
-      this.search();
+      // Not search(): a shared/reloaded URL's filters, oca-jd toggle, and open
+      // observation/file are still sitting in the address bar at this point (ngOnInit
+      // skipped restoring them since the user wasn't authenticated yet) — restore from
+      // them now instead of dropping straight to a blank default search.
+      this.restoreStateFromUrl();
     }
   }
 
