@@ -691,6 +691,15 @@ export class AppComponent implements OnInit {
       elements.push({ data: { id: `${e.from}->${e.to}`, source: e.from, target: e.to } });
     }
 
+    // Fixed spacing constants hold up fine for a handful of nodes but collapse into an
+    // unreadable overlapping mess once a real observation's lineage pulls in dozens of
+    // calibration files — fcose's repulsion needs to grow with the node count or the
+    // physics settle into overlap long before nodes have room to spread apart.
+    const nodeCount = nodeIds.size;
+    const nodeSeparation = Math.min(600, 180 + nodeCount * 6);
+    const idealEdgeLength = Math.min(500, 160 + nodeCount * 5);
+    const nodeRepulsion = 10000 + nodeCount * 1200;
+
     this.cy = cytoscape({
       container,
       elements,
@@ -770,17 +779,21 @@ export class AppComponent implements OnInit {
       ],
       layout: {
         name: 'fcose',
-        quality: 'default',
+        // 'proof' runs more iterations and weighs overlap-avoidance more heavily than
+        // 'default' — worth the extra layout time here since this runs once per
+        // observation open, not on every frame, and overlap is the actual complaint.
+        quality: 'proof',
         animate: false,
+        numIter: 5000,
         // Without this, fcose spaces nodes using only their fixed width/height (140x56)
         // and ignores that the label itself (badge + filename + status, wrapped to 3
         // lines) can render right up to — or past — those bounds, so boxes end up
         // overlapping and their edges appear to converge on a single jumbled point
         // instead of fanning out cleanly.
         nodeDimensionsIncludeLabels: true,
-        nodeSeparation: 160,
-        idealEdgeLength: 150,
-        nodeRepulsion: 10000,
+        nodeSeparation,
+        idealEdgeLength,
+        nodeRepulsion,
       } as any,
     });
 

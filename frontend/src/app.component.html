@@ -1492,10 +1492,8 @@
 
     <!-- Observation Detail Modal -->
     @if (selectedObservation()) {
-      <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-        (click)="closeObservation()">
-        <div class="relative bg-space-900 border border-space-700 rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col m-4"
-          (click)="$event.stopPropagation()">
+      <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div class="relative bg-space-900 border border-space-700 rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col m-4">
 
           <!-- Header -->
           <div class="p-4 border-b border-space-800 shrink-0">
