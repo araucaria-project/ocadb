@@ -373,6 +373,11 @@ export class AppComponent implements OnInit {
       const { search: s, view } = parseSearchParams(window.location.search);
       this.filters.set(s.filters);
       this.sortExpr.set(s.sortExpr);
+      // The date/oca-jd toggle is separate UI state, not itself a filter field — without
+      // this, a shared oca-jd search URL restores the oca_jd_from/to filter values
+      // correctly (the search results are right) but the toggle stays on "date" and the
+      // oca-jd inputs stay hidden until the user clicks the toggle themselves.
+      this.dateRangeMode.set(s.filters.oca_jd_from != null || s.filters.oca_jd_to != null ? 'oca_jd' : 'date');
       // object/pi/sciprog/filter each have their own display-text signal driving the
       // autocomplete <input>'s [ngModel], separate from the filters() value the actual
       // search reads — restoring only `filters` leaves those boxes blank even though the
