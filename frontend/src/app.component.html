@@ -100,17 +100,32 @@
             </div>
             <div class="flex items-center gap-2 ml-auto">
             @if (ocadbService.currentUser()) {
-              <span class="text-xs text-slate-400 truncate max-w-[120px]">{{ ocadbService.currentUser() }}</span>
+              <div class="relative">
+                <button
+                  (click)="userMenuOpen.set(!userMenuOpen())"
+                  class="flex items-center gap-1 bg-space-950 border border-space-700 rounded px-2 py-1 text-slate-400 hover:text-slate-200 hover:border-slate-500 transition-colors"
+                >
+                  <span class="text-xs truncate max-w-[120px]">{{ ocadbService.currentUser() }}</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 transition-transform shrink-0" [class.rotate-180]="userMenuOpen()" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                @if (userMenuOpen()) {
+                  <div class="fixed inset-0 z-10" (click)="userMenuOpen.set(false)"></div>
+                  <div class="absolute z-20 right-0 mt-1 bg-space-900 border border-space-700 rounded shadow-lg min-w-32 overflow-hidden">
+                    <button
+                      (click)="userMenuOpen.set(false); handleLogout()"
+                      class="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-400 hover:text-red-400 hover:bg-space-800 transition-colors text-left"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      </svg>
+                      Log out
+                    </button>
+                  </div>
+                }
+              </div>
             }
-            <button
-              (click)="handleLogout()"
-              class="text-slate-500 hover:text-red-400 transition-colors p-1 rounded hover:bg-space-800"
-              title="Logout"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-            </button>
             </div>
           </div>
         </div>

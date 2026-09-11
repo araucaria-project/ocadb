@@ -928,6 +928,7 @@ export class AppComponent implements OnInit {
 
   searchTags = signal<SearchTag[]>([]);
   tagsDropdownOpen = signal(false);
+  userMenuOpen = signal(false);
 
   private readonly TAG_PRIORITY: Record<string, number> = { zdf: 0, raw: 1, metadata: 2 };
   availableTags = computed(() => {
