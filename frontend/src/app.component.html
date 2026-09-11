@@ -85,7 +85,7 @@
   @else {
     <div class="flex h-full w-full flex-col md:flex-row">
       <!-- Sidebar: Search Filters -->
-      <aside class="w-full md:w-96 bg-space-900 border-r border-space-800 flex flex-col md:h-full z-10 shadow-2xl shrink-0">
+      <aside class="w-full md:w-[21rem] bg-space-900 border-r border-space-800 flex flex-col md:h-full z-10 shadow-2xl shrink-0">
         <!-- Header -->
         <div class="p-3 md:p-4 border-b border-space-800">
           <div class="flex items-center">
@@ -937,7 +937,7 @@
         <!-- Table -->
         <div class="flex-1 overflow-auto relative" #tableScrollContainer (scroll)="updateSelectionIndicators()">
           @if (ocadbService.loading()) {
-            <div class="fixed top-0 bottom-0 left-0 right-0 md:left-80 z-20 flex flex-col items-center justify-center gap-3 backdrop-blur-sm bg-space-950/40">
+            <div class="fixed top-0 bottom-0 left-0 right-0 md:left-[21rem] z-20 flex flex-col items-center justify-center gap-3 backdrop-blur-sm bg-space-950/40">
               <!-- Orrery spinner -->
               <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <!-- Outer orbit ring -->
