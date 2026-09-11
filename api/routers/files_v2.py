@@ -87,7 +87,6 @@ async def upsert_fitsfile(
                 "filesize": file_data.filesize,
                 "mtime": file_data.mtime,
                 "digest": file_data.digest,
-                "observation_id": file_data.observation_id,
                 "source_filenames": file_data.source_filenames,
                 "image_type": file_data.fits_header.IMAGETYP if file_data.fits_header else None,
                 "file_status": file_data.file_status,
@@ -122,6 +121,11 @@ async def upsert_fitsfile(
                         raise
                 except HTTPException as e:
                     raise HTTPException(status_code=e.status_code, detail="Cannot create observation object.")
+
+            file_data.observation_id = observation.get_id()
+            await FITSFile.find_one(FITSFile.id == file_data.id).update(
+                {"$set": {"observation_id": file_data.observation_id}}
+            )
 
             await observation.store_file(file_data)
 

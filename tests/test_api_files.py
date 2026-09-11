@@ -233,6 +233,27 @@ async def test_upsert_updates_existing_file(client, auth_headers, regular_user):
     assert resp.status_code in (200, 201)
 
 
+async def test_upsert_sets_observation_id_on_new_file(client, auth_headers, regular_user):
+    """Regression test: upsert used to link the file into the observation's own
+    `files` list without ever writing `observation_id` back onto the FITSFile
+    document, leaving it permanently null — which silently broke anything that
+    queries FITSFile by observation_id (e.g. the moderator upload-approval flow)."""
+    resp = await client.post(
+        "/api/v2/files/upsert", json=make_file_payload(filename="upsert_obsid.fits"), headers=auth_headers
+    )
+    assert resp.status_code == 201
+    assert resp.json()["observation_id"] is not None
+
+    # A second upsert (update path) must still report the observation_id set by the first.
+    refetch = await client.post(
+        "/api/v2/files/upsert",
+        json=make_file_payload(filename="upsert_obsid.fits", **{"filesize": 999}),
+        headers=auth_headers,
+    )
+    assert refetch.status_code == 200
+    assert refetch.json()["observation_id"] is not None
+
+
 # --- POST /api/v2/files/file-status/list ---
 
 async def test_list_file_statuses(client, auth_headers, regular_user):
