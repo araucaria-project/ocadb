@@ -24,6 +24,7 @@ from ocadb.migrations.metadata_migration import run_pass1 as run_metadata_pass1,
 from ocadb.migrations.storage_status_migration import run_pass1 as run_storage_status_pass1
 from ocadb.migrations.source_filenames_migration import run_pass1 as run_source_filenames_pass1
 from ocadb.migrations.source_files_number_migration import run_pass1 as run_source_files_number_pass1
+from ocadb.migrations.observation_id_migration import run_pass1 as run_observation_id_pass1
 from ocadb.models import Observation, FitsHeader, SkyCoord
 from ocadb.models.download_script_event import DownloadScriptEvent
 from ocadb.models.file import FITSFile, StorageStatusType
@@ -1202,6 +1203,92 @@ async def migrate_source_files_number_status(
         token: Annotated[str, Depends(AuthService.validate_token)]
 ):
     job = await _source_files_number_migration_jobs().find_one({"_id": _SOURCE_FILES_NUMBER_MIGRATION_JOB_ID})
+    if job is None:
+        return {"status": "idle"}
+    return job
+
+
+# --- FITSFile observation_id backfill migration (see
+# ocadb/migrations/observation_id_migration.py) ---
+#
+# Same shape/rationale as the migrations above: Mongo-persisted job state, moderator-gated
+# trigger, dry-run by default. Single pass only — backfilling observation_id from the
+# existing Observation.files back-reference is not destructive, so there's no separate pass2.
+
+_OBSERVATION_ID_MIGRATION_JOB_ID = "observation_id_migration"
+
+
+def _observation_id_migration_jobs():
+    return Connection().database["migration_jobs"]  # same collection, distinct _id
+
+
+async def _run_observation_id_migration(apply: bool) -> None:
+    jobs = _observation_id_migration_jobs()
+
+    async def persist_progress(progress: dict) -> None:
+        await jobs.update_one(
+            {"_id": _OBSERVATION_ID_MIGRATION_JOB_ID},
+            {"$set": {"status": "running", "progress": progress}},
+        )
+
+    try:
+        pass1_result = await run_observation_id_pass1(dry_run=not apply, on_progress=persist_progress)
+        await jobs.update_one(
+            {"_id": _OBSERVATION_ID_MIGRATION_JOB_ID},
+            {"$set": {
+                "status": "done", "apply": apply,
+                "pass1": pass1_result,
+                "finished_at": datetime.utcnow().isoformat(),
+            }},
+        )
+    except Exception as e:
+        log.error(f"observation_id migration failed: {e}")
+        await jobs.update_one(
+            {"_id": _OBSERVATION_ID_MIGRATION_JOB_ID},
+            {"$set": {"status": "failed", "error": str(e), "finished_at": datetime.utcnow().isoformat()}},
+        )
+
+
+@router.post("/migrate-observation-id", response_description="Start the observation_id backfill migration in the background",
+             status_code=status.HTTP_202_ACCEPTED)
+async def migrate_observation_id(
+        moderator: Annotated[str, Depends(AuthService.require_moderator)],
+        apply: bool = False,
+        force: bool = False,
+):
+    """Backfill FITSFile.observation_id for every file that's missing it, using the
+    parent Observation's own `files` back-reference to find the correct id. Defaults
+    to a dry run (report only, no writes). Pass apply=true to actually write the
+    changes — safe to re-run since already-backfilled files are skipped.
+
+    A file with no Observation referencing it at all (a true orphan) can't be
+    repaired by this migration and is counted under "errors" in the result, not
+    silently treated as success.
+
+    force=true bypasses the "already running" guard — needed if a previous run's process
+    was killed/redeployed mid-flight and left a stale "running" status behind.
+    """
+    jobs = _observation_id_migration_jobs()
+    existing = await jobs.find_one({"_id": _OBSERVATION_ID_MIGRATION_JOB_ID})
+    if existing is not None and existing.get("status") == "running" and not force:
+        raise HTTPException(status_code=409, detail="observation_id migration already running (pass force=true to override)")
+
+    await jobs.update_one(
+        {"_id": _OBSERVATION_ID_MIGRATION_JOB_ID},
+        {"$set": {"status": "running", "apply": apply, "started_at": datetime.utcnow().isoformat(),
+                  "started_by": moderator, "progress": None}},
+        upsert=True,
+    )
+    asyncio.create_task(_run_observation_id_migration(apply))
+    return {"status": "accepted", "apply": apply,
+            "message": "Migration started. Poll /migrate-observation-id/status for progress."}
+
+
+@router.get("/migrate-observation-id/status", response_description="Get observation_id migration job status")
+async def migrate_observation_id_status(
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    job = await _observation_id_migration_jobs().find_one({"_id": _OBSERVATION_ID_MIGRATION_JOB_ID})
     if job is None:
         return {"status": "idle"}
     return job
