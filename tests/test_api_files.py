@@ -248,3 +248,67 @@ async def test_list_file_statuses(client, auth_headers, regular_user):
     assert "status1.fits" in body
     assert "status2.fits" in body
     assert "missing.fits" not in body
+
+
+# --- POST /api/v2/observations/bulk-approve-uploads, GET /api/v2/files/upload-queue ---
+
+async def _create_requested_file(client, auth_headers, filename: str, obs_name: str) -> str:
+    """Creates an observation + a linked file, then flips the file's cloud status to
+    REQUESTED (the state generate_download_script() would leave it in). Returns the
+    observation's id."""
+    obs_resp = await client.post("/api/v2/observations/", json=make_obs_payload(obs_name), headers=auth_headers)
+    obs_id = obs_resp.json()["_id"]
+    await client.post("/api/v2/files/", json=make_file_payload(filename=filename, obs_name=obs_name), headers=auth_headers)
+    requested_status = {
+        "observatory": {"ready": False, "check_needed": False, "status": "not_stored"},
+        "hub": {"ready": False, "check_needed": False, "status": "not_stored"},
+        "cloud": {"ready": False, "check_needed": False, "status": "requested"},
+    }
+    resp = await client.put(f"/api/v2/files/file-status/{filename}/", json=requested_status, headers=auth_headers)
+    assert resp.status_code == 200
+    return obs_id
+
+
+async def test_bulk_approve_uploads_requires_auth(client, beanie):
+    resp = await client.post("/api/v2/observations/bulk-approve-uploads", json={"obs_ids": ["000000000000000000000001"]})
+    assert resp.status_code == 401
+
+
+async def test_bulk_approve_uploads_requires_moderator(client, auth_headers, regular_user):
+    obs_id = await _create_requested_file(client, auth_headers, "approve_needs_mod.fits", "obs_approve_needs_mod")
+    resp = await client.post("/api/v2/observations/bulk-approve-uploads", json={"obs_ids": [obs_id]}, headers=auth_headers)
+    assert resp.status_code == 403
+
+
+async def test_bulk_approve_uploads_flips_requested_to_queued(client, auth_headers, mod_headers, regular_user, moderator_user):
+    obs_id = await _create_requested_file(client, auth_headers, "approve_me.fits", "obs_approve_me")
+
+    resp = await client.post("/api/v2/observations/bulk-approve-uploads", json={"obs_ids": [obs_id]}, headers=mod_headers)
+    assert resp.status_code == 200
+    assert resp.json()["approved_count"] == 1
+
+    status_resp = await client.get("/api/v2/files/file-status/approve_me.fits/", headers=auth_headers)
+    assert status_resp.json()["cloud"]["status"] == "queued"
+
+
+async def test_bulk_approve_uploads_leaves_other_statuses_untouched(client, auth_headers, mod_headers, regular_user, moderator_user):
+    obs_resp = await client.post("/api/v2/observations/", json=make_obs_payload("obs_approve_untouched"), headers=auth_headers)
+    obs_id = obs_resp.json()["_id"]
+    await client.post("/api/v2/files/", json=make_file_payload(filename="not_requested.fits", obs_name="obs_approve_untouched"), headers=auth_headers)
+
+    resp = await client.post("/api/v2/observations/bulk-approve-uploads", json={"obs_ids": [obs_id]}, headers=mod_headers)
+    assert resp.status_code == 200
+    assert resp.json()["approved_count"] == 0
+
+    status_resp = await client.get("/api/v2/files/file-status/not_requested.fits/", headers=auth_headers)
+    assert status_resp.json()["cloud"]["status"] == "not_stored"
+
+
+async def test_upload_queue_lists_only_queued_files(client, auth_headers, mod_headers, regular_user, moderator_user):
+    obs_id = await _create_requested_file(client, auth_headers, "in_queue.fits", "obs_upload_queue")
+    await client.post("/api/v2/observations/bulk-approve-uploads", json={"obs_ids": [obs_id]}, headers=mod_headers)
+
+    resp = await client.get("/api/v2/files/upload-queue", headers=auth_headers)
+    assert resp.status_code == 200
+    filenames = [f["filename"] for f in resp.json()]
+    assert filenames == ["in_queue.fits"]

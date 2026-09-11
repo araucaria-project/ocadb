@@ -30,6 +30,7 @@ class MultiSearchForm(BaseModel):
     pi: Optional[str] = None
     sort_expr: Optional[dict] = None
     tags: Optional[set] = None
+    has_requested_files: Optional[bool] = None
 
 class QueryBuilder(BaseFindOperator):
     def __init__(

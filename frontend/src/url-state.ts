@@ -41,6 +41,9 @@ export function buildSearchParams(search: UrlSearchState, view: UrlViewState): U
     const value = search.filters[key] as string[] | null | undefined;
     if (value && value.length) params.set(key, value.join(','));
   }
+  if (search.filters.has_requested_files) {
+    params.set('has_requested_files', '1');
+  }
   if (search.cone) {
     params.set('cone', search.cone.coordinates);
     params.set('cone_radius', String(search.cone.radius));
@@ -74,6 +77,9 @@ export function parseSearchParams(qs: string): { search: UrlSearchState; view: U
   for (const key of ARRAY_FILTER_KEYS) {
     const raw = params.get(key);
     if (raw) (filters as any)[key] = raw.split(',').filter(Boolean);
+  }
+  if (params.get('has_requested_files')) {
+    filters.has_requested_files = true;
   }
 
   const coneCoordinates = params.get('cone');

@@ -771,6 +771,37 @@
 
         </div>
 
+        <!-- Moderator tools -->
+        @if (ocadbService.isModerator()) {
+          <div class="px-4 pb-3" [class.hidden]="!showFilters()" [class.md:block]="true">
+            <div class="text-[10px] text-slate-400 uppercase tracking-wider mb-1.5">Moderator tools</div>
+            <div class="flex flex-wrap items-center gap-1.5">
+              <button type="button"
+                (click)="openTagManager()"
+                class="flex items-center gap-1 px-2 py-1 bg-space-950 border border-space-700 rounded text-xs text-slate-400 hover:text-slate-200 hover:border-slate-500 transition-colors">
+                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                Edit tags
+              </button>
+              <button type="button"
+                (click)="updateFilter('has_requested_files', !filters().has_requested_files); search()"
+                class="flex items-center gap-1.5 px-2 py-1 rounded border text-xs transition-colors"
+                [class.bg-amber-700/40]="filters().has_requested_files"
+                [class.border-amber-600/50]="filters().has_requested_files"
+                [class.text-amber-300]="filters().has_requested_files"
+                [class.bg-space-950]="!filters().has_requested_files"
+                [class.border-space-700]="!filters().has_requested_files"
+                [class.text-slate-400]="!filters().has_requested_files"
+                [class.hover:border-slate-500]="!filters().has_requested_files"
+                [class.hover:text-slate-200]="!filters().has_requested_files">
+                <svg class="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
+                </svg>
+                Has requested files
+              </button>
+            </div>
+          </div>
+        }
+
         <!-- Search Actions -->
         <div class="p-4 border-t border-space-800 space-y-2" [class.hidden]="!showFilters()" [class.md:block]="true">
           @if (ocadbService.error()) {
@@ -871,6 +902,22 @@
                   </svg>
                 } @else {
                   GET DOWNLOADER SCRIPT FOR {{ selectedObsIds().size }}
+                }
+              </button>
+            }
+            @if (selectedObsIds().size > 0 && ocadbService.isModerator()) {
+              <button
+                (click)="approveSelectedUploads()"
+                [disabled]="approveUploadsLoading()"
+                class="px-4 py-1.5 rounded font-medium transition-colors border text-xs disabled:cursor-not-allowed bg-sky-700/40 border-sky-600/50 text-sky-300 hover:bg-sky-700/60"
+              >
+                @if (approveUploadsLoading()) {
+                  <svg class="animate-spin w-3.5 h-3.5 mx-auto" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                  </svg>
+                } @else {
+                  APPROVE UPLOADS FOR {{ selectedObsIds().size }}
                 }
               </button>
             }
@@ -1485,6 +1532,126 @@
             [disabled]="!newTagName().trim()"
             class="w-full py-1.5 rounded bg-accent-600 text-white text-sm font-medium hover:bg-accent-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
             Add this tag
+          </button>
+        </div>
+      </div>
+    }
+
+    <!-- Tag manager modal (moderator-only) -->
+    @if (tagManagerOpen()) {
+      <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div class="relative bg-space-900 border border-space-700 rounded-xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col m-4">
+          <div class="flex items-center justify-between p-4 border-b border-space-800 shrink-0">
+            <span class="text-sm font-medium text-slate-200">Manage tags</span>
+            <button type="button" (click)="closeTagManager()" class="text-slate-500 hover:text-white transition-colors">
+              <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+            </button>
+          </div>
+          <div class="flex-1 overflow-y-auto p-3 space-y-1.5">
+            @if (tagManagerLoading()) {
+              <div class="flex flex-col items-center justify-center gap-2 py-8 text-slate-500">
+                <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                </svg>
+                <span class="text-[11px]">Loading tags</span>
+              </div>
+            } @else if (tagManagerTags().length === 0) {
+              <div class="text-center text-[11px] text-slate-600 py-8">No user-created tags yet</div>
+            } @else {
+              @for (tag of tagManagerTags(); track tag.tag_name) {
+                <div class="flex items-center gap-2 bg-black/25 rounded px-3 py-2">
+                  <div class="min-w-0 flex-1">
+                    <span class="px-1.5 py-0.5 rounded text-[10px] font-medium border" [class]="tag.tag_color || pickColorForTag(tag.tag_name!)">
+                      {{ tag.tag_name }}
+                    </span>
+                    @if (tag.tag_description) {
+                      <div class="text-[10px] text-slate-500 truncate mt-1">{{ tag.tag_description }}</div>
+                    }
+                  </div>
+                  <button type="button" (click)="openEditTag(tag)"
+                    class="shrink-0 px-2 py-1 rounded text-[10px] font-medium border bg-space-800 border-space-700 text-slate-400 hover:text-slate-200 hover:border-slate-500 transition-colors">
+                    Edit
+                  </button>
+                  <button type="button" (click)="confirmRemoveTag(tag.tag_name!)"
+                    class="shrink-0 px-2 py-1 rounded text-[10px] font-medium border transition-colors"
+                    [class]="confirmRemoveTagName() === tag.tag_name
+                      ? 'bg-red-700/50 border-red-600/60 text-red-200'
+                      : 'bg-space-800 border-space-700 text-slate-400 hover:text-red-300 hover:border-red-600/50'">
+                    {{ confirmRemoveTagName() === tag.tag_name ? 'Confirm remove?' : 'Remove' }}
+                  </button>
+                </div>
+              }
+            }
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Edit tag dialog -->
+    @if (editingTagName()) {
+      <div class="fixed inset-0 z-[60] flex items-center justify-center bg-black/60">
+        <div class="bg-space-900 border border-space-700 rounded-lg shadow-2xl w-80 p-5 flex flex-col gap-4">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-medium text-slate-200">Edit tag</span>
+            <button type="button" (click)="closeEditTag()" class="text-slate-500 hover:text-slate-200 transition-colors">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <div class="flex flex-col gap-3">
+            <div>
+              <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Tag name</label>
+              <input type="text"
+                [ngModel]="editTagNameInput()"
+                (ngModelChange)="editTagNameInput.set($event)"
+                (keyup.enter)="saveEditTag()"
+                class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:border-accent-500 focus:outline-none">
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Description</label>
+              <input type="text"
+                [ngModel]="editTagDescriptionInput()"
+                (ngModelChange)="editTagDescriptionInput.set($event)"
+                (keyup.enter)="saveEditTag()"
+                placeholder="optional"
+                class="w-full bg-space-950 border border-space-700 rounded px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:border-accent-500 focus:outline-none">
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Color</label>
+              <div class="flex flex-wrap gap-1">
+                @for (color of TAG_PALETTE; track color) {
+                  <button type="button"
+                    (click)="editTagColorInput.set(color)"
+                    class="w-5 h-5 rounded border-2 transition-all"
+                    [class]="color"
+                    [class.border-white]="editTagColorInput() === color"
+                    [class.border-transparent]="editTagColorInput() !== color"
+                    [title]="color">
+                  </button>
+                }
+              </div>
+              <div class="mt-1.5 flex items-center gap-1.5">
+                <span class="text-[10px] text-slate-500">Preview:</span>
+                <span class="px-1.5 py-0.5 rounded text-[10px] font-medium border" [class]="editTagColorInput()">
+                  {{ editTagNameInput() || 'tag' }}
+                </span>
+              </div>
+            </div>
+            @if (editTagError()) {
+              <div class="text-[11px] text-red-400">{{ editTagError() }}</div>
+            }
+          </div>
+          <button type="button"
+            (click)="saveEditTag()"
+            [disabled]="!editTagNameInput().trim() || editTagSaving()"
+            class="w-full py-1.5 rounded bg-accent-600 text-white text-sm font-medium hover:bg-accent-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+            @if (editTagSaving()) {
+              <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+              </svg>
+            }
+            Save
           </button>
         </div>
       </div>

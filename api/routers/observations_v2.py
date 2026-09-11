@@ -26,7 +26,7 @@ from ocadb.migrations.source_filenames_migration import run_pass1 as run_source_
 from ocadb.migrations.source_files_number_migration import run_pass1 as run_source_files_number_pass1
 from ocadb.models import Observation, FitsHeader, SkyCoord
 from ocadb.models.download_script_event import DownloadScriptEvent
-from ocadb.models.file import FITSFile
+from ocadb.models.file import FITSFile, StorageStatusType
 from ocadb.models.search_object import SearchObject, SearchTag
 from ocadb.models.geo import ArchDistance
 from ocadb.models.s3_presigned_url import S3PresignedUrl, S3PresignedUrlBatchList
@@ -38,6 +38,11 @@ from pydantic import BaseModel
 
 class SearchTagCreate(BaseModel):
     tag_name: str
+    tag_description: Optional[str] = None
+    tag_color: Optional[str] = None
+
+class SearchTagUpdate(BaseModel):
+    tag_name: Optional[str] = None
     tag_description: Optional[str] = None
     tag_color: Optional[str] = None
 
@@ -318,6 +323,11 @@ async def search_multi(
                   search_form.cone_search.rad_distance()))
     if search_form.tags is not None:
         observations = observations.find({"obs_tags": {"$all": list(search_form.tags)}})
+    if search_form.has_requested_files:
+        requested_obs_ids = await FITSFile.distinct(
+            "observation_id", {"file_status.cloud.status": StorageStatusType.REQUESTED.value}
+        )
+        observations = observations.find(In(Observation.id, requested_obs_ids))
 
     pipeline = AggregationQueryBuilder.aggregate(access_tags=user.access_tags, page=page, page_size=page_size, sort_expr=search_form.sort_expr)
     pipeline[-1]['$facet']['data'].append({"$addFields": {"files": []}})
@@ -386,6 +396,61 @@ async def create_search_tag(
         raise HTTPException(status_code=409, detail=f"Tag '{data.tag_name}' already exists")
     return tag
 
+@router.put('/values/tags/{tag_name}', response_description="Edit a search tag (name/description/color)", response_model=SearchTag)
+async def update_search_tag(
+        tag_name: str,
+        data: Annotated[SearchTagUpdate, Body(...)],
+        moderator: Annotated[str, Depends(AuthService.require_moderator)],
+):
+    """Moderator action: edits a tag's name/description/color. Tags are stored on
+    Observation.obs_tags as bare strings, not references — renaming therefore also
+    cascades to every observation currently carrying the old name, so the catalog and
+    the actual per-observation data never drift apart."""
+    tag = await SearchTag.find_one(SearchTag.tag_name == tag_name)
+    if tag is None:
+        raise HTTPException(status_code=404, detail=f"Tag '{tag_name}' not found")
+
+    new_name = data.tag_name.strip() if data.tag_name else tag_name
+    if new_name != tag_name:
+        existing = await SearchTag.find_one(SearchTag.tag_name == new_name)
+        if existing is not None:
+            raise HTTPException(status_code=409, detail=f"Tag '{new_name}' already exists")
+
+    tag.tag_name = new_name
+    if data.tag_description is not None:
+        tag.tag_description = data.tag_description
+    if data.tag_color is not None:
+        tag.tag_color = data.tag_color
+    await tag.replace()
+
+    if new_name != tag_name:
+        # Mongo won't $pull and $addToSet the same array field in one update, so this
+        # is a real two-phase rename: pull the old string, then add the new one to
+        # every observation that had it.
+        matching_ids = [o.id async for o in Observation.find({"obs_tags": tag_name})]
+        if matching_ids:
+            await Observation.find({"_id": {"$in": matching_ids}}).update_many({"$pull": {"obs_tags": tag_name}})
+            await Observation.find({"_id": {"$in": matching_ids}}).update_many({"$addToSet": {"obs_tags": new_name}})
+
+    return tag
+
+@router.delete('/values/tags/{tag_name}', response_description="Delete a search tag and remove it from every observation", status_code=200)
+async def delete_search_tag(
+        tag_name: str,
+        moderator: Annotated[str, Depends(AuthService.require_moderator)],
+):
+    """Moderator action: deletes the tag from the catalog and pulls it from every
+    Observation.obs_tags that currently has it, since tags are stored there as bare
+    strings — deleting only the catalog entry would leave it dangling on observations."""
+    tag = await SearchTag.find_one(SearchTag.tag_name == tag_name)
+    if tag is None:
+        raise HTTPException(status_code=404, detail=f"Tag '{tag_name}' not found")
+
+    result = await Observation.find({"obs_tags": tag_name}).update_many({"$pull": {"obs_tags": tag_name}})
+    await tag.delete()
+
+    return {"deleted": tag_name, "observations_updated": result.modified_count if result else 0}
+
 @router.post('/{id}/obs-tags', response_description="Add a tag to an observation", status_code=200)
 async def add_obs_tag(
         id: PydanticObjectId,
@@ -433,6 +498,18 @@ async def bulk_tag_observations(
     if tags_to_remove:
         await Observation.find(In(Observation.id, ids)).update_many({"$pull": {"obs_tags": {"$in": tags_to_remove}}})
     return {"updated": len(ids), "tags_added": tags_to_add or [], "tags_removed": tags_to_remove or []}
+
+@router.post('/bulk-approve-uploads', response_description="Approve REQUESTED files for upload across multiple observations", status_code=200)
+async def bulk_approve_uploads(
+        obs_ids: Annotated[List[str], Body(..., embed=True)],
+        moderator: Annotated[str, Depends(AuthService.require_moderator)],
+):
+    """Moderator action: flips every REQUESTED file belonging to the given observations
+    to QUEUED — the signal `sroca` polls for (GET /api/v2/files/upload-queue) to actually
+    perform the S3 upload."""
+    ids = [PydanticObjectId(oid) for oid in obs_ids]
+    approved_count = await FITSFile.approve_uploads(ids, moderator)
+    return {"approved_count": approved_count}
 
 @router.delete('/{id}/obs-tags', response_description="Remove a tag from an observation", status_code=200)
 async def remove_obs_tag(

@@ -126,6 +126,7 @@ async def read_users_me(token: Annotated[str, Depends(AuthService.validate_token
         email=user.email,
         full_name=user.full_name,
         disabled=user.disabled,
+        moderator=user.moderator,
         access_tags=user.access_tags
     )
 
@@ -149,6 +150,7 @@ async def read_users_username(token: Annotated[str, Depends(AuthService.validate
                 email=user.email,
                 full_name=user.full_name,
                 disabled=user.disabled,
+                moderator=user.moderator,
                 access_tags=user.access_tags
             )
     else:

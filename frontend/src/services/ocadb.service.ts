@@ -128,6 +128,7 @@ export interface SearchFilters {
   oca_jd_to?: string | null;
   file_types?: string[] | null;
   tags?: string[] | null;
+  has_requested_files?: boolean | null;
   cone_search?: {
     coordinates: string;
     arc_seconds: number;
@@ -156,6 +157,9 @@ export class OcadbService {
   token = signal<string | null>(null);
   refreshToken = signal<string | null>(null);
   currentUser = signal<string | null>(null);
+  // Not persisted to localStorage — refetched from /auth/me on every fresh session
+  // (login or restore) so a demoted/promoted user's status is never trusted stale.
+  isModerator = signal(false);
   sessionExpiredUser = signal<string | null>(null);
   lastRequestInfo = signal('System initialized');
   isAuthenticated = computed(() => !!this.token());
@@ -173,6 +177,7 @@ export class OcadbService {
       this.refreshToken.set(savedRefresh);
       this.currentUser.set(savedUser);
       this.lastRequestInfo.set('Session restored from local storage');
+      this.fetchModeratorStatus();
     }
     const savedConf = localStorage.getItem('ocadb_viewer_conf');
     if (savedConf) {
@@ -227,6 +232,7 @@ export class OcadbService {
       this.lastRequestInfo.set('Login successful.');
       this.loading.set(false);
       this.fetchViewerConf();
+      await this.fetchModeratorStatus();
       return true;
     } catch (e: any) {
       this.handleFetchError(e, 'Login');
@@ -234,10 +240,22 @@ export class OcadbService {
     }
   }
 
+  private async fetchModeratorStatus(): Promise<void> {
+    try {
+      const response = await this.authenticatedFetch(`${this.baseUrl}/auth/me/`);
+      if (!response.ok) { this.isModerator.set(false); return; }
+      const data = await response.json();
+      this.isModerator.set(!!data.moderator);
+    } catch {
+      this.isModerator.set(false);
+    }
+  }
+
   logout() {
     this.token.set(null);
     this.refreshToken.set(null);
     this.currentUser.set(null);
+    this.isModerator.set(false);
     localStorage.removeItem('ocadb_token');
     localStorage.removeItem('ocadb_refresh_token');
     localStorage.removeItem('ocadb_user');
@@ -319,6 +337,7 @@ export class OcadbService {
       if (filters.oca_jd_from) body.oca_jd_from = Number(filters.oca_jd_from);
       if (filters.oca_jd_to) body.oca_jd_to = Number(filters.oca_jd_to);
       if (filters.tags && filters.tags.length > 0) body.tags = filters.tags;
+      if (filters.has_requested_files) body.has_requested_files = true;
       if (filters.cone_search) body.cone_search = filters.cone_search;
       if (sortExpr) body.sort_expr = sortExpr;
 
@@ -409,6 +428,32 @@ export class OcadbService {
     }
   }
 
+  async updateSearchTag(currentName: string, updates: { tag_name?: string; tag_description?: string; tag_color?: string }): Promise<SearchTag | { error: string } | null> {
+    try {
+      const response = await this.authenticatedFetch(`${this.v2BaseUrl}/observations/values/tags/${encodeURIComponent(currentName)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      if (!response.ok) return { error: await this.extractErrorMessage(response, `Failed to update tag (${response.status})`) };
+      return await response.json();
+    } catch {
+      return null;
+    }
+  }
+
+  async deleteSearchTag(tagName: string): Promise<{ observations_updated: number } | null> {
+    try {
+      const response = await this.authenticatedFetch(`${this.v2BaseUrl}/observations/values/tags/${encodeURIComponent(tagName)}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) return null;
+      return await response.json();
+    } catch {
+      return null;
+    }
+  }
+
   async addObsTag(obsId: string, tagName: string): Promise<string[] | null> {
     try {
       const response = await this.authenticatedFetch(`${this.v2BaseUrl}/observations/${obsId}/obs-tags`, {
@@ -434,6 +479,21 @@ export class OcadbService {
       return response.ok;
     } catch {
       return false;
+    }
+  }
+
+  async bulkApproveUploads(obsIds: string[]): Promise<number | null> {
+    try {
+      const response = await this.authenticatedFetch(`${this.v2BaseUrl}/observations/bulk-approve-uploads`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ obs_ids: obsIds }),
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      return data.approved_count ?? 0;
+    } catch {
+      return null;
     }
   }
 

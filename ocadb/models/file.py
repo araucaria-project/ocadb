@@ -69,6 +69,11 @@ class FITSFile(FITSFileBase, Document):
         None, description="FITS header IMAGETYP, copied at write time (header itself is not persisted)"
     )
 
+    # Set when a moderator approves this file for upload (REQUESTED -> QUEUED) via
+    # approve_uploads() below — an audit trail in the same spirit as upload_requests.
+    approved_by: Optional[str] = Field(None, description="Moderator who last approved this file for upload")
+    approved_at: Optional[datetime] = Field(None, description="When this file was last approved for upload")
+
     class Settings:
         name = "fits_files"
         indexes = [
@@ -79,6 +84,7 @@ class FITSFile(FITSFileBase, Document):
             IndexModel([("file_status.cloud.status", pymongo.ASCENDING)]),
             IndexModel([("access_tags", pymongo.ASCENDING)]),
             IndexModel([("created_at", pymongo.DESCENDING)]),
+            IndexModel([("observation_id", pymongo.ASCENDING)]),
         ]
         validate_assignment = True
 
@@ -120,6 +126,30 @@ class FITSFile(FITSFileBase, Document):
                 "file_status.cloud.check_needed": True,
             },
         })
+
+    @classmethod
+    async def approve_uploads(cls, obs_ids: List[PydanticObjectId], username: str) -> int:
+        """Moderator approval step: flips every REQUESTED file belonging to the given
+        observations to QUEUED, the signal `sroca` polls for to actually perform the
+        S3 upload. Returns the number of files flipped.
+        """
+        if not obs_ids:
+            return 0
+
+        now = datetime.utcnow()
+        result = await cls.find({
+            "observation_id": {"$in": obs_ids},
+            "file_status.cloud.status": StorageStatusType.REQUESTED.value,
+        }).update({
+            "$set": {
+                "file_status.cloud.status": StorageStatusType.QUEUED.value,
+                "file_status.cloud.check_needed": True,
+                "approved_by": username,
+                "approved_at": now,
+                "updated_at": now,
+            },
+        })
+        return result.modified_count if result is not None else 0
 
     def pop_fits_header(self) -> Optional[FitsHeader]:
         """Detach fits_header (deriving image_type from it first) before this object

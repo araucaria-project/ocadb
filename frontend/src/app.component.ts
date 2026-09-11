@@ -1182,6 +1182,97 @@ export class AppComponent implements OnInit {
     this.obsTagQuery.set('');
   }
 
+  // --- Tag manager (moderator-only "Edit tags" modal) — lets a moderator rename,
+  // re-describe/re-color, or delete a user-created tag. System tags (raw/zdf/metadata/
+  // master) are excluded: they're auto-applied from file_class at ingest time, not
+  // looked up from the SearchTag catalog, so renaming/deleting them here would just
+  // desync the catalog from what the backend keeps re-adding.
+  tagManagerOpen = signal(false);
+  tagManagerLoading = signal(false);
+  tagManagerTags = computed(() => this.searchTags().filter(t => !this.SYSTEM_TAGS.has(t.tag_name ?? '')));
+
+  editingTagName = signal<string | null>(null);
+  editTagNameInput = signal('');
+  editTagDescriptionInput = signal('');
+  editTagColorInput = signal('');
+  editTagSaving = signal(false);
+  editTagError = signal('');
+
+  confirmRemoveTagName = signal<string | null>(null);
+
+  async openTagManager() {
+    this.tagManagerOpen.set(true);
+    this.tagManagerLoading.set(true);
+    this.searchTags.set(await this.ocadbService.fetchSearchTags());
+    this.tagManagerLoading.set(false);
+  }
+
+  closeTagManager() {
+    this.tagManagerOpen.set(false);
+    this.editingTagName.set(null);
+    this.confirmRemoveTagName.set(null);
+  }
+
+  openEditTag(tag: SearchTag) {
+    this.editingTagName.set(tag.tag_name);
+    this.editTagNameInput.set(tag.tag_name ?? '');
+    this.editTagDescriptionInput.set(tag.tag_description ?? '');
+    this.editTagColorInput.set(tag.tag_color ?? this.pickColorForTag(tag.tag_name ?? ''));
+    this.editTagError.set('');
+  }
+
+  closeEditTag() {
+    this.editingTagName.set(null);
+    this.editTagError.set('');
+  }
+
+  async saveEditTag() {
+    const originalName = this.editingTagName();
+    if (!originalName) return;
+    const newName = this.editTagNameInput().trim();
+    if (!newName) return;
+    this.editTagSaving.set(true);
+    this.editTagError.set('');
+    const result = await this.ocadbService.updateSearchTag(originalName, {
+      tag_name: newName !== originalName ? newName : undefined,
+      tag_description: this.editTagDescriptionInput().trim(),
+      tag_color: this.editTagColorInput(),
+    });
+    this.editTagSaving.set(false);
+    if (!result) {
+      this.editTagError.set('Failed to update tag.');
+      return;
+    }
+    if ('error' in result) {
+      this.editTagError.set(result.error);
+      return;
+    }
+    this.searchTags.update(tags => tags.map(t => t.tag_name === originalName ? result : t));
+    this.closeEditTag();
+  }
+
+  /** Two-click confirm: first click arms it (button reads "Confirm remove?" for 3s),
+   * second click while armed actually deletes — enough friction for a destructive,
+   * cascading action without a jarring native confirm() or a whole extra dialog. */
+  confirmRemoveTag(tagName: string) {
+    if (this.confirmRemoveTagName() === tagName) {
+      this.removeSearchTag(tagName);
+      return;
+    }
+    this.confirmRemoveTagName.set(tagName);
+    setTimeout(() => {
+      if (this.confirmRemoveTagName() === tagName) this.confirmRemoveTagName.set(null);
+    }, 3000);
+  }
+
+  private async removeSearchTag(tagName: string) {
+    this.confirmRemoveTagName.set(null);
+    const result = await this.ocadbService.deleteSearchTag(tagName);
+    if (result) {
+      this.searchTags.update(tags => tags.filter(t => t.tag_name !== tagName));
+    }
+  }
+
   async submitNewTag() {
     const name = this.newTagName().trim();
     if (!name) return;
@@ -1541,6 +1632,19 @@ export class AppComponent implements OnInit {
     const allTypes = selectedTypes.length === visibleTypes.length;
     await this.ocadbService.downloadScript(ids, username, includeCalib, allTypes ? undefined : selectedTypes);
     this.scriptLoading.set(false);
+  }
+
+  approveUploadsLoading = signal(false);
+
+  async approveSelectedUploads() {
+    const ids = [...this.selectedObsIds()];
+    if (!ids.length) return;
+    this.approveUploadsLoading.set(true);
+    const approvedCount = await this.ocadbService.bulkApproveUploads(ids);
+    this.approveUploadsLoading.set(false);
+    if (approvedCount !== null) {
+      this.ocadbService.lastRequestInfo.set(`Approved ${approvedCount} file(s) for upload.`);
+    }
   }
 
   private scrollDropdownItem(key: string, index: number) {

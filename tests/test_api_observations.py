@@ -388,6 +388,97 @@ async def test_create_duplicate_search_tag_returns_409(client, auth_headers, reg
     assert resp.status_code == 409
 
 
+async def test_update_search_tag_requires_moderator(client, auth_headers, regular_user):
+    await client.post("/api/v2/observations/values/tags", json={"tag_name": "modtag"}, headers=auth_headers)
+    resp = await client.put(
+        "/api/v2/observations/values/tags/modtag",
+        json={"tag_description": "edited"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 403
+
+
+async def test_update_search_tag_description_and_color(client, auth_headers, mod_headers, regular_user, moderator_user):
+    await client.post("/api/v2/observations/values/tags", json={"tag_name": "edittag"}, headers=auth_headers)
+    resp = await client.put(
+        "/api/v2/observations/values/tags/edittag",
+        json={"tag_description": "new desc", "tag_color": "bg-red-900/40"},
+        headers=mod_headers,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["tag_name"] == "edittag"
+    assert body["tag_description"] == "new desc"
+    assert body["tag_color"] == "bg-red-900/40"
+
+
+async def test_rename_search_tag_cascades_to_observations(client, auth_headers, mod_headers, regular_user, moderator_user):
+    await client.post("/api/v2/observations/values/tags", json={"tag_name": "oldname"}, headers=auth_headers)
+    create = await client.post("/api/v2/observations/", json=make_obs_payload(obs_name="obs_tag_rename"), headers=auth_headers)
+    obs_id = create.json()["_id"]
+    await client.post(f"/api/v2/observations/{obs_id}/obs-tags", json={"tag_name": "oldname"}, headers=auth_headers)
+
+    resp = await client.put(
+        "/api/v2/observations/values/tags/oldname",
+        json={"tag_name": "newname"},
+        headers=mod_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["tag_name"] == "newname"
+
+    obs_resp = await client.get(f"/api/v2/observations/{obs_id}/", headers=auth_headers)
+    assert "newname" in obs_resp.json()["obs_tags"]
+    assert "oldname" not in obs_resp.json()["obs_tags"]
+
+
+async def test_rename_search_tag_to_existing_name_returns_409(client, auth_headers, mod_headers, regular_user, moderator_user):
+    await client.post("/api/v2/observations/values/tags", json={"tag_name": "taga"}, headers=auth_headers)
+    await client.post("/api/v2/observations/values/tags", json={"tag_name": "tagb"}, headers=auth_headers)
+    resp = await client.put(
+        "/api/v2/observations/values/tags/taga",
+        json={"tag_name": "tagb"},
+        headers=mod_headers,
+    )
+    assert resp.status_code == 409
+
+
+async def test_update_search_tag_not_found(client, mod_headers, moderator_user):
+    resp = await client.put(
+        "/api/v2/observations/values/tags/nonexistent",
+        json={"tag_description": "x"},
+        headers=mod_headers,
+    )
+    assert resp.status_code == 404
+
+
+async def test_delete_search_tag_requires_moderator(client, auth_headers, regular_user):
+    await client.post("/api/v2/observations/values/tags", json={"tag_name": "deltag"}, headers=auth_headers)
+    resp = await client.delete("/api/v2/observations/values/tags/deltag", headers=auth_headers)
+    assert resp.status_code == 403
+
+
+async def test_delete_search_tag_removes_from_observations(client, auth_headers, mod_headers, regular_user, moderator_user):
+    await client.post("/api/v2/observations/values/tags", json={"tag_name": "removeme"}, headers=auth_headers)
+    create = await client.post("/api/v2/observations/", json=make_obs_payload(obs_name="obs_tag_delete"), headers=auth_headers)
+    obs_id = create.json()["_id"]
+    await client.post(f"/api/v2/observations/{obs_id}/obs-tags", json={"tag_name": "removeme"}, headers=auth_headers)
+
+    resp = await client.delete("/api/v2/observations/values/tags/removeme", headers=mod_headers)
+    assert resp.status_code == 200
+    assert resp.json()["observations_updated"] == 1
+
+    obs_resp = await client.get(f"/api/v2/observations/{obs_id}/", headers=auth_headers)
+    assert "removeme" not in obs_resp.json()["obs_tags"]
+
+    tags_resp = await client.get("/api/v2/observations/values/tags", headers=auth_headers)
+    assert "removeme" not in [t["tag_name"] for t in tags_resp.json()]
+
+
+async def test_delete_search_tag_not_found(client, mod_headers, moderator_user):
+    resp = await client.delete("/api/v2/observations/values/tags/nonexistent", headers=mod_headers)
+    assert resp.status_code == 404
+
+
 # --- POST /api/v2/observations/search ---
 
 async def test_multi_search_by_telescop(client, auth_headers, regular_user):
@@ -403,6 +494,47 @@ async def test_multi_search_by_telescop(client, auth_headers, regular_user):
     )
     assert resp.status_code == 200
     assert resp.json()["data"][0]["fits_header"]["TELESCOP"] == "ZEISS-1m"
+
+
+async def test_multi_search_has_requested_files_filter(client, auth_headers, regular_user):
+    await client.post("/api/v2/observations/", json=make_obs_payload(obs_name="search_no_requested"), headers=auth_headers)
+
+    await client.post("/api/v2/observations/", json=make_obs_payload(obs_name="search_has_requested"), headers=auth_headers)
+    await client.post(
+        "/api/v2/files/",
+        json={
+            "filename": "search_requested.fits",
+            "file_class": "raw",
+            "obs_name": "search_has_requested",
+            "file_status": {
+                "observatory": {"ready": False, "check_needed": False, "status": "not_stored"},
+                "hub": {"ready": False, "check_needed": False, "status": "not_stored"},
+                "cloud": {"ready": False, "check_needed": False, "status": "not_stored"},
+            },
+            "fits_header": make_fits_header().model_dump(by_alias=True),
+            "access_tags": [],
+            "source_filenames": [],
+        },
+        headers=auth_headers,
+    )
+    await client.put(
+        "/api/v2/files/file-status/search_requested.fits/",
+        json={
+            "observatory": {"ready": False, "check_needed": False, "status": "not_stored"},
+            "hub": {"ready": False, "check_needed": False, "status": "not_stored"},
+            "cloud": {"ready": False, "check_needed": False, "status": "requested"},
+        },
+        headers=auth_headers,
+    )
+
+    resp = await client.post(
+        "/api/v2/observations/search",
+        json={"has_requested_files": True},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    obs_names = [o["obs_name"] for o in resp.json()["data"]]
+    assert obs_names == ["search_has_requested"]
 
 
 async def test_multi_search_empty_result_returns_404(client, auth_headers, regular_user):

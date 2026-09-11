@@ -113,6 +113,18 @@ async def test_me_does_not_return_password(client, regular_user, auth_headers):
     assert "password" not in body
 
 
+async def test_me_reports_moderator_status(client, regular_user, auth_headers, moderator_user, mod_headers):
+    """read_users_me() used to build its User response without passing moderator=...,
+    so this field silently always came back null regardless of the DB value — the
+    frontend's moderator-only UI (e.g. bulk upload approval) depends on this being
+    accurate."""
+    resp = await client.get("/api/v1/auth/me/", headers=auth_headers)
+    assert resp.json()["moderator"] is False
+
+    mod_resp = await client.get("/api/v1/auth/me/", headers=mod_headers)
+    assert mod_resp.json()["moderator"] is True
+
+
 # --- POST /api/v1/auth/register/ ---
 
 async def test_register_user_as_moderator(client, moderator_user, mod_headers):

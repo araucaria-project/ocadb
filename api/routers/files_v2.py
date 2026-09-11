@@ -290,6 +290,17 @@ async def list_pending_upload_requests(
         {"file_status.cloud.status": StorageStatusType.REQUESTED.value}
     ).sort("-updated_at").to_list()
 
+@router.get("/upload-queue", response_description="List files a moderator approved for upload, awaiting pickup", response_model=List[FITSFile])
+async def list_upload_queue(
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    """Polled by `sroca` (or any uploader) to find files a moderator has approved
+    (QUEUED) — see POST /api/v2/observations/bulk-approve-uploads. Regular auth, not
+    moderator-gated: the poller authenticates as a plain service account."""
+    return await FITSFile.find(
+        {"file_status.cloud.status": StorageStatusType.QUEUED.value}
+    ).sort("approved_at").to_list()
+
 @router.put("/file-status/{fitsfile_name}/", response_description="Update file status", response_model=FITSFile)
 async def update_file_status(
         fitsfile_name: str,
@@ -303,7 +314,7 @@ async def update_file_status(
         raise HTTPException(status_code=404, detail=f"FITS file with name {fitsfile_name} not found")
 
     fitsfile.file_status = filestatus
-    fitsfile.replace()
+    await fitsfile.replace()
 
     return fitsfile
 
