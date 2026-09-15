@@ -1572,6 +1572,7 @@ export class AppComponent implements OnInit {
     } : null;
     const baseFilters = this.coneSearchExpanded() ? { ...this.filters(), object: null } : this.filters();
     const results = await this.ocadbService.searchObservations({ ...baseFilters, cone_search }, page, this.getSortExpr());
+    this.ocadbService.isInitialLoad.set(false);
     this.displayedObservations.set(results);
   }
 
