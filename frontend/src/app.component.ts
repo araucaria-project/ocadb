@@ -85,8 +85,21 @@ export class AppComponent implements OnInit {
     return [...this.selectionPageMap().entries()].some(([id, page]) => selected.has(id) && page > currentPage);
   });
   scriptLoading = signal(false);
+  filepathsLoading = signal(false);
+  tabularExportLoading = signal(false);
   showDownloadDialog = signal(false);
   sortExpr = signal<{ col: string; dir: 1 | -1 } | null>(null);
+  readonly DOWNLOAD_MODES = [
+    { value: 'script', label: 'Downloader script' },
+    { value: 'table', label: 'Tabular Observation Data' },
+    { value: 'filepaths', label: 'Filepaths Export' },
+  ] as const;
+  downloadMode = signal<'script' | 'table' | 'filepaths'>('script');
+  readonly TABULAR_EXPORT_FORMATS = [
+    { value: 'ecsv', label: 'ECSV' },
+    { value: 'fixed_width', label: 'Fixed width' },
+  ] as const;
+  tabularExportFormat = signal<'ecsv' | 'fixed_width'>('ecsv');
   downloadForCurrentUser = signal(true);
   downloadCustomUsername = signal('');
   downloadIncludeCalibration = signal(false);
@@ -1695,19 +1708,31 @@ export class AppComponent implements OnInit {
   }
 
   openDownloadDialog() {
+    this.downloadMode.set('script');
     this.downloadForCurrentUser.set(true);
     this.downloadCustomUsername.set('');
     this.downloadIncludeCalibration.set(false);
-    this.downloadFileTypes.set(new Set(this.DOWNLOAD_FILE_TYPES));
+    this.downloadFileTypes.set(new Set(['zdf', 'raw']));
+    this.tabularExportFormat.set('ecsv');
     this.showDownloadDialog.set(true);
   }
 
+  /** Plain, predictable toggle — no boxes checked means "no filter" (all types), and
+   * checking one just adds it to the filter. See selectedDownloadFileTypes(). */
   toggleDownloadFileType(type: string) {
     this.downloadFileTypes.update(set => {
       const next = new Set(set);
       next.has(type) ? next.delete(type) : next.add(type);
       return next;
     });
+  }
+
+  /** undefined means "all file types" (no filter) — true both when nothing is checked
+   * and, after calibration-visibility filtering, when a checked type is currently hidden. */
+  private selectedDownloadFileTypes(): string[] | undefined {
+    const includeCalib = this.downloadIncludeCalibration();
+    const selectedTypes = [...this.downloadFileTypes()].filter(t => includeCalib || !this.DOWNLOAD_CALIB_TYPES.has(t));
+    return selectedTypes.length === 0 ? undefined : selectedTypes;
   }
 
   async executeDownloadScript() {
@@ -1719,11 +1744,28 @@ export class AppComponent implements OnInit {
     this.scriptLoading.set(true);
     this.showDownloadDialog.set(false);
     const includeCalib = this.downloadIncludeCalibration();
-    const selectedTypes = [...this.downloadFileTypes()].filter(t => includeCalib || !this.DOWNLOAD_CALIB_TYPES.has(t));
-    const visibleTypes = this.DOWNLOAD_FILE_TYPES.filter(t => includeCalib || !this.DOWNLOAD_CALIB_TYPES.has(t));
-    const allTypes = selectedTypes.length === visibleTypes.length;
-    await this.ocadbService.downloadScript(ids, username, includeCalib, allTypes ? undefined : selectedTypes);
+    await this.ocadbService.downloadScript(ids, username, includeCalib, this.selectedDownloadFileTypes());
     this.scriptLoading.set(false);
+  }
+
+  async executeFilepathsExport() {
+    const ids = [...this.selectedObsIds()];
+    if (!ids.length) return;
+    this.filepathsLoading.set(true);
+    this.showDownloadDialog.set(false);
+    const includeCalib = this.downloadIncludeCalibration();
+    await this.ocadbService.exportFilepaths(ids, includeCalib, this.selectedDownloadFileTypes());
+    this.filepathsLoading.set(false);
+  }
+
+  async exportTabularData() {
+    const ids = [...this.selectedObsIds()];
+    if (!ids.length) return;
+    this.tabularExportLoading.set(true);
+    this.showDownloadDialog.set(false);
+    const coordFormat = this.coordMode() === 'SX' ? 'sexagesimal' : 'deg';
+    await this.ocadbService.exportTabularData(ids, this.tabularExportFormat(), coordFormat);
+    this.tabularExportLoading.set(false);
   }
 
   approveUploadsLoading = signal(false);
@@ -2378,6 +2420,16 @@ export class AppComponent implements OnInit {
     if (['storing', 'queued', 'scheduled', 'requested'].includes(status)) return 'text-amber-400';
     if (status === 'corrupted') return 'text-red-400';
     return 'text-slate-600';
+  }
+
+  /** Same status→color mapping as getStorageStatusClass(), as a filled dot background
+   * instead of text color — used for the Observatory/Hub hover dots next to the
+   * (always-visible) Cloud status in file rows. */
+  getStorageStatusDotClass(status: StorageStatusType, ready: boolean): string {
+    if (status === 'stored' && ready) return 'bg-emerald-400';
+    if (['storing', 'queued', 'scheduled', 'requested'].includes(status)) return 'bg-amber-400';
+    if (status === 'corrupted') return 'bg-red-400';
+    return 'bg-slate-600';
   }
 
   private formatSexagesimal(value: number, isRA: boolean): string {

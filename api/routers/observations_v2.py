@@ -34,7 +34,7 @@ from ocadb.models.s3_presigned_url import S3PresignedUrl, S3PresignedUrlBatchLis
 from api.services.auth_service import AuthService
 from api.routers.api_auth import read_users_me
 from api.services.s3_api_service import S3Connection
-from api.schemas import DownloadScriptRequest
+from api.schemas import DownloadScriptRequest, TabularExportRequest
 from pydantic import BaseModel
 
 class SearchTagCreate(BaseModel):
@@ -1294,6 +1294,67 @@ async def migrate_observation_id_status(
     return job
 
 
+async def _resolve_export_filenames(
+        obs_ids_raw: List[str], include_calibration: bool, file_types: Optional[List[str]]
+) -> Tuple[List[Observation], List[str]]:
+    """Resolves a list of observation IDs to the filenames of their linked FITSFiles,
+    optionally expanding to instrumental calibration files (transitively, via
+    source_filenames) and filtering by file class — shared by the downloader-script
+    and filepaths-export endpoints, which differ only in what they do with the result.
+
+    File-class filtering uses each FITSFile's own `file_class` field — the same field
+    the frontend's file badges are derived from — not the filename. A filename's
+    class-suffix (e.g. "_zdf") isn't guaranteed to match the document's actual
+    file_class, so deriving class from the name instead of the field can silently
+    misclassify files and make different filters return the same (wrong) results.
+    """
+    try:
+        obs_ids = [PydanticObjectId(oid) for oid in obs_ids_raw]
+    except Exception:
+        raise HTTPException(status_code=422, detail="One or more observation IDs are invalid")
+
+    observations = await Observation.find(In(Observation.id, obs_ids)).to_list()
+
+    if not observations:
+        raise HTTPException(status_code=404, detail="No observations found for the given IDs")
+
+    entries: Dict[str, str] = {}  # filename -> file_class, insertion order = discovery order
+    calib_seed: set = set()
+    for obs in observations:
+        await obs.fetch_all_links()
+        for f in obs.files:
+            entries[f.filename] = f.file_class
+            if include_calibration:
+                calib_seed.update(f.source_filenames or [])
+
+    if include_calibration:
+        collected: Dict[str, str] = {}
+        frontier = calib_seed - entries.keys()
+        while frontier:
+            new_names = frontier - collected.keys()
+            if not new_names:
+                break
+            db_files = await FITSFile.find({"filename": {"$in": list(new_names)}}).to_list()
+            for f in db_files:
+                collected[f.filename] = f.file_class
+            frontier = set()
+            for f in db_files:
+                frontier.update(f.source_filenames or [])
+        for name, fclass in sorted(collected.items()):
+            entries.setdefault(name, fclass)
+
+    if file_types is not None:
+        allowed = set(file_types)
+        entries = {name: fclass for name, fclass in entries.items() if fclass in allowed}
+
+    filenames = list(entries.keys())
+
+    if not filenames:
+        raise HTTPException(status_code=404, detail="No files found for the selected observations")
+
+    return observations, filenames
+
+
 @router.post("/download-script", response_description="Generate a POSIX shell download script for selected observations")
 async def generate_download_script(
         request: Annotated[DownloadScriptRequest, Body(...)],
@@ -1304,55 +1365,13 @@ async def generate_download_script(
     File classes are filtered server-side; the script embeds the authenticated user's username
     and handles password acquisition and token refresh at runtime.
     """
-    from ocafitsfiles import render_download_script, parse_filename
+    from ocafitsfiles import render_download_script
 
     user = await read_users_me(token)
 
-    try:
-        obs_ids = [PydanticObjectId(oid) for oid in request.obs_ids]
-    except Exception:
-        raise HTTPException(status_code=422, detail="One or more observation IDs are invalid")
-
-    observations = await Observation.find(In(Observation.id, obs_ids)).to_list()
-
-    if not observations:
-        raise HTTPException(status_code=404, detail="No observations found for the given IDs")
-
-    filenames: List[str] = []
-    calib_seed: set = set()
-    for obs in observations:
-        await obs.fetch_all_links()
-        for f in obs.files:
-            filenames.append(f.filename)
-            if request.include_calibration:
-                calib_seed.update(f.source_filenames or [])
-
-    if request.include_calibration:
-        obs_name_set = set(filenames)
-        collected: set = set()
-        frontier = calib_seed - obs_name_set
-        while frontier:
-            new_names = frontier - collected
-            if not new_names:
-                break
-            collected.update(new_names)
-            db_files = await FITSFile.find({"filename": {"$in": list(new_names)}}).to_list()
-            frontier = set()
-            for f in db_files:
-                frontier.update(f.source_filenames or [])
-        filenames.extend(n for n in sorted(collected) if n not in obs_name_set)
-    else:
-        obs_name_set = set(filenames)
-
-    if request.file_types is not None:
-        allowed = set(request.file_types)
-        def _ftype(name: str) -> str:
-            _, suffix = parse_filename(name)
-            return suffix if suffix else 'raw'
-        filenames = [n for n in filenames if _ftype(n) in allowed]
-
-    if not filenames:
-        raise HTTPException(status_code=404, detail="No files found for the selected observations")
+    observations, filenames = await _resolve_export_filenames(
+        request.obs_ids, request.include_calibration, request.file_types
+    )
 
     await FITSFile.request_cloud_uploads(filenames, user.username)
 
@@ -1378,4 +1397,123 @@ async def generate_download_script(
         content=script,
         media_type="text/x-shellscript",
         headers={"Content-Disposition": "attachment; filename=download.sh"}
+    )
+
+
+@router.post("/export-filepaths", response_description="Export a plain-text list of filenames for selected observations")
+async def export_filepaths(
+        request: Annotated[DownloadScriptRequest, Body(...)],
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    """Returns a plain text file listing the filenames of the files matching the selected
+    file classes for the given observations — the same file-class filtering as the
+    downloader script, but without generating a script or triggering cloud uploads.
+    """
+    await read_users_me(token)
+
+    _, filenames = await _resolve_export_filenames(
+        request.obs_ids, request.include_calibration, request.file_types
+    )
+
+    timestamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+    filename = f"OCADB_FilePaths_export_{timestamp}.txt"
+
+    return Response(
+        content="\n".join(filenames),
+        media_type="text/plain",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+# Columns replicate the main results table (see frontend app.component.html observations
+# table) minus the Tags column — that one has no single scalar value to put in a cell.
+_TABULAR_EXPORT_BASE_NUMERIC_COLUMNS = {'AIRMASS', 'EXPTIME'}
+
+
+def _format_sexagesimal(value: float, is_ra: bool) -> str:
+    """Mirrors the frontend's formatSexagesimal() (app.component.ts) exactly, so a
+    sexagesimal-format export matches what the RA/Dec unit toggle shows on screen."""
+    total = value / 15 if is_ra else abs(value)
+    sign = '-' if (not is_ra and value < 0) else ('' if is_ra else '+')
+    h = int(total)
+    m_total = (total - h) * 60
+    m = int(m_total)
+    s = (m_total - m) * 60
+    return f"{sign}{h:02d}:{m:02d}:{s:04.1f}"
+
+
+@router.post("/export-table", response_description="Export selected observations as an astropy-written text table")
+async def export_table(
+        request: Annotated[TabularExportRequest, Body(...)],
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    """Returns a text table (ECSV or fixed-width, via astropy) of the selected observations,
+    with the same columns as the main results table minus Tags (which has no scalar value).
+    RA/Dec are exported as decimal degrees or sexagesimal strings depending on coord_format,
+    matching whichever unit the frontend's RA/Dec toggle was showing.
+    """
+    from astropy.table import Table
+
+    await read_users_me(token)
+
+    if request.format not in ('ecsv', 'fixed_width'):
+        raise HTTPException(status_code=422, detail="format must be 'ecsv' or 'fixed_width'")
+    if request.coord_format not in ('deg', 'sexagesimal'):
+        raise HTTPException(status_code=422, detail="coord_format must be 'deg' or 'sexagesimal'")
+
+    try:
+        obs_ids = [PydanticObjectId(oid) for oid in request.obs_ids]
+    except Exception:
+        raise HTTPException(status_code=422, detail="One or more observation IDs are invalid")
+
+    observations = await Observation.find(In(Observation.id, obs_ids)).to_list()
+    if not observations:
+        raise HTTPException(status_code=404, detail="No observations found for the given IDs")
+
+    sexagesimal = request.coord_format == 'sexagesimal'
+    numeric_columns = _TABULAR_EXPORT_BASE_NUMERIC_COLUMNS | (set() if sexagesimal else {'RA', 'DEC'})
+
+    def _clean(col: str, value):
+        if value is not None:
+            return value
+        return float('nan') if col in numeric_columns else ''
+
+    rows = []
+    for obs in observations:
+        h = obs.fits_header.model_dump(by_alias=True)
+        ra, dec = h.get('RA'), h.get('DEC')
+        if sexagesimal:
+            ra = _format_sexagesimal(ra, is_ra=True) if ra is not None else None
+            dec = _format_sexagesimal(dec, is_ra=False) if dec is not None else None
+        rows.append({
+            'OBJECT': h.get('OBJECT'),
+            'obs_name': obs.obs_name,
+            'DATE-OBS': h.get('DATE-OBS'),
+            'TELESCOP': h.get('TELESCOP'),
+            'FILTER': h.get('FILTER'),
+            'AIRMASS': h.get('AIRMASS'),
+            'EXPTIME': h.get('EXPTIME'),
+            'TYPE': h.get('IMAGETYP') or h.get('OBSTYPE'),
+            'RA': ra,
+            'DEC': dec,
+            'SCIPROG': h.get('SCIPROG'),
+            'PI': h.get('PI'),
+        })
+
+    columns = ['OBJECT', 'obs_name', 'DATE-OBS', 'TELESCOP', 'FILTER', 'AIRMASS', 'EXPTIME', 'TYPE', 'RA', 'DEC', 'SCIPROG', 'PI']
+    data = {col: [_clean(col, row.get(col)) for row in rows] for col in columns}
+    table = Table(data)
+
+    import io
+    buf = io.StringIO()
+    table.write(buf, format=f'ascii.{request.format}')
+    content = buf.getvalue()
+
+    timestamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+    filename = f"OCADB_Observations_{timestamp}.txt"
+
+    return Response(
+        content=content,
+        media_type="text/plain",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
     )

@@ -550,6 +550,62 @@ export class OcadbService {
     }
   }
 
+  async exportFilepaths(ids: string[], includeCalibration = false, fileTypes?: string[]): Promise<void> {
+    try {
+      const response = await this.authenticatedFetch(`${this.v2BaseUrl}/observations/export-filepaths`, {
+        method: 'POST',
+        body: JSON.stringify({
+          obs_ids: ids,
+          include_calibration: includeCalibration,
+          ...(fileTypes ? { file_types: fileTypes } : {})
+        })
+      });
+      if (!response.ok) {
+        const msg = await this.extractErrorMessage(response, `Filepaths export failed (${response.status})`);
+        this.error.set(msg);
+        return;
+      }
+      const disposition = response.headers.get('Content-Disposition') ?? '';
+      const filenameMatch = disposition.match(/filename="?([^"]+)"?/);
+      const filename = filenameMatch?.[1] ?? `OCADB_FilePaths_export_${new Date().toISOString().replace(/[:.]/g, '')}.txt`;
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      this.handleFetchError(e, 'Filepaths export');
+    }
+  }
+
+  async exportTabularData(ids: string[], format: 'ecsv' | 'fixed_width' = 'ecsv', coordFormat: 'deg' | 'sexagesimal' = 'deg'): Promise<void> {
+    try {
+      const response = await this.authenticatedFetch(`${this.v2BaseUrl}/observations/export-table`, {
+        method: 'POST',
+        body: JSON.stringify({ obs_ids: ids, format, coord_format: coordFormat })
+      });
+      if (!response.ok) {
+        const msg = await this.extractErrorMessage(response, `Tabular export failed (${response.status})`);
+        this.error.set(msg);
+        return;
+      }
+      const disposition = response.headers.get('Content-Disposition') ?? '';
+      const filenameMatch = disposition.match(/filename="?([^"]+)"?/);
+      const filename = filenameMatch?.[1] ?? `OCADB_Observations_${new Date().toISOString().replace(/[:.]/g, '')}.txt`;
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      this.handleFetchError(e, 'Tabular export');
+    }
+  }
+
   async fetchObjectCoordinates(objectName: string): Promise<{ra: number, dec: number} | null> {
     try {
       const response = await this.authenticatedFetch(`${this.v2BaseUrl}/observations/search?page=1&page_size=1`, {

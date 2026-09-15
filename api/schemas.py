@@ -29,3 +29,9 @@ class DownloadScriptRequest(BaseModel):
     username: str | None = None
     include_calibration: bool = False
     file_types: List[str] | None = None  # None = all types
+
+
+class TabularExportRequest(BaseModel):
+    obs_ids: List[str]
+    format: str = 'ecsv'  # 'ecsv' or 'fixed_width'
+    coord_format: str = 'deg'  # 'deg' or 'sexagesimal' — matches the frontend's RA/Dec unit toggle
