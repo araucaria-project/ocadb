@@ -31,7 +31,10 @@ class Observation(ObservationBase, Document):
     files: List[Link[FITSFile]] = []
 
     # Coordinates — DB-only, not part of the shared plain contract
-    telescope_coordinates: SkyCoord = Field(SkyCoord, description="telescope direction coordinates", exclude=True)  # exclude field from json dump
+    telescope_coordinates: SkyCoord = Field(
+        default_factory=lambda: SkyCoord(radec=(0.0, 0.0)),
+        description="telescope direction coordinates", exclude=True,
+    )  # exclude field from json dump; (0, 0) is this model's own "no coordinate" sentinel — see SkyCoord.radec
 
     # Tracks which linked file's header currently backs fits_header, now that the full
     # header is no longer stored per-file — ZDF always takes precedence over raw/other.
@@ -82,10 +85,13 @@ class Observation(ObservationBase, Document):
         # workaround - pydantic bug?? similar to https://github.com/google/adk-python/issues/3633
         if isinstance(self.fits_header, dict):
             self.fits_header = FitsHeader.model_validate(self.fits_header)
-        if not self.fits_header.RA or not self.fits_header.DEC:
-            self.telescope_coordinates = SkyCoord(radec=(self.fits_header.RA_TEL, self.fits_header.DEC_TEL))
-        else:
+        # Calibration/master frames routinely carry neither a real pointing (RA/DEC)
+        # nor a telescope position (RA_TEL/DEC_TEL) — leave the (0, 0) "no coordinate"
+        # sentinel default in place rather than crash on None + float.
+        if self.fits_header.RA and self.fits_header.DEC:
             self.telescope_coordinates = SkyCoord(radec=(self.fits_header.RA, self.fits_header.DEC))
+        elif self.fits_header.RA_TEL and self.fits_header.DEC_TEL:
+            self.telescope_coordinates = SkyCoord(radec=(self.fits_header.RA_TEL, self.fits_header.DEC_TEL))
 
         return self
 
@@ -93,7 +99,10 @@ class Observation(ObservationBase, Document):
     def store_canonical_object(self):
         if isinstance(self.fits_header, dict):
             self.fits_header = FitsHeader.model_validate(self.fits_header)
-        self.canonized_object_name = name_canonizator(self.fits_header.OBJECT)
+        # No OBJECT keyword (common for calibration/master frames) — leave
+        # canonized_object_name at its default (None) rather than crash.
+        if self.fits_header.OBJECT:
+            self.canonized_object_name = name_canonizator(self.fits_header.OBJECT)
 
         return self
 
@@ -102,7 +111,10 @@ class Observation(ObservationBase, Document):
         # workaround - pydantic bug?? similar to https://github.com/google/adk-python/issues/3633
         if isinstance(self.fits_header, dict):
             self.fits_header = FitsHeader.model_validate(self.fits_header)
-        self.date_obs = parser.parse(self.fits_header.DATE_OBS)
+        # No DATE-OBS keyword — leave date_obs at its default (record creation time,
+        # via date_obs's own default_factory) rather than crash on a None parse.
+        if self.fits_header.DATE_OBS:
+            self.date_obs = parser.parse(self.fits_header.DATE_OBS)
         return self
 
     @model_validator(mode='after')

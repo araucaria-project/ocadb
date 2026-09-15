@@ -1,6 +1,5 @@
 import { Injectable, signal, computed, inject } from '@angular/core';
 import { environment } from '../environments/environment';
-import { ApiLogService } from './api-log.service';
 
 export type FileClassification = 'raw' | 'zdf' | 'master' | 'source' | 'tmp' | 'test';
 export type StorageStatusType = 'not_stored' | 'deleted' | 'stored' | 'corrupted' | 'requested' | 'scheduled' | 'queued' | 'storing';
@@ -148,7 +147,6 @@ export interface PaginationState {
 export class OcadbService {
   private readonly baseUrl = environment.apiBaseUrl;
   private readonly v2BaseUrl = environment.apiV2BaseUrl;
-  private readonly apiLog = inject(ApiLogService);
 
   loading = signal(false);
   isInitialLoad = signal(true);
@@ -206,7 +204,7 @@ export class OcadbService {
       params.append('username', username);
       params.append('password', password);
 
-      const response = await this.loggedFetch(`${this.baseUrl}/auth/token/`, {
+      const response = await fetch(`${this.baseUrl}/auth/token/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: params.toString()
@@ -266,10 +264,10 @@ export class OcadbService {
   }
 
   private async authenticatedFetch(url: string, init?: RequestInit): Promise<Response> {
-    const response = await this.loggedFetch(url, { ...init, headers: this.authHeaders() });
+    const response = await fetch(url, { ...init, headers: this.authHeaders() });
     if (response.status !== 401 && response.status !== 403) return response;
     const refreshed = await this.tryRefresh();
-    if (refreshed) return this.loggedFetch(url, { ...init, headers: this.authHeaders() });
+    if (refreshed) return fetch(url, { ...init, headers: this.authHeaders() });
     this.sessionExpiredUser.set(this.currentUser());
     this.logout();
     return response;
@@ -287,7 +285,7 @@ export class OcadbService {
     const rt = this.refreshToken();
     if (!rt) return false;
     try {
-      const res = await this.loggedFetch(`${this.baseUrl}/auth/refresh/`, {
+      const res = await fetch(`${this.baseUrl}/auth/refresh/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refresh_token: rt })
@@ -663,37 +661,6 @@ export class OcadbService {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${this.token()}`
     };
-  }
-
-  private async loggedFetch(url: string, init?: RequestInit): Promise<Response> {
-    const reqHeaders: Record<string, string> = {};
-    if (init?.headers) {
-      const h = init.headers;
-      if (h instanceof Headers) {
-        h.forEach((v, k) => reqHeaders[k] = v);
-      } else if (Array.isArray(h)) {
-        h.forEach(([k, v]) => reqHeaders[k] = v);
-      } else {
-        Object.entries(h).forEach(([k, v]) => reqHeaders[k] = v);
-      }
-    }
-    const entry = this.apiLog.createEntry(init?.method ?? 'GET', url, reqHeaders, init?.body);
-    try {
-      const response = await fetch(url, init);
-      const resHeaders: Record<string, string> = {};
-      response.headers.forEach((v, k) => resHeaders[k] = v);
-      const clone = response.clone();
-      try {
-        const text = await clone.text();
-        this.apiLog.completeEntry(entry, response.status, resHeaders, text);
-      } catch {
-        this.apiLog.completeEntry(entry, response.status, resHeaders);
-      }
-      return response;
-    } catch (e: any) {
-      this.apiLog.failEntry(entry, e.message ?? 'Network error');
-      throw e;
-    }
   }
 
   private async extractErrorMessage(response: Response, fallback: string): Promise<string> {

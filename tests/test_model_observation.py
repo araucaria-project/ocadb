@@ -34,6 +34,16 @@ async def test_store_skycoord_geojson_longitude_in_range(beanie):
     assert -180.0 <= lon <= 180.0
 
 
+async def test_store_skycoord_sentinel_when_no_coordinates_at_all(beanie):
+    """Regression test: calibration/master frames routinely have neither a real
+    pointing (RA/DEC) nor a telescope position (RA_TEL/DEC_TEL) — this used to crash
+    with TypeError (None + 180.0) instead of falling back to the model's own (0, 0)
+    'no coordinate' sentinel (see SkyCoord.radec's own default)."""
+    header = make_fits_header(**{"RA": None, "DEC": None, "RA_TEL": None, "DEC_TEL": None})
+    obs = Observation(obs_name="test_skycoord_none", fits_header=header)
+    assert obs.telescope_coordinates.radec == (0.0, 0.0)
+
+
 # --- store_canonical_object validator ---
 
 async def test_store_canonical_object_strips_spaces(beanie):
@@ -51,14 +61,26 @@ async def test_store_canonical_object_lowercases(beanie):
     assert obs.canonized_object_name == "v0441cyg"
 
 
-async def test_store_canonical_object_raises_when_object_none(beanie):
-    """name_canonizator(None) raises TypeError — OBJECT field must not be None."""
-    import pytest
-    with pytest.raises(TypeError):
-        Observation(obs_name="test_canon_none", fits_header=make_fits_header(**{"OBJECT": None}))
+async def test_store_canonical_object_none_when_object_missing(beanie):
+    """Regression test: calibration/master frames routinely have no OBJECT keyword —
+    this used to raise TypeError (name_canonizator(None)), crashing ingestion for any
+    such file (see production incident: jk15c_1064_77760_master_z.fits failed to
+    upsert with a bare 500 for exactly this reason)."""
+    obs = Observation(obs_name="test_canon_none", fits_header=make_fits_header(**{"OBJECT": None}))
+    assert obs.canonized_object_name is None
 
 
 # --- store_obs_date validator ---
+
+async def test_store_obs_date_defaults_when_date_obs_missing(beanie):
+    """Regression test: calibration/master frames routinely have no DATE-OBS keyword —
+    this used to raise a dateutil ParserError on parser.parse(None) instead of leaving
+    date_obs at its own default (record creation time, via its default_factory)."""
+    before = datetime.utcnow()
+    obs = Observation(obs_name="test_date_none", fits_header=make_fits_header(**{"DATE-OBS": None}))
+    assert isinstance(obs.date_obs, datetime)
+    assert obs.date_obs >= before
+
 
 async def test_store_obs_date_iso_format(beanie):
     obs = Observation(

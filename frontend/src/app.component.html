@@ -103,7 +103,7 @@
               <div class="relative">
                 <button
                   (click)="userMenuOpen.set(!userMenuOpen())"
-                  class="flex items-center gap-1 bg-space-950 border border-space-700 rounded px-2 py-1 text-slate-400 hover:text-slate-200 hover:border-slate-500 transition-colors"
+                  class="flex items-center gap-1 h-[2.5em] text-xs bg-space-950 border border-space-700 rounded px-2 text-slate-400 hover:text-slate-200 hover:border-slate-500 transition-colors"
                 >
                   <span class="text-xs truncate max-w-[120px]">{{ ocadbService.currentUser() }}</span>
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 transition-transform shrink-0" [class.rotate-180]="userMenuOpen()" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -851,7 +851,7 @@
         </div>
 
         <!-- Footer -->
-        <div class="p-2 border-t border-space-800 flex justify-center" [class.hidden]="!showFilters()" [class.md:block]="true">
+        <div class="p-2 border-t border-space-800 flex justify-center" [class.hidden]="!showFilters()" [class.md:flex]="true">
             <a href="https://akond.space/" target="_blank" class="group flex items-center gap-1.5 opacity-70 hover:opacity-100 transition-opacity">
                 <span class="text-[10px] text-slate-600 group-hover:text-slate-400 transition-colors mb-0.5">by</span>
                 <svg viewBox="0 0 67.194 12.425" xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-auto">
@@ -871,72 +871,34 @@
 
       <!-- Main Content: Results Table + Debug Panel -->
       <main class="flex-1 min-h-0 bg-space-950 relative overflow-hidden flex flex-col">
-        <!-- Results Count & Pagination Top -->
-        <div class="px-4 h-10 border-b border-space-800 flex items-center gap-3 bg-space-900/50 relative z-10 shrink-0">
+        <!-- Results Count & Search Chips -->
+        <div class="px-4 h-10 border-b border-space-800 flex items-center gap-2 bg-space-900/50 relative z-10 shrink-0">
 
           <!-- Left: count -->
           <span class="text-xs text-slate-400 shrink-0">
-            {{ ocadbService.pagination().total }} observations
-            @if (ocadbService.pagination().total > 0) {
-              <span class="text-slate-600">
-                — page {{ ocadbService.pagination().page }} of {{ totalPages }}
-              </span>
+            @if (searchChips().length > 0) {
+              Found {{ ocadbService.pagination().total }} observation{{ ocadbService.pagination().total === 1 ? '' : 's' }} for:
+            } @else {
+              {{ ocadbService.pagination().total }} observation{{ ocadbService.pagination().total === 1 ? '' : 's' }} in OCADB
             }
           </span>
 
-          <div class="flex-1"></div>
+          <!-- Search chips -->
+          @if (searchChips().length > 0) {
+            <div class="flex-1 min-w-0 overflow-x-auto flex items-center gap-1.5">
+              @for (chip of searchChips(); track chip.key) {
+                <button type="button"
+                  (click)="chip.remove()"
+                  [title]="'Remove filter: ' + chip.label"
+                  class="shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border cursor-pointer transition-colors bg-sky-900/30 border-sky-600/40 text-sky-300 hover:bg-sky-900/50"
+                >
+                  {{ chip.label }}
+                  <span class="opacity-50">×</span>
+                </button>
+              }
+            </div>
+          }
 
-          <!-- Right: download action buttons -->
-          <div class="flex items-center gap-2 shrink-0">
-            @if (selectedObsIds().size > 0) {
-              <button
-                (click)="clearSelection()"
-                class="px-4 py-1.5 rounded font-medium transition-colors border text-xs bg-amber-700/40 border-amber-600/50 text-amber-300 hover:bg-amber-700/60"
-              >
-                Clear selection
-              </button>
-            }
-            @if (selectedObsIds().size > 0) {
-              <button
-                (click)="openBatchTagDialog()"
-                class="px-4 py-1.5 rounded font-medium transition-colors border text-xs bg-violet-700/40 border-violet-600/50 text-violet-300 hover:bg-violet-700/60"
-              >
-                ADD OR REMOVE TAGS FOR {{ selectedObsIds().size }}
-              </button>
-            }
-            @if (selectedObsIds().size > 0) {
-              <button
-                (click)="openDownloadDialog()"
-                [disabled]="scriptLoading()"
-                class="px-4 py-1.5 rounded font-medium transition-colors border text-xs disabled:cursor-not-allowed bg-emerald-700/40 border-emerald-600/50 text-emerald-300 hover:bg-emerald-700/60"
-              >
-                @if (scriptLoading()) {
-                  <svg class="animate-spin w-3.5 h-3.5 mx-auto" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
-                  </svg>
-                } @else {
-                  GET DOWNLOADER SCRIPT FOR {{ selectedObsIds().size }}
-                }
-              </button>
-            }
-            @if (selectedObsIds().size > 0 && ocadbService.isModerator()) {
-              <button
-                (click)="approveSelectedUploads()"
-                [disabled]="approveUploadsLoading()"
-                class="px-4 py-1.5 rounded font-medium transition-colors border text-xs disabled:cursor-not-allowed bg-sky-700/40 border-sky-600/50 text-sky-300 hover:bg-sky-700/60"
-              >
-                @if (approveUploadsLoading()) {
-                  <svg class="animate-spin w-3.5 h-3.5 mx-auto" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
-                  </svg>
-                } @else {
-                  APPROVE UPLOADS FOR {{ selectedObsIds().size }}
-                }
-              </button>
-            }
-          </div>
         </div>
 
         <!-- Selected above indicator (outside scroll container so thead doesn't cover it) -->
@@ -1185,175 +1147,105 @@
         </div>
 
         <!-- Pagination Bottom -->
-        @if (totalPages > 1) {
-          <div class="px-6 py-2 border-t border-space-800 flex justify-center items-center bg-space-900/50">
-            <div class="flex items-center gap-1">
-              @if (hasSelectionOnPrevPages()) {
-                <span (click)="goToNearestSelectionBefore()" class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 select-none mr-1 cursor-pointer hover:bg-amber-500/40 transition-colors">◀ sel</span>
+        @if (totalPages > 1 || selectedObsIds().size > 0) {
+          <div class="px-6 py-3 min-h-[3.25rem] border-t border-space-800 grid grid-cols-[1fr_auto_1fr] items-center gap-4 bg-space-900/50">
+            <div class="flex items-center gap-2 justify-self-start">
+              @if (selectedObsIds().size > 0) {
+                <span class="text-xs text-slate-400 font-medium">{{ selectedObsIds().size }} SELECTED:</span>
+                <button
+                  (click)="clearSelection()"
+                  class="px-4 py-1.5 rounded font-medium transition-colors border text-xs bg-amber-700/40 border-amber-600/50 text-amber-300 hover:bg-amber-700/60"
+                >
+                  CLEAR SELECTION
+                </button>
               }
-              <button
-                (click)="goToPage(1)"
-                [disabled]="ocadbService.pagination().page <= 1"
-                class="px-2 py-1 text-xs rounded bg-space-800 text-slate-400 hover:bg-space-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >First</button>
-              <button
-                (click)="goToPage(ocadbService.pagination().page - 1)"
-                [disabled]="ocadbService.pagination().page <= 1"
-                class="px-2 py-1 text-xs rounded bg-space-800 text-slate-400 hover:bg-space-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >Prev</button>
-              @if (editingPage()) {
-                <input
-                  #pageInput
-                  type="text"
-                  inputmode="numeric"
-                  [ngModel]="pageInputValue()"
-                  (ngModelChange)="pageInputValue.set($event)"
-                  (keydown.enter)="commitPageEdit()"
-                  (focus)="$any($event.target).select()"
-                  (blur)="editingPage.set(false)"
-                  class="w-16 px-1 py-0.5 text-xs text-center rounded bg-space-700 border border-amber-400 text-slate-200 outline-none"
-                />
-              } @else {
-                <span
-                  class="text-xs text-slate-500 px-2 cursor-pointer hover:text-slate-300 transition-colors select-none"
-                  (click)="startPageEdit()"
-                >{{ ocadbService.pagination().page }} / {{ totalPages }}</span>
+              @if (selectedObsIds().size > 0) {
+                <button
+                  (click)="openBatchTagDialog()"
+                  class="px-4 py-1.5 rounded font-medium transition-colors border text-xs bg-violet-700/40 border-violet-600/50 text-violet-300 hover:bg-violet-700/60"
+                >
+                  EDIT TAGS
+                </button>
               }
-              <button
-                (click)="goToPage(ocadbService.pagination().page + 1)"
-                [disabled]="ocadbService.pagination().page >= totalPages"
-                class="px-2 py-1 text-xs rounded bg-space-800 text-slate-400 hover:bg-space-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >Next</button>
-              @if (hasSelectionOnNextPages()) {
-                <span (click)="goToNearestSelectionAfter()" class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 select-none ml-1 cursor-pointer hover:bg-amber-500/40 transition-colors">sel ▶</span>
+              @if (selectedObsIds().size > 0) {
+                <button
+                  (click)="openDownloadDialog()"
+                  [disabled]="scriptLoading()"
+                  class="px-4 py-1.5 rounded font-medium transition-colors border text-xs disabled:cursor-not-allowed bg-emerald-700/40 border-emerald-600/50 text-emerald-300 hover:bg-emerald-700/60"
+                >
+                  @if (scriptLoading()) {
+                    <svg class="animate-spin w-3.5 h-3.5 mx-auto" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                    </svg>
+                  } @else {
+                    DOWNLOAD
+                  }
+                </button>
+              }
+              @if (selectedObsIds().size > 0 && ocadbService.isModerator()) {
+                <button
+                  (click)="approveSelectedUploads()"
+                  [disabled]="approveUploadsLoading()"
+                  class="px-4 py-1.5 rounded font-medium transition-colors border text-xs disabled:cursor-not-allowed bg-sky-700/40 border-sky-600/50 text-sky-300 hover:bg-sky-700/60"
+                >
+                  @if (approveUploadsLoading()) {
+                    <svg class="animate-spin w-3.5 h-3.5 mx-auto" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                    </svg>
+                  } @else {
+                    APPROVE UPLOADS
+                  }
+                </button>
               }
             </div>
+            <div class="flex items-center gap-1 justify-self-center">
+              @if (totalPages > 1) {
+                @if (hasSelectionOnPrevPages()) {
+                  <span (click)="goToNearestSelectionBefore()" class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 select-none mr-1 cursor-pointer hover:bg-amber-500/40 transition-colors">◀ sel</span>
+                }
+                <button
+                  (click)="goToPage(1)"
+                  [disabled]="ocadbService.pagination().page <= 1"
+                  class="px-2 py-1 text-xs rounded bg-space-800 text-slate-400 hover:bg-space-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >First</button>
+                <button
+                  (click)="goToPage(ocadbService.pagination().page - 1)"
+                  [disabled]="ocadbService.pagination().page <= 1"
+                  class="px-2 py-1 text-xs rounded bg-space-800 text-slate-400 hover:bg-space-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >Prev</button>
+                @if (editingPage()) {
+                  <input
+                    #pageInput
+                    type="text"
+                    inputmode="numeric"
+                    [ngModel]="pageInputValue()"
+                    (ngModelChange)="pageInputValue.set($event)"
+                    (keydown.enter)="commitPageEdit()"
+                    (focus)="$any($event.target).select()"
+                    (blur)="editingPage.set(false)"
+                    class="w-16 px-1 py-0.5 text-xs text-center rounded bg-space-700 border border-amber-400 text-slate-200 outline-none"
+                  />
+                } @else {
+                  <span
+                    class="text-xs text-slate-500 px-2 cursor-pointer hover:text-slate-300 transition-colors select-none"
+                    (click)="startPageEdit()"
+                  >{{ ocadbService.pagination().page }} / {{ totalPages }}</span>
+                }
+                <button
+                  (click)="goToPage(ocadbService.pagination().page + 1)"
+                  [disabled]="ocadbService.pagination().page >= totalPages"
+                  class="px-2 py-1 text-xs rounded bg-space-800 text-slate-400 hover:bg-space-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >Next</button>
+                @if (hasSelectionOnNextPages()) {
+                  <span (click)="goToNearestSelectionAfter()" class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 select-none ml-1 cursor-pointer hover:bg-amber-500/40 transition-colors">sel ▶</span>
+                }
+              }
+            </div>
+            <div></div>
           </div>
         }
-        <!-- Debug Panel -->
-        <div class="border-t border-space-700 bg-space-900 flex flex-col"
-          [class.h-8]="!showDebugPanel()"
-          [class.h-64]="showDebugPanel()">
-          <!-- Debug Header -->
-          <div class="flex items-center justify-between px-3 py-1 border-b border-space-800 shrink-0 cursor-pointer select-none"
-            (click)="showDebugPanel.set(!showDebugPanel())">
-            <div class="flex items-center gap-2">
-              <span class="text-[10px] font-mono font-bold text-amber-500/80 uppercase tracking-widest">API Log</span>
-              <span class="text-[10px] text-slate-600">{{ apiLog.entries().length }} calls</span>
-            </div>
-            <div class="flex items-center gap-2">
-              @if (showDebugPanel()) {
-                <button (click)="apiLog.clear(); $event.stopPropagation()"
-                  class="text-[10px] text-slate-600 hover:text-slate-400 transition-colors px-1">Clear</button>
-              }
-              <button (click)="testSpinner(); $event.stopPropagation()"
-                class="text-[10px] text-slate-500 hover:text-amber-400 transition-colors px-1 font-mono">test spinner</button>
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-slate-600 transition-transform"
-                [class.rotate-180]="!showDebugPanel()" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
-          </div>
-          <!-- Debug Entries -->
-          @if (showDebugPanel()) {
-            <div class="flex-1 overflow-y-auto font-mono text-[11px]">
-              @for (entry of apiLog.entries().slice().reverse(); track entry.id) {
-                <div class="border-b border-space-800/50 hover:bg-space-800/30">
-                  <!-- Summary Row -->
-                  <div class="flex items-center gap-2 px-3 py-1 cursor-pointer" (click)="toggleLogEntry(entry.id)">
-                    <span class="text-slate-600 w-16 shrink-0">{{ entry.timestamp | date:'HH:mm:ss' }}</span>
-                    <span class="font-bold w-10 shrink-0"
-                      [class.text-blue-400]="entry.method === 'POST'"
-                      [class.text-emerald-400]="entry.method === 'GET'"
-                      [class.text-amber-400]="entry.method === 'PUT'"
-                      [class.text-red-400]="entry.method === 'DELETE'"
-                    >{{ entry.method }}</span>
-                    <span class="text-slate-400 truncate flex-1">{{ entry.url }}</span>
-                    <span class="shrink-0 w-8 text-right" [class]="getStatusClass(entry)">
-                      {{ entry.error ? 'ERR' : entry.status ?? '...' }}
-                    </span>
-                    <span class="text-slate-600 w-12 text-right shrink-0">
-                      {{ entry.durationMs != null ? entry.durationMs + 'ms' : '' }}
-                    </span>
-                  </div>
-                  <!-- Expanded Detail -->
-                  @if (expandedLogEntry() === entry.id) {
-                    <div class="px-3 pb-2 space-y-1.5">
-                      <!-- Request Headers (collapsed) -->
-                      <div>
-                        <button (click)="toggleLogSection('reqH'); $event.stopPropagation()"
-                          class="text-[10px] uppercase text-slate-600 hover:text-slate-400 flex items-center gap-1">
-                          <svg class="w-2.5 h-2.5 transition-transform" [class.rotate-90]="expandedLogSections()['reqH']" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M6 4l8 6-8 6V4z"/>
-                          </svg>
-                          Request Headers
-                          <span class="text-slate-700">({{ headerEntries(entry.requestHeaders).length }})</span>
-                        </button>
-                        @if (expandedLogSections()['reqH']) {
-                          <div class="bg-space-950 rounded p-2 mt-0.5 text-[10px]">
-                            @for (h of headerEntries(entry.requestHeaders); track h[0]) {
-                              <div class="flex gap-2">
-                                <span class="text-blue-400/70 shrink-0">{{ h[0] }}:</span>
-                                <span class="text-slate-400 break-all">{{ h[1] }}</span>
-                              </div>
-                            }
-                          </div>
-                        }
-                      </div>
-                      <!-- Request Body -->
-                      @if (entry.requestBody) {
-                        <div>
-                          <span class="text-[10px] uppercase text-slate-600">Request Body</span>
-                          <pre class="text-slate-400 text-[10px] whitespace-pre-wrap break-all bg-space-950 rounded p-2 mt-0.5 max-h-28 overflow-auto">{{ entry.requestBody }}</pre>
-                        </div>
-                      }
-                      <!-- Response Headers (collapsed) -->
-                      @if (headerEntries(entry.responseHeaders).length > 0) {
-                        <div>
-                          <button (click)="toggleLogSection('resH'); $event.stopPropagation()"
-                            class="text-[10px] uppercase text-slate-600 hover:text-slate-400 flex items-center gap-1">
-                            <svg class="w-2.5 h-2.5 transition-transform" [class.rotate-90]="expandedLogSections()['resH']" fill="currentColor" viewBox="0 0 20 20">
-                              <path d="M6 4l8 6-8 6V4z"/>
-                            </svg>
-                            Response Headers
-                            <span class="text-slate-700">({{ headerEntries(entry.responseHeaders).length }})</span>
-                          </button>
-                          @if (expandedLogSections()['resH']) {
-                            <div class="bg-space-950 rounded p-2 mt-0.5 text-[10px]">
-                              @for (h of headerEntries(entry.responseHeaders); track h[0]) {
-                                <div class="flex gap-2">
-                                  <span class="text-emerald-400/70 shrink-0">{{ h[0] }}:</span>
-                                  <span class="text-slate-400 break-all">{{ h[1] }}</span>
-                                </div>
-                              }
-                            </div>
-                          }
-                        </div>
-                      }
-                      <!-- Response Body -->
-                      @if (entry.responseBody) {
-                        <div>
-                          <span class="text-[10px] uppercase text-slate-600">Response Body</span>
-                          <pre class="text-emerald-300/60 text-[10px] whitespace-pre-wrap break-all bg-space-950 rounded p-2 mt-0.5 max-h-64 overflow-auto">{{ entry.responseBody }}</pre>
-                        </div>
-                      }
-                      <!-- Error -->
-                      @if (entry.error) {
-                        <div>
-                          <span class="text-red-600 text-[10px] uppercase">Error</span>
-                          <pre class="text-red-400 text-[10px] whitespace-pre-wrap break-all bg-red-950/30 rounded p-2 mt-0.5">{{ entry.error }}</pre>
-                        </div>
-                      }
-                    </div>
-                  }
-                </div>
-              }
-              @if (apiLog.entries().length === 0) {
-                <div class="text-center text-slate-600 py-4 text-[10px]">No API calls yet</div>
-              }
-            </div>
-          }
-        </div>
       </main>
     </div>
 
@@ -1675,12 +1567,13 @@
     <!-- Observation Detail Modal -->
     @if (selectedObservation()) {
       <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-        <div class="relative bg-space-900 border border-space-700 rounded-xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col m-4">
+        <div class="relative bg-space-900 border border-space-700 rounded-xl shadow-2xl w-full max-w-6xl h-[94vh] flex flex-col m-4 overflow-hidden transition-[max-width] duration-300 ease-in-out"
+          [style.max-width.px]="sourceFilesView() === 'lineage' ? (1152 + lineageExtraWidth()) : null">
 
           <!-- Header -->
           <div class="p-4 border-b border-space-800 shrink-0">
             <div class="flex items-center justify-between gap-3">
-              <div class="font-mono text-base text-slate-200 truncate min-w-0">{{ selectedObservation()!.fits_header['OBJECT'] ?? '—' }}</div>
+              <div class="font-mono text-xl text-slate-200 truncate min-w-0">{{ selectedObservation()!.fits_header['OBJECT'] ?? '—' }}</div>
               <div class="flex items-center gap-2 shrink-0">
                 @if (hasMetadata(selectedObservation()!)) {
                   <button
@@ -1728,12 +1621,13 @@
               </div>
             </div>
 
-            <div class="flex items-end justify-between gap-3 mt-4">
+            <div class="grid grid-cols-[1fr_auto_1fr] items-end gap-3 mt-4">
               <div class="min-w-0">
-                <div class="text-xs text-slate-500 truncate">{{ selectedObservation()!.obs_name }}</div>
-                <div class="text-[10px] uppercase tracking-widest text-slate-400 mt-1.5">Observation</div>
+                <div class="text-sm leading-4 text-slate-500 truncate">{{ selectedObservation()!.fits_header['SCIPROG'] ?? '' }}</div>
+                <div class="text-[10px] uppercase tracking-widest text-slate-400 mt-1.5">{{ selectedObservation()!.fits_header['PI'] ?? '' }}</div>
               </div>
-              <div class="text-[10px] text-slate-500 text-right font-mono leading-tight shrink-0">
+              <div class="font-mono text-base text-slate-400 truncate min-w-0 max-w-full justify-self-center">{{ selectedObservation()!.obs_name }}</div>
+              <div class="text-[10px] text-slate-500 text-right font-mono leading-tight shrink-0 justify-self-end">
                 @if (selectedObservation()!.updated_at) {
                   <div>created {{ selectedObservation()!.created_at | date:'yyyy-MM-dd HH:mm' }}</div>
                   <div>updated {{ selectedObservation()!.updated_at | date:'yyyy-MM-dd HH:mm' }}</div>
@@ -1746,10 +1640,12 @@
           </div>
 
           <!-- Body -->
-          <div class="flex-1 overflow-y-auto p-4 space-y-4 text-sm">
+          <div class="flex-1 min-h-0 p-4 text-sm">
+            <div class="h-full min-h-0 flex flex-col lg:flex-row gap-4">
+            <div class="lg:w-[32rem] lg:shrink-0 min-h-0 overflow-y-auto flex flex-col space-y-4 pr-1">
 
             <!-- Key fields -->
-            <div class="text-xs"
+            <div class="text-xs shrink-0"
               (dragover)="onContainerDragOver($event)"
               (dragleave)="onContainerDragLeave($event)"
               (drop)="onContainerDrop($event)">
@@ -1799,7 +1695,7 @@
             </div>
 
             <!-- Tags -->
-            <div>
+            <div class="shrink-0">
               <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Tags</div>
               <div class="flex flex-wrap items-center gap-1.5">
                 @for (tag of sortedObsTags(selectedObservation()!.obs_tags ?? []); track tag) {
@@ -1875,9 +1771,9 @@
             </div>
 
             <!-- Full FITS Header -->
-            <div>
-              <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">FITS Header</div>
-              <div class="bg-space-950 rounded p-3 font-mono text-[11px] max-h-64 overflow-y-auto space-y-0.5">
+            <div class="flex-1 min-h-64 flex flex-col">
+              <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1.5 shrink-0">FITS Header</div>
+              <div class="flex-1 min-h-0 bg-space-950 rounded p-3 font-mono text-[11px] overflow-y-auto space-y-0.5">
                 @for (entry of headerEntries2(selectedObservation()!.fits_header); track entry[0]) {
                   <div class="group flex items-baseline gap-4">
                     <span class="whitespace-nowrap w-28 shrink-0"
@@ -1916,10 +1812,14 @@
               </div>
             </div>
 
+            </div>
+            <div #obsModalRightColumn class="lg:flex-1 min-h-0 min-w-0 flex flex-col gap-4 overflow-hidden">
+
             <!-- Files -->
-            <div>
-              <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Observation files</div>
-              <div class="bg-space-950 border border-space-700 rounded-lg p-2">
+            <div class="min-h-0 flex flex-col flex-none overflow-hidden transition-[flex-basis] duration-300 ease-in-out"
+              [style.flex-basis.px]="filesBoxHeightPx()">
+              <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-2 shrink-0">Observation files</div>
+              <div class="flex-1 min-h-0 overflow-y-auto bg-space-950 border border-space-700 rounded-lg p-2">
                 @if (filesLoading()) {
                   <div class="flex flex-col items-center justify-center gap-2 py-5 text-slate-500">
                     <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
@@ -1951,8 +1851,8 @@
             </div>
 
             <!-- Source Files -->
-            <div>
-              <div class="flex items-center justify-between mb-2">
+            <div class="flex-1 min-h-0 flex flex-col overflow-hidden">
+              <div class="flex items-center justify-between mb-2 shrink-0">
                 <div class="text-[10px] uppercase tracking-wider text-slate-500">Source files</div>
                 <div class="flex items-center gap-1 bg-space-900 border border-space-700 rounded p-0.5">
                   <button (click)="showSourceFilesListView()"
@@ -1967,7 +1867,7 @@
                   </button>
                 </div>
               </div>
-              <div class="bg-space-950 border border-space-700 rounded-lg p-2">
+              <div class="flex-1 min-h-0 overflow-y-auto bg-space-950 border border-space-700 rounded-lg p-2">
                 @if (sourceFilesView() === 'list') {
                   @if (calibrationFilesLoading()) {
                     <div class="flex flex-col items-center justify-center gap-2 py-5 text-slate-500">
@@ -2016,12 +1916,14 @@
                   } @else if (!selectedLineage() || !objectKeys(selectedLineage()!.nodes).length) {
                     <div class="text-center text-[11px] text-slate-600 py-5">No file lineage available</div>
                   } @else {
-                    <div #lineageCyContainer class="relative w-full max-w-[880px] mx-auto aspect-square overflow-hidden rounded"></div>
+                    <div #lineageCyContainer class="relative w-full h-full overflow-hidden rounded"></div>
                   }
                 }
               </div>
             </div>
 
+            </div>
+            </div>
           </div>
         </div>
       </div>
@@ -2061,18 +1963,8 @@
 
           <div class="flex items-center justify-between p-4 border-b border-space-800 shrink-0">
             <div class="flex items-center gap-3 min-w-0">
-              @if (selectedObservation()) {
-                <button (click)="selectedMetadata.set(null)"
-                  class="flex items-center gap-1 text-slate-400 hover:text-white transition-colors shrink-0 text-xs">
-                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-                  </svg>
-                  Back
-                </button>
-                <span class="text-slate-700 shrink-0">|</span>
-              }
               <div class="flex items-stretch gap-3 min-w-0">
-                <span class="flex items-center justify-center px-2 py-1 rounded border text-xs font-bold bg-violet-900/30 text-violet-300 border-violet-600/50 shrink-0">metadata</span>
+                <span class="flex items-center justify-center px-2 h-[37px] rounded border text-xs font-bold bg-violet-900/30 text-violet-300 border-violet-600/50 shrink-0">metadata</span>
                 <span class="font-mono text-base text-slate-200 truncate self-center">{{ selectedMetadata()!.obs_name }}</span>
               </div>
             </div>
@@ -2102,16 +1994,6 @@
           <!-- Modal Header -->
           <div class="flex items-center justify-between p-4 border-b border-space-800 shrink-0">
             <div class="flex items-center gap-3 min-w-0">
-              @if (selectedObservation() || fileHistory().length > 0) {
-                <button (click)="goBackFile()"
-                  class="flex items-center gap-1 text-slate-400 hover:text-white transition-colors shrink-0 text-xs">
-                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-                  </svg>
-                  Back
-                </button>
-                <span class="text-slate-700 shrink-0">|</span>
-              }
               <div class="flex items-stretch gap-3 min-w-0">
                 <span class="flex items-center justify-center px-2 rounded text-xs font-bold border shrink-0"
                   [class]="getFileBadgeClass(selectedFile()!)">
@@ -2152,7 +2034,7 @@
                   Download
                 </button>
               }
-              <button (click)="closeFileAndObservation()"
+              <button (click)="closeFileViewer()"
                 class="text-slate-500 hover:text-white transition-colors">
                 <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
                   <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>

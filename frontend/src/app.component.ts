@@ -3,7 +3,6 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { OcadbService, Observation, SearchFilters, SearchObject, SearchTag, FitsFile, StorageStatusType, StorageStatus, ViewerConf, DEFAULT_VIEWER_CONF, FileLineage } from './services/ocadb.service';
-import { ApiLogService, ApiLogEntry } from './services/api-log.service';
 import { FlatpickrDirective } from './flatpickr.directive';
 import { InfoIconComponent } from './info-icon.component';
 import { buildSearchParams, parseSearchParams, UrlSearchState, UrlViewState } from './url-state';
@@ -29,7 +28,6 @@ const LINEAGE_NODE_COLORS: Record<string, { bg: string; border: string; text: st
 })
 export class AppComponent implements OnInit {
   ocadbService = inject(OcadbService);
-  apiLog = inject(ApiLogService);
   private _lastCalibrationKey: string | null = null;
   private _lastSourceKey: string | null = null;
   private _coneObjectKey: string | null = null;
@@ -73,7 +71,6 @@ export class AppComponent implements OnInit {
   selectedLineage = signal<FileLineage | null>(null);
   lineageLoading = signal(false);
   showFilters = signal(true);
-  showDebugPanel = signal(false);
   selectedObsIds = signal<Set<string>>(new Set());
   selectionPageMap = signal<Map<string, number>>(new Map());
 
@@ -96,7 +93,6 @@ export class AppComponent implements OnInit {
   readonly DOWNLOAD_FILE_TYPES = ['zdf', 'raw', 'flat', 'zero', 'dark', 'master'] as const;
   readonly DOWNLOAD_CALIB_TYPES = new Set(['flat', 'zero', 'dark', 'master']);
   downloadFileTypes = signal<Set<string>>(new Set(this.DOWNLOAD_FILE_TYPES));
-  expandedLogEntry = signal<number | null>(null);
   editingPage = signal(false);
   pageInputValue = signal('');
   @ViewChild('pageInput') pageInputRef?: ElementRef<HTMLInputElement>;
@@ -510,37 +506,9 @@ export class AppComponent implements OnInit {
     this.openSourceFile(file);
   }
 
-  goBackFile() {
-    const history = this.fileHistory();
-    if (history.length > 0) {
-      const prev = history[history.length - 1];
-      this.fileHistory.update(h => h.slice(0, -1));
-      this.selectedFile.set(prev);
-    } else {
-      this.selectedFile.set(null);
-    }
-    this.syncModalUrl();
-  }
-
-  testSpinner() {
-    this.ocadbService.loading.set(true);
-    setTimeout(() => this.ocadbService.loading.set(false), 3000);
-  }
-
   closeFileViewer() {
     this.selectedFile.set(null);
     this.fileHistory.set([]);
-    this.syncModalUrl();
-  }
-
-  /** Closes both the file and observation modals in one go — used by the file modal's
-   * explicit X button, as distinct from closeFileViewer() (backdrop click / implicit
-   * goBackFile() fallback), which only closes the file and reveals the observation
-   * modal underneath if one is open. */
-  closeFileAndObservation() {
-    this.selectedFile.set(null);
-    this.fileHistory.set([]);
-    this.selectedObservation.set(null);
     this.syncModalUrl();
   }
 
@@ -616,6 +584,32 @@ export class AppComponent implements OnInit {
   lineageStatusesLoading = signal(false);
 
   @ViewChild('lineageCyContainer') lineageCyContainerRef?: ElementRef<HTMLDivElement>;
+  @ViewChild('obsModalRightColumn') obsModalRightColumnRef?: ElementRef<HTMLDivElement>;
+
+  private static readonly LINEAGE_FILES_HEIGHT_PX = 128; // h-32
+
+  /** The Files box's height when evenly split 50/50 with Source Files (list view). */
+  private defaultFilesHeightPx(): number {
+    const el = this.obsModalRightColumnRef?.nativeElement;
+    if (!el) return 0;
+    const gap = 16; // gap-4 between Files and Source Files
+    return (el.clientHeight - gap) / 2;
+  }
+
+  /** Files box height in px — shrinks to a fixed height in lineage view so Source
+   * Files/the lineage graph can grow; animated via a CSS transition on flex-basis. */
+  filesBoxHeightPx(): number {
+    return this.sourceFilesView() === 'lineage'
+      ? AppComponent.LINEAGE_FILES_HEIGHT_PX
+      : this.defaultFilesHeightPx();
+  }
+
+  /** How much wider the observation modal should grow in lineage view, so the
+   * lineage box's width gain matches its height gain (from the Files section
+   * shrinking to a fixed h-32) instead of ballooning to fill the viewport. */
+  lineageExtraWidth(): number {
+    return Math.max(0, this.defaultFilesHeightPx() - AppComponent.LINEAGE_FILES_HEIGHT_PX);
+  }
   private cy: cytoscape.Core | null = null;
 
   showSourceFilesListView() {
@@ -760,8 +754,8 @@ export class AppComponent implements OnInit {
             'curve-style': 'bezier',
             'width': 1.5,
             'line-color': '#475569',
-            'target-arrow-color': '#475569',
-            'target-arrow-shape': 'triangle',
+            'source-arrow-color': '#475569',
+            'source-arrow-shape': 'triangle',
             'arrow-scale': 0.9,
             // Labels sit near whichever endpoint the user is actually hovering over
             // (source-label near the edge's source node, target-label near its target),
@@ -792,7 +786,7 @@ export class AppComponent implements OnInit {
           selector: 'edge.lineage-highlighted',
           style: {
             'line-color': '#38bdf8',
-            'target-arrow-color': '#38bdf8',
+            'source-arrow-color': '#38bdf8',
             'width': 2.5,
             'opacity': 1,
           },
@@ -1348,6 +1342,102 @@ export class AppComponent implements OnInit {
   updateFilterArray(key: keyof SearchFilters, value: string) {
     const items = value ? value.split(',').map(s => s.trim()).filter(Boolean) : null;
     this.filters.update(f => ({ ...f, [key]: items }));
+  }
+
+  private readonly FILTER_CHIP_LABELS: Partial<Record<keyof SearchFilters, string>> = {
+    telescop: 'Telescope',
+    imagetyp: 'Image type',
+    obstype: 'Obs type',
+    object: 'Object',
+    obs_name: 'Obs name',
+    pi: 'PI',
+    sciprog: 'Sci prog',
+  };
+
+  searchChips = computed(() => {
+    const f = this.filters();
+    const chips: { key: string; label: string; remove: () => void }[] = [];
+
+    (Object.keys(this.FILTER_CHIP_LABELS) as (keyof SearchFilters)[]).forEach(key => {
+      const value = f[key];
+      if (value) chips.push({ key, label: `${this.FILTER_CHIP_LABELS[key]}: ${value}`, remove: () => this.removeSearchChip(key) });
+    });
+
+    if (f.filter?.length) {
+      chips.push({ key: 'filter', label: `Filter: ${f.filter.join(', ')}`, remove: () => this.removeSearchChip('filter') });
+    }
+    if (f.file_types?.length) {
+      chips.push({ key: 'file_types', label: `File types: ${f.file_types.join(', ')}`, remove: () => this.removeSearchChip('file_types') });
+    }
+    if (f.tags?.length) {
+      chips.push({ key: 'tags', label: `Tags: ${f.tags.join(', ')}`, remove: () => this.removeSearchChip('tags') });
+    }
+    if (f.date_obs_from || f.date_obs_to) {
+      const from = f.date_obs_from?.slice(0, 10) ?? '…';
+      const to = f.date_obs_to?.slice(0, 10) ?? '…';
+      chips.push({ key: 'date_obs', label: `Date: ${from} → ${to}`, remove: () => this.removeSearchChip('date_obs') });
+    }
+    if (f.oca_jd_from || f.oca_jd_to) {
+      chips.push({ key: 'oca_jd', label: `OCA JD: ${f.oca_jd_from ?? '…'} → ${f.oca_jd_to ?? '…'}`, remove: () => this.removeSearchChip('oca_jd') });
+    }
+    if (f.exptime_from || f.exptime_to) {
+      chips.push({ key: 'exptime', label: `Exp time: ${f.exptime_from ?? '…'} → ${f.exptime_to ?? '…'}`, remove: () => this.removeSearchChip('exptime') });
+    }
+    if (f.jd_from || f.jd_to) {
+      chips.push({ key: 'jd', label: `JD: ${f.jd_from ?? '…'} → ${f.jd_to ?? '…'}`, remove: () => this.removeSearchChip('jd') });
+    }
+    if (f.has_requested_files) {
+      chips.push({ key: 'has_requested_files', label: 'Requested files only', remove: () => this.removeSearchChip('has_requested_files') });
+    }
+    if (this.coneSearchExpanded() && this.coneCoordinates().trim()) {
+      chips.push({ key: 'cone_search', label: `Cone: ${this.coneCoordinates().trim()} (${this.coneRadius()}″)`, remove: () => this.removeSearchChip('cone_search') });
+    }
+
+    return chips;
+  });
+
+  removeSearchChip(key: string) {
+    switch (key) {
+      case 'date_obs':
+        this.updateFilter('date_obs_from', null);
+        this.updateFilter('date_obs_to', null);
+        break;
+      case 'oca_jd':
+        this.updateFilter('oca_jd_from', null);
+        this.updateFilter('oca_jd_to', null);
+        break;
+      case 'exptime':
+        this.updateFilter('exptime_from', null);
+        this.updateFilter('exptime_to', null);
+        break;
+      case 'jd':
+        this.updateFilter('jd_from', null);
+        this.updateFilter('jd_to', null);
+        break;
+      case 'cone_search':
+        this.coneSearchExpanded.set(false);
+        this.coneCoordinates.set('');
+        break;
+      case 'object':
+        this.updateFilter('object', null);
+        this.objectQuery.set('');
+        break;
+      case 'pi':
+        this.updateFilter('pi', null);
+        this.piQuery.set('');
+        break;
+      case 'sciprog':
+        this.updateFilter('sciprog', null);
+        this.sciprogQuery.set('');
+        break;
+      case 'filter':
+        this.updateFilter('filter', null);
+        this.filterQuery.set('');
+        break;
+      default:
+        this.updateFilter(key as keyof SearchFilters, null);
+    }
+    this.search();
   }
 
   toggleFileTypeFilter(ft: string) {
@@ -2037,7 +2127,6 @@ export class AppComponent implements OnInit {
     this.clearFilters();
   }
 
-  expandedLogSections = signal<Record<string, boolean>>({});
   coordMode = signal<'DEG' | 'SX'>('DEG');
 
   readonly FIELD_DEFS: Record<string, { label: string }> = {
@@ -2190,27 +2279,6 @@ export class AppComponent implements OnInit {
     this.dragOverKey.set(null);
     this.dragOverEnd.set(false);
     this.dragHandleActive.set(false);
-  }
-
-  toggleLogEntry(id: number) {
-    this.expandedLogEntry.update(current => current === id ? null : id);
-    this.expandedLogSections.set({});
-  }
-
-  toggleLogSection(section: string) {
-    this.expandedLogSections.update(s => ({ ...s, [section]: !s[section] }));
-  }
-
-  headerEntries(headers: Record<string, string>): [string, string][] {
-    return Object.entries(headers);
-  }
-
-  getStatusClass(entry: ApiLogEntry): string {
-    if (entry.error) return 'text-red-400';
-    if (!entry.status) return 'text-slate-500';
-    if (entry.status >= 200 && entry.status < 300) return 'text-emerald-400';
-    if (entry.status >= 400 && entry.status < 500) return 'text-amber-400';
-    return 'text-red-400';
   }
 
   getFileCloudStatus(file: FitsFile): 'stored' | 'storing' | 'none' | 'other' {
