@@ -103,9 +103,38 @@ export class AppComponent implements OnInit {
   downloadForCurrentUser = signal(true);
   downloadCustomUsername = signal('');
   downloadIncludeCalibration = signal(false);
-  readonly DOWNLOAD_FILE_TYPES = ['zdf', 'raw', 'flat', 'zero', 'dark', 'master'] as const;
-  readonly DOWNLOAD_CALIB_TYPES = new Set(['flat', 'zero', 'dark', 'master']);
+  /** "Science" — the observation's own direct Files, filtered by file_class. */
+  readonly DOWNLOAD_FILE_TYPES = ['zdf', 'raw'] as const;
+  /** "Calibration" — Source Files, filtered by filename since calibration frames are
+   * frequently stored with file_class='raw' regardless of their actual role. Each group
+   * below (raw calibration / master calibration) gets its own tri-state parent checkbox. */
+  readonly RAW_CALIB_SUB_TYPES = ['flat', 'zero', 'dark'] as const;
+  readonly MASTER_SUB_TYPES = ['master_flat', 'master_dark', 'master_zero'] as const;
+  readonly UNKNOWN_CALIB_TYPE = 'unknown';
+  readonly DOWNLOAD_CALIB_TYPES = new Set<string>([...this.RAW_CALIB_SUB_TYPES, ...this.MASTER_SUB_TYPES, this.UNKNOWN_CALIB_TYPE]);
   downloadFileTypes = signal<Set<string>>(new Set(this.DOWNLOAD_FILE_TYPES));
+
+  /** 'all'/'none'/'some' — drives a calibration group's parent checkbox
+   * checked/unchecked/indeterminate look. */
+  groupState(types: readonly string[]): 'all' | 'none' | 'some' {
+    const set = this.downloadFileTypes();
+    const checkedCount = types.filter(t => set.has(t)).length;
+    if (checkedCount === 0) return 'none';
+    return checkedCount === types.length ? 'all' : 'some';
+  }
+
+  /** Clicking a group's parent checkbox checks all its sub-types if any are currently
+   * unchecked, or clears all of them if they're all already checked. */
+  toggleGroup(types: readonly string[]) {
+    this.downloadFileTypes.update(set => {
+      const next = new Set(set);
+      const allChecked = types.every(t => next.has(t));
+      for (const t of types) {
+        allChecked ? next.delete(t) : next.add(t);
+      }
+      return next;
+    });
+  }
   editingPage = signal(false);
   pageInputValue = signal('');
   @ViewChild('pageInput') pageInputRef?: ElementRef<HTMLInputElement>;

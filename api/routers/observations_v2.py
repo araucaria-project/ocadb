@@ -1294,14 +1294,26 @@ async def migrate_observation_id_status(
     return job
 
 
-# RAW/ZDF describe an observation's own "Files" — filtered by each FITSFile's file_class.
-# Instrumental calibration frames (flat/zero/dark/master, pulled in transitively via
-# source_filenames as "Source Files") are frequently stored with file_class='raw' too
-# (they're raw CCD exposures at the storage level), so their *role* is only recoverable
-# from their filename's class suffix, not file_class — and their inclusion must be gated
-# by their own flat/zero/dark/master checkbox, independent of whether raw/zdf is checked.
-_DIRECT_FILE_TYPES = {'raw', 'zdf'}
-_CALIB_FILE_TYPES = {'flat', 'zero', 'dark', 'master'}
+# Field-based classification: (file_class, image_type) pairs with clean, unambiguous
+# criteria. A file matches type_name if its file_class equals the tuple's first element
+# and its image_type equals the second. Anything not matching any of these is 'unknown'.
+_FIELD_BASED_TYPES: Dict[str, Tuple[str, str]] = {
+    'zdf': ('zdf', 'science'),
+    'raw': ('raw', 'science'),
+    'flat': ('raw', 'flat'),
+    'zero': ('raw', 'zero'),
+    'dark': ('raw', 'dark'),
+    'master_flat': ('master', 'flat'),
+    'master_dark': ('master', 'dark'),
+    'master_zero': ('master', 'zero'),
+}
+
+
+def _classify_file(file_class: Optional[str], image_type: Optional[str]) -> str:
+    for type_name, (fclass, itype) in _FIELD_BASED_TYPES.items():
+        if file_class == fclass and image_type == itype:
+            return type_name
+    return 'unknown'
 
 
 async def _resolve_export_filenames(
@@ -1309,13 +1321,14 @@ async def _resolve_export_filenames(
 ) -> Tuple[List[Observation], List[str]]:
     """Resolves a list of observation IDs to the filenames of their linked FITSFiles,
     optionally expanding to instrumental calibration files (transitively, via
-    source_filenames) and filtering by file class — shared by the downloader-script
-    and filepaths-export endpoints, which differ only in what they do with the result.
+    source_filenames), and filtering by file type — shared by the downloader-script and
+    filepaths-export endpoints, which differ only in what they do with the result.
 
-    Direct observation files (the "Files" section) are filtered by their own file_class
-    field. Calibration files (the "Source Files" pulled in via source_filenames) are
-    filtered by their filename's class suffix instead, independently of the direct
-    file-type selection — see _DIRECT_FILE_TYPES/_CALIB_FILE_TYPES above.
+    Every discovered file (whether directly linked to the observation or pulled in via
+    source_filenames) is classified the same way via _classify_file() and filtered
+    uniformly — a calibration-role file can be directly linked too (e.g. a dedicated
+    calibration-night observation), so there's no meaningful "direct vs calibration"
+    split for filtering purposes, only for whether source_filenames is expanded at all.
     """
     try:
         obs_ids = [PydanticObjectId(oid) for oid in obs_ids_raw]
@@ -1327,51 +1340,43 @@ async def _resolve_export_filenames(
     if not observations:
         raise HTTPException(status_code=404, detail="No observations found for the given IDs")
 
-    direct_entries: Dict[str, str] = {}  # filename -> file_class
+    entries: Dict[str, Tuple[Optional[str], Optional[str]]] = {}  # filename -> (file_class, image_type)
     calib_seed: set = set()
     for obs in observations:
         await obs.fetch_all_links()
         for f in obs.files:
-            direct_entries[f.filename] = f.file_class
+            entries[f.filename] = (f.file_class, f.image_type)
             if include_calibration:
                 calib_seed.update(f.source_filenames or [])
 
-    # Filenames reachable via source_filenames, kept as calibration candidates
-    # regardless of whether they're ALSO directly linked — a file's calibration role
-    # must still count even if the raw/zdf filter excludes it from the direct bucket
-    # below (only its own DB lookup is skipped for ones we already have data for).
-    calib_filenames: List[str] = []
     if include_calibration:
         collected: set = set(calib_seed)
         frontier = calib_seed
         while frontier:
-            unknown = [n for n in frontier if n not in direct_entries]
+            unknown = [n for n in frontier if n not in entries]
             db_files = await FITSFile.find({"filename": {"$in": unknown}}).to_list() if unknown else []
+            for f in db_files:
+                entries[f.filename] = (f.file_class, f.image_type)
             frontier = set()
             for f in db_files:
                 frontier.update(f.source_filenames or [])
             frontier -= collected
             collected.update(frontier)
-        calib_filenames = sorted(collected)
+        # A source_filenames reference with no matching FITSFile document — a data error,
+        # or simply not ingested into the DB yet — still gets included as 'unknown' rather
+        # than silently dropped. There's no file_class/image_type (no document at all), so
+        # it can only ever classify as 'unknown'.
+        for name in collected:
+            entries.setdefault(name, (None, None))
 
     if file_types is not None:
-        from ocafitsfiles import parse_filename
-
         allowed = set(file_types)
-        direct_allowed = allowed & _DIRECT_FILE_TYPES
-        calib_allowed = allowed & _CALIB_FILE_TYPES
+        entries = {
+            name: v for name, v in entries.items()
+            if _classify_file(v[0], v[1]) in allowed
+        }
 
-        if direct_allowed:
-            direct_entries = {name: fclass for name, fclass in direct_entries.items() if fclass in direct_allowed}
-        if calib_allowed:
-            def _calib_type(name: str) -> str:
-                _, suffix = parse_filename(name)
-                return suffix if suffix else 'raw'
-            calib_filenames = [n for n in calib_filenames if _calib_type(n) in calib_allowed]
-
-    # A file can be both a direct observation file and someone else's calibration
-    # source — list it once, preferring the direct bucket's ordering.
-    filenames = list(dict.fromkeys(list(direct_entries.keys()) + calib_filenames))
+    filenames = list(entries.keys())
 
     if not filenames:
         raise HTTPException(status_code=404, detail="No files found for the selected observations")

@@ -2387,25 +2387,131 @@
             </div>
 
             <!-- File type filter -->
-            <div class="border-t border-space-800 pt-3 space-y-2">
+            <div class="border-t border-space-800 pt-3 space-y-3">
               <p class="text-xs text-slate-400">Files (processing) stage: <span class="text-slate-600">(none checked = all types)</span></p>
-              @for (type of DOWNLOAD_FILE_TYPES; track type) {
-                @if (downloadIncludeCalibration() || !DOWNLOAD_CALIB_TYPES.has(type)) {
-                <label class="flex items-center gap-2.5 cursor-pointer select-none" (click)="toggleDownloadFileType(type)">
-                  <div class="w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors"
-                    [class.bg-accent-600]="downloadFileTypes().has(type)"
-                    [class.border-accent-500]="downloadFileTypes().has(type)"
-                    [class.bg-space-950]="!downloadFileTypes().has(type)"
-                    [class.border-space-600]="!downloadFileTypes().has(type)">
-                    @if (downloadFileTypes().has(type)) {
-                      <svg class="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-                      </svg>
-                    }
-                  </div>
-                  <span class="font-mono text-xs text-slate-300">{{ type }}{{ type === 'zdf' ? ' (zero/dark/flat calibrated)' : '' }}</span>
-                </label>
+
+              <!-- Science -->
+              <div class="space-y-2">
+                <p class="text-[10px] uppercase tracking-wider text-slate-500">Observation files</p>
+                @for (type of DOWNLOAD_FILE_TYPES; track type) {
+                  <label class="flex items-center gap-2.5 cursor-pointer select-none" (click)="toggleDownloadFileType(type)">
+                    <div class="w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors"
+                      [class.bg-accent-600]="downloadFileTypes().has(type)"
+                      [class.border-accent-500]="downloadFileTypes().has(type)"
+                      [class.bg-space-950]="!downloadFileTypes().has(type)"
+                      [class.border-space-600]="!downloadFileTypes().has(type)">
+                      @if (downloadFileTypes().has(type)) {
+                        <svg class="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                        </svg>
+                      }
+                    </div>
+                    <span class="font-mono text-xs text-slate-300">{{ type }}{{ type === 'zdf' ? ' (zero/dark/flat calibrated)' : '' }}</span>
+                  </label>
                 }
+              </div>
+
+              <!-- Calibration -->
+              @if (downloadIncludeCalibration()) {
+                <div class="space-y-2">
+                  <p class="text-[10px] uppercase tracking-wider text-slate-500">Calibration files</p>
+
+                  <!-- Raw calibration -->
+                  <div>
+                    <label class="flex items-center gap-2.5 cursor-pointer select-none" (click)="toggleGroup(RAW_CALIB_SUB_TYPES)">
+                      <div class="w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors"
+                        [class.bg-accent-600]="groupState(RAW_CALIB_SUB_TYPES) !== 'none'"
+                        [class.border-accent-500]="groupState(RAW_CALIB_SUB_TYPES) !== 'none'"
+                        [class.bg-space-950]="groupState(RAW_CALIB_SUB_TYPES) === 'none'"
+                        [class.border-space-600]="groupState(RAW_CALIB_SUB_TYPES) === 'none'">
+                        @if (groupState(RAW_CALIB_SUB_TYPES) === 'all') {
+                          <svg class="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                          </svg>
+                        } @else if (groupState(RAW_CALIB_SUB_TYPES) === 'some') {
+                          <svg class="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M4 10a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1z" clip-rule="evenodd"/>
+                          </svg>
+                        }
+                      </div>
+                      <span class="font-mono text-xs text-slate-300">raw calibration</span>
+                    </label>
+                    <div class="pl-6 mt-1.5 space-y-1.5">
+                      @for (sub of RAW_CALIB_SUB_TYPES; track sub) {
+                        <label class="flex items-center gap-2.5 cursor-pointer select-none" (click)="toggleDownloadFileType(sub)">
+                          <div class="w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors"
+                            [class.bg-accent-600]="downloadFileTypes().has(sub)"
+                            [class.border-accent-500]="downloadFileTypes().has(sub)"
+                            [class.bg-space-950]="!downloadFileTypes().has(sub)"
+                            [class.border-space-600]="!downloadFileTypes().has(sub)">
+                            @if (downloadFileTypes().has(sub)) {
+                              <svg class="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                              </svg>
+                            }
+                          </div>
+                          <span class="font-mono text-xs text-slate-300">{{ sub }}</span>
+                        </label>
+                      }
+                    </div>
+                  </div>
+
+                  <!-- Master calibration -->
+                  <div>
+                    <label class="flex items-center gap-2.5 cursor-pointer select-none" (click)="toggleGroup(MASTER_SUB_TYPES)">
+                      <div class="w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors"
+                        [class.bg-accent-600]="groupState(MASTER_SUB_TYPES) !== 'none'"
+                        [class.border-accent-500]="groupState(MASTER_SUB_TYPES) !== 'none'"
+                        [class.bg-space-950]="groupState(MASTER_SUB_TYPES) === 'none'"
+                        [class.border-space-600]="groupState(MASTER_SUB_TYPES) === 'none'">
+                        @if (groupState(MASTER_SUB_TYPES) === 'all') {
+                          <svg class="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                          </svg>
+                        } @else if (groupState(MASTER_SUB_TYPES) === 'some') {
+                          <svg class="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M4 10a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1z" clip-rule="evenodd"/>
+                          </svg>
+                        }
+                      </div>
+                      <span class="font-mono text-xs text-slate-300">master calibration</span>
+                    </label>
+                    <div class="pl-6 mt-1.5 space-y-1.5">
+                      @for (sub of MASTER_SUB_TYPES; track sub) {
+                        <label class="flex items-center gap-2.5 cursor-pointer select-none" (click)="toggleDownloadFileType(sub)">
+                          <div class="w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors"
+                            [class.bg-accent-600]="downloadFileTypes().has(sub)"
+                            [class.border-accent-500]="downloadFileTypes().has(sub)"
+                            [class.bg-space-950]="!downloadFileTypes().has(sub)"
+                            [class.border-space-600]="!downloadFileTypes().has(sub)">
+                            @if (downloadFileTypes().has(sub)) {
+                              <svg class="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                              </svg>
+                            }
+                          </div>
+                          <span class="font-mono text-xs text-slate-300">{{ sub.replace('master_', 'master ') }}</span>
+                        </label>
+                      }
+                    </div>
+                  </div>
+
+                  <!-- Unknown calibration file -->
+                  <label class="flex items-center gap-2.5 cursor-pointer select-none" (click)="toggleDownloadFileType(UNKNOWN_CALIB_TYPE)">
+                    <div class="w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors"
+                      [class.bg-accent-600]="downloadFileTypes().has(UNKNOWN_CALIB_TYPE)"
+                      [class.border-accent-500]="downloadFileTypes().has(UNKNOWN_CALIB_TYPE)"
+                      [class.bg-space-950]="!downloadFileTypes().has(UNKNOWN_CALIB_TYPE)"
+                      [class.border-space-600]="!downloadFileTypes().has(UNKNOWN_CALIB_TYPE)">
+                      @if (downloadFileTypes().has(UNKNOWN_CALIB_TYPE)) {
+                        <svg class="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                        </svg>
+                      }
+                    </div>
+                    <span class="font-mono text-xs text-slate-300">unknown type calibration file</span>
+                  </label>
+                </div>
               }
             </div>
           }
