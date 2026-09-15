@@ -282,6 +282,34 @@ async def list_observations_by_geo(
 
     return observations[0]
 
+async def _observation_ids_with_requested_files() -> List[PydanticObjectId]:
+    """Observations with a requested file — either directly, or transitively via a
+    source_filenames chain (e.g. a science file whose calibration master/raw inputs are
+    requested, even though those calibration files carry a different observation_id, or
+    none at all). Mirrors the source_filenames traversal in _collect_observation_entries/
+    bulk_approve_uploads, but walked in the opposite direction: outward from the
+    requested files to whatever directly-linked file consumes them, however many levels
+    deep, rather than outward from a chosen observation.
+    """
+    requested_filenames = set(await FITSFile.distinct(
+        "filename", {"file_status.cloud.status": StorageStatusType.REQUESTED.value}
+    ))
+    if not requested_filenames:
+        return []
+
+    relevant = set(requested_filenames)
+    frontier = set(requested_filenames)
+    while frontier:
+        consumers = await FITSFile.distinct("filename", {"source_filenames": {"$in": list(frontier)}})
+        new_consumers = set(consumers) - relevant
+        if not new_consumers:
+            break
+        relevant.update(new_consumers)
+        frontier = new_consumers
+
+    return await FITSFile.distinct("observation_id", {"filename": {"$in": list(relevant)}})
+
+
 @router.post('/search', response_description="Search Observations by multi parameter query", response_model=dict[str, Union[List[Observation], Any]])
 async def search_multi(
         search_form: Annotated[MultiSearchForm, Body(...)],
@@ -325,9 +353,7 @@ async def search_multi(
     if search_form.tags is not None:
         observations = observations.find({"obs_tags": {"$all": list(search_form.tags)}})
     if search_form.has_requested_files:
-        requested_obs_ids = await FITSFile.distinct(
-            "observation_id", {"file_status.cloud.status": StorageStatusType.REQUESTED.value}
-        )
+        requested_obs_ids = await _observation_ids_with_requested_files()
         observations = observations.find(In(Observation.id, requested_obs_ids))
 
     pipeline = AggregationQueryBuilder.aggregate(access_tags=user.access_tags, page=page, page_size=page_size, sort_expr=search_form.sort_expr)
@@ -507,9 +533,12 @@ async def bulk_approve_uploads(
 ):
     """Moderator action: flips every REQUESTED file belonging to the given observations
     to QUEUED — the signal `sroca` polls for (GET /api/v2/files/upload-queue) to actually
-    perform the S3 upload."""
+    perform the S3 upload. Includes calibration files reachable via source_filenames
+    (e.g. flats/darks/zeros/masters), not just the observations' own direct files."""
     ids = [PydanticObjectId(oid) for oid in obs_ids]
-    approved_count = await FITSFile.approve_uploads(ids, moderator)
+    observations = await Observation.find(In(Observation.id, ids)).to_list()
+    entries = await _collect_observation_entries(observations, include_calibration=True)
+    approved_count = await FITSFile.approve_uploads(list(entries.keys()), moderator)
     return {"approved_count": approved_count}
 
 @router.delete('/{id}/obs-tags', response_description="Remove a tag from an observation", status_code=200)
@@ -1316,6 +1345,49 @@ def _classify_file(file_class: Optional[str], image_type: Optional[str]) -> str:
     return 'unknown'
 
 
+async def _collect_observation_entries(
+        observations: List[Observation], include_calibration: bool
+) -> Dict[str, Tuple[Optional[str], Optional[str]]]:
+    """Collects filename -> (file_class, image_type) for every file directly linked to
+    the given observations, optionally expanded transitively via source_filenames to
+    reach instrumental calibration files. Shared by the export endpoints below and by
+    bulk_approve_uploads, which all need the same "direct files + reachable calibration
+    files" set — a calibration-role file can itself be directly linked too (e.g. a
+    dedicated calibration-night observation), so there's no meaningful "direct vs
+    calibration" split, only whether source_filenames is expanded at all.
+
+    A source_filenames reference with no matching FITSFile document — a data error, or
+    simply not ingested into the DB yet — is still included, as (None, None) (classifies
+    as 'unknown' via _classify_file), rather than silently dropped.
+    """
+    entries: Dict[str, Tuple[Optional[str], Optional[str]]] = {}
+    calib_seed: set = set()
+    for obs in observations:
+        await obs.fetch_all_links()
+        for f in obs.files:
+            entries[f.filename] = (f.file_class, f.image_type)
+            if include_calibration:
+                calib_seed.update(f.source_filenames or [])
+
+    if include_calibration:
+        collected: set = set(calib_seed)
+        frontier = calib_seed
+        while frontier:
+            unknown = [n for n in frontier if n not in entries]
+            db_files = await FITSFile.find({"filename": {"$in": unknown}}).to_list() if unknown else []
+            for f in db_files:
+                entries[f.filename] = (f.file_class, f.image_type)
+            frontier = set()
+            for f in db_files:
+                frontier.update(f.source_filenames or [])
+            frontier -= collected
+            collected.update(frontier)
+        for name in collected:
+            entries.setdefault(name, (None, None))
+
+    return entries
+
+
 async def _resolve_export_filenames(
         obs_ids_raw: List[str], include_calibration: bool, file_types: Optional[List[str]]
 ) -> Tuple[List[Observation], List[str]]:
@@ -1340,34 +1412,7 @@ async def _resolve_export_filenames(
     if not observations:
         raise HTTPException(status_code=404, detail="No observations found for the given IDs")
 
-    entries: Dict[str, Tuple[Optional[str], Optional[str]]] = {}  # filename -> (file_class, image_type)
-    calib_seed: set = set()
-    for obs in observations:
-        await obs.fetch_all_links()
-        for f in obs.files:
-            entries[f.filename] = (f.file_class, f.image_type)
-            if include_calibration:
-                calib_seed.update(f.source_filenames or [])
-
-    if include_calibration:
-        collected: set = set(calib_seed)
-        frontier = calib_seed
-        while frontier:
-            unknown = [n for n in frontier if n not in entries]
-            db_files = await FITSFile.find({"filename": {"$in": unknown}}).to_list() if unknown else []
-            for f in db_files:
-                entries[f.filename] = (f.file_class, f.image_type)
-            frontier = set()
-            for f in db_files:
-                frontier.update(f.source_filenames or [])
-            frontier -= collected
-            collected.update(frontier)
-        # A source_filenames reference with no matching FITSFile document — a data error,
-        # or simply not ingested into the DB yet — still gets included as 'unknown' rather
-        # than silently dropped. There's no file_class/image_type (no document at all), so
-        # it can only ever classify as 'unknown'.
-        for name in collected:
-            entries.setdefault(name, (None, None))
+    entries = await _collect_observation_entries(observations, include_calibration)
 
     if file_types is not None:
         allowed = set(file_types)

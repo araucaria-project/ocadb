@@ -128,17 +128,21 @@ class FITSFile(FITSFileBase, Document):
         })
 
     @classmethod
-    async def approve_uploads(cls, obs_ids: List[PydanticObjectId], username: str) -> int:
-        """Moderator approval step: flips every REQUESTED file belonging to the given
-        observations to QUEUED, the signal `sroca` polls for to actually perform the
-        S3 upload. Returns the number of files flipped.
+    async def approve_uploads(cls, filenames: List[str], username: str) -> int:
+        """Moderator approval step: flips every REQUESTED file among the given filenames
+        to QUEUED, the signal `sroca` polls for to actually perform the S3 upload.
+        Returns the number of files flipped.
+
+        Takes filenames rather than observation IDs so the caller can include
+        calibration files reachable only via source_filenames (not a direct
+        observation_id match) — see api.routers.observations_v2._collect_observation_entries.
         """
-        if not obs_ids:
+        if not filenames:
             return 0
 
         now = datetime.utcnow()
         result = await cls.find({
-            "observation_id": {"$in": obs_ids},
+            "filename": {"$in": filenames},
             "file_status.cloud.status": StorageStatusType.REQUESTED.value,
         }).update({
             "$set": {
