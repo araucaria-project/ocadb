@@ -628,9 +628,11 @@ export class AppComponent implements OnInit {
   @ViewChild('lineageCyContainer') lineageCyContainerRef?: ElementRef<HTMLDivElement>;
   @ViewChild('obsModalRightColumn') obsModalRightColumnRef?: ElementRef<HTMLDivElement>;
 
-  private static readonly LINEAGE_FILES_HEIGHT_PX = 128; // h-32
+  private static readonly FILES_BOX_HEIGHT_PX = 128; // h-32
 
-  /** The Files box's height when evenly split 50/50 with Source Files (list view). */
+  /** Hypothetical Files box height if it were evenly split 50/50 with Source Files —
+   * used only as a baseline for lineageExtraWidth() below, since Files itself no longer
+   * actually uses this height (see filesBoxHeightPx()). */
   private defaultFilesHeightPx(): number {
     const el = this.obsModalRightColumnRef?.nativeElement;
     if (!el) return 0;
@@ -638,19 +640,18 @@ export class AppComponent implements OnInit {
     return (el.clientHeight - gap) / 2;
   }
 
-  /** Files box height in px — shrinks to a fixed height in lineage view so Source
-   * Files/the lineage graph can grow; animated via a CSS transition on flex-basis. */
+  /** Files box height in px — always the compact fixed height (most observations only
+   * have a couple of files), scrollable internally if there happen to be more, so
+   * Source Files/the lineage graph get the rest of the column's height by default. */
   filesBoxHeightPx(): number {
-    return this.sourceFilesView() === 'lineage'
-      ? AppComponent.LINEAGE_FILES_HEIGHT_PX
-      : this.defaultFilesHeightPx();
+    return AppComponent.FILES_BOX_HEIGHT_PX;
   }
 
-  /** How much wider the observation modal should grow in lineage view, so the
-   * lineage box's width gain matches its height gain (from the Files section
-   * shrinking to a fixed h-32) instead of ballooning to fill the viewport. */
+  /** How much wider the observation modal should grow in lineage view, so the lineage
+   * box's width gain matches the height it gains over a hypothetical 50/50 split
+   * (instead of ballooning to fill the viewport). */
   lineageExtraWidth(): number {
-    return Math.max(0, this.defaultFilesHeightPx() - AppComponent.LINEAGE_FILES_HEIGHT_PX);
+    return Math.max(0, this.defaultFilesHeightPx() - AppComponent.FILES_BOX_HEIGHT_PX);
   }
   private cy: cytoscape.Core | null = null;
 
