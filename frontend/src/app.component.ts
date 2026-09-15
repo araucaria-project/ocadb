@@ -2420,6 +2420,19 @@ export class AppComponent implements OnInit {
     return m[1] ?? 'raw';
   }
 
+  /** Colors a Source Files badge by calibration role. Master frames (file_class='master')
+   * are always the same blue as the MASTER badge in the Files section, regardless of
+   * whether they're a master flat/dark/zero — only the label (still dark/flat/zero, via
+   * getCalibDisplayLabel) says which. Non-master dark/flat/zero each get their own color. */
+  getCalibBadgeClass(file: FitsFile): string {
+    if (file.file_class === 'master') return 'bg-sky-900/40 text-sky-300 border-sky-600/50';
+    const label = this.getCalibDisplayLabel(file);
+    if (label === 'dark') return 'bg-indigo-950/60 text-indigo-200 border-indigo-700/50';
+    if (label === 'flat') return 'bg-amber-950/60 text-amber-200 border-amber-700/50';
+    if (label === 'zero') return 'bg-emerald-950/60 text-emerald-200 border-emerald-700/50';
+    return 'bg-space-800 text-slate-400 border-slate-600/50';
+  }
+
   closeShare() {
     this.shareFile.set(null);
     this.shareUrl.set(null);

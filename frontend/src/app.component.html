@@ -1893,7 +1893,7 @@
                       @for (file of calibrationFiles(); track file.filename) {
                         <div class="group flex items-center gap-2 bg-black/25 rounded px-3 py-2 cursor-pointer hover:bg-space-800/60 transition-colors overflow-hidden"
                           (click)="selectedFile.set(file)">
-                          <span class="px-1.5 py-0.5 rounded border text-[10px] font-medium shrink-0 min-w-[2.5rem] text-center bg-space-800 text-slate-400 border-slate-600/50">
+                          <span class="px-1.5 py-0.5 rounded border text-[10px] font-medium shrink-0 min-w-[2.5rem] text-center" [class]="getCalibBadgeClass(file)">
                             {{ getCalibDisplayLabel(file) }}
                           </span>
                           <span class="font-mono text-[11px] text-slate-400 truncate flex-1">{{ file.filename }}</span>
@@ -2126,7 +2126,7 @@
                       @if (file.filename !== selectedFile()?.filename) {
                       <div class="group flex items-center gap-2 bg-black/25 rounded px-3 py-2 cursor-pointer hover:bg-space-800/60 transition-colors overflow-hidden"
                         (click)="openSourceFile(file)">
-                        <span class="px-1.5 py-0.5 rounded border text-[10px] font-medium shrink-0 min-w-[2.5rem] text-center bg-space-800 text-slate-400 border-slate-600/50">
+                        <span class="px-1.5 py-0.5 rounded border text-[10px] font-medium shrink-0 min-w-[2.5rem] text-center" [class]="getCalibBadgeClass(file)">
                           {{ getCalibDisplayLabel(file) }}
                         </span>
                         <span class="font-mono text-[11px] text-slate-400 truncate flex-1">{{ file.filename }}</span>
