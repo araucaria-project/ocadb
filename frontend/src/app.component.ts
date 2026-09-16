@@ -2430,7 +2430,7 @@ export class AppComponent implements OnInit {
     const label = this.getCalibDisplayLabel(file);
     if (label === 'dark') return 'bg-indigo-950/60 text-indigo-200 border-indigo-700/50';
     if (label === 'flat') return 'bg-amber-950/60 text-amber-200 border-amber-700/50';
-    if (label === 'zero') return 'bg-emerald-950/60 text-emerald-200 border-emerald-700/50';
+    if (label === 'zero') return 'bg-zinc-800/60 text-zinc-300 border-zinc-600/50';
     return 'bg-space-800 text-slate-400 border-slate-600/50';
   }
 
