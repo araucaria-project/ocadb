@@ -1402,6 +1402,10 @@ export class AppComponent implements OnInit {
     const chips: { key: string; label: string; remove: () => void }[] = [];
 
     (Object.keys(this.FILTER_CHIP_LABELS) as (keyof SearchFilters)[]).forEach(key => {
+      // When cone search is active, search() nulls out `object` for the actual query
+      // (baseFilters below) — showing an "Object: X" chip alongside "Cone: ..." would
+      // claim a filter that isn't really applied, so suppress it in that mode.
+      if (key === 'object' && this.coneSearchExpanded()) return;
       const value = f[key];
       if (value) chips.push({ key, label: `${this.FILTER_CHIP_LABELS[key]}: ${value}`, remove: () => this.removeSearchChip(key) });
     });
