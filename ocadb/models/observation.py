@@ -43,6 +43,13 @@ class Observation(ObservationBase, Document):
         description="file_class of the FITSFile currently backing fits_header (ZDF always wins over RAW/other)",
     )
 
+    # Response-only, computed on demand by the /search endpoint when has_requested_files
+    # is set (see api.routers.observations_v2._requested_by_for_observations) — not
+    # meaningfully persisted; left None everywhere else.
+    requested_by: Optional[List[str]] = Field(
+        None, description="Usernames who requested a file belonging to this observation, if any are pending upload"
+    )
+
     async def store_file(self, fits_file: FITSFile, fits_header: Optional[FitsHeader] = None):
         self.files.append(fits_file)
         self.filetypes.add(fits_file.file_class)

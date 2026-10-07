@@ -1,4 +1,4 @@
-import { Component, signal, computed, inject, OnInit, ElementRef, ViewChild, effect } from '@angular/core';
+import { Component, signal, computed, inject, OnInit, ElementRef, ViewChild, effect, WritableSignal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
@@ -114,10 +114,18 @@ export class AppComponent implements OnInit {
   readonly DOWNLOAD_CALIB_TYPES = new Set<string>([...this.RAW_CALIB_SUB_TYPES, ...this.MASTER_SUB_TYPES, this.UNKNOWN_CALIB_TYPE]);
   downloadFileTypes = signal<Set<string>>(new Set(this.DOWNLOAD_FILE_TYPES));
 
+  /** Request Files dialog — same file-type constants/tri-state group logic as the
+   * Download dialog above, just its own independent selection state. */
+  showRequestFilesDialog = signal(false);
+  requestFilesLoading = signal(false);
+  requestFilesIncludeCalibration = signal(false);
+  requestFilesTypes = signal<Set<string>>(new Set(this.DOWNLOAD_FILE_TYPES));
+
   /** 'all'/'none'/'some' — drives a calibration group's parent checkbox
-   * checked/unchecked/indeterminate look. */
-  groupState(types: readonly string[]): 'all' | 'none' | 'some' {
-    const set = this.downloadFileTypes();
+   * checked/unchecked/indeterminate look. `target` lets both the Download and Request
+   * Files dialogs share this logic against their own independent selection signal. */
+  groupState(types: readonly string[], target: WritableSignal<Set<string>> = this.downloadFileTypes): 'all' | 'none' | 'some' {
+    const set = target();
     const checkedCount = types.filter(t => set.has(t)).length;
     if (checkedCount === 0) return 'none';
     return checkedCount === types.length ? 'all' : 'some';
@@ -125,8 +133,8 @@ export class AppComponent implements OnInit {
 
   /** Clicking a group's parent checkbox checks all its sub-types if any are currently
    * unchecked, or clears all of them if they're all already checked. */
-  toggleGroup(types: readonly string[]) {
-    this.downloadFileTypes.update(set => {
+  toggleGroup(types: readonly string[], target: WritableSignal<Set<string>> = this.downloadFileTypes) {
+    target.update(set => {
       const next = new Set(set);
       const allChecked = types.every(t => next.has(t));
       for (const t of types) {
@@ -1752,9 +1760,10 @@ export class AppComponent implements OnInit {
   }
 
   /** Plain, predictable toggle — no boxes checked means "no filter" (all types), and
-   * checking one just adds it to the filter. See selectedDownloadFileTypes(). */
-  toggleDownloadFileType(type: string) {
-    this.downloadFileTypes.update(set => {
+   * checking one just adds it to the filter. See selectedFileTypes(). `target` lets
+   * both the Download and Request Files dialogs share this against their own signal. */
+  toggleDownloadFileType(type: string, target: WritableSignal<Set<string>> = this.downloadFileTypes) {
+    target.update(set => {
       const next = new Set(set);
       next.has(type) ? next.delete(type) : next.add(type);
       return next;
@@ -1763,10 +1772,13 @@ export class AppComponent implements OnInit {
 
   /** undefined means "all file types" (no filter) — true both when nothing is checked
    * and, after calibration-visibility filtering, when a checked type is currently hidden. */
-  private selectedDownloadFileTypes(): string[] | undefined {
-    const includeCalib = this.downloadIncludeCalibration();
-    const selectedTypes = [...this.downloadFileTypes()].filter(t => includeCalib || !this.DOWNLOAD_CALIB_TYPES.has(t));
+  private selectedFileTypes(types: Set<string>, includeCalibration: boolean): string[] | undefined {
+    const selectedTypes = [...types].filter(t => includeCalibration || !this.DOWNLOAD_CALIB_TYPES.has(t));
     return selectedTypes.length === 0 ? undefined : selectedTypes;
+  }
+
+  private selectedDownloadFileTypes(): string[] | undefined {
+    return this.selectedFileTypes(this.downloadFileTypes(), this.downloadIncludeCalibration());
   }
 
   async executeDownloadScript() {
@@ -1790,6 +1802,50 @@ export class AppComponent implements OnInit {
     const includeCalib = this.downloadIncludeCalibration();
     await this.ocadbService.exportFilepaths(ids, includeCalib, this.selectedDownloadFileTypes());
     this.filepathsLoading.set(false);
+  }
+
+  /** null = act on the bulk selection (selectedObsIds()); a string = scoped to just
+   * that one observation, set when the dialog is opened from the observation modal. */
+  requestFilesSingleObsId = signal<string | null>(null);
+  requestFilesTargetCount = computed(() => this.requestFilesSingleObsId() ? 1 : this.selectedObsIds().size);
+
+  /** Whether the currently-open observation has any on_demand file, directly linked or
+   * among its (already-loaded) source/calibration files — gates the modal's own
+   * "Request files" button, distinct from the bulk one in the results bottom bar. */
+  observationHasOnDemandFiles = computed(() => {
+    const obs = this.selectedObservation();
+    if (!obs) return false;
+    if (obs.files.some(f => f.file_status?.cloud?.status === 'on_demand')) return true;
+    return this.calibrationFiles().some(f => f.file_status?.cloud?.status === 'on_demand');
+  });
+
+  openRequestFilesDialog() {
+    this.requestFilesSingleObsId.set(null);
+    this.requestFilesIncludeCalibration.set(false);
+    this.requestFilesTypes.set(new Set(['zdf', 'raw']));
+    this.showRequestFilesDialog.set(true);
+  }
+
+  openRequestFilesDialogForObservation(obsId: string) {
+    this.requestFilesSingleObsId.set(obsId);
+    this.requestFilesIncludeCalibration.set(false);
+    this.requestFilesTypes.set(new Set(['zdf', 'raw']));
+    this.showRequestFilesDialog.set(true);
+  }
+
+  async executeRequestFiles() {
+    const singleObsId = this.requestFilesSingleObsId();
+    const ids = singleObsId ? [singleObsId] : [...this.selectedObsIds()];
+    if (!ids.length) return;
+    this.requestFilesLoading.set(true);
+    this.showRequestFilesDialog.set(false);
+    const includeCalib = this.requestFilesIncludeCalibration();
+    const fileTypes = this.selectedFileTypes(this.requestFilesTypes(), includeCalib);
+    const count = await this.ocadbService.requestFiles(ids, includeCalib, fileTypes);
+    this.requestFilesLoading.set(false);
+    if (count !== null) {
+      this.ocadbService.lastRequestInfo.set(`Requested ${count} file(s) for upload.`);
+    }
   }
 
   async exportTabularData() {

@@ -89,13 +89,17 @@ async def upsert_fitsfile(
                 "digest": file_data.digest,
                 "source_filenames": file_data.source_filenames,
                 "image_type": file_data.fits_header.IMAGETYP if file_data.fits_header else None,
-                "file_status": file_data.file_status,
                 "access_tags": file_data.access_tags,
                 "updated_at": datetime.utcnow(),
             },
             "$setOnInsert": {
                 "filename": file_data.filename,
                 "created_at": datetime.utcnow(),
+                # Only applied on initial creation — an upsert on an existing record must
+                # never overwrite file_status wholesale, since independent SROCA instances
+                # at different locations each only know their own location's true status.
+                # Use PUT /file-status/{filename}/{stage}/ to update a single location safely.
+                "file_status": file_data.file_status,
             },
         },
         upsert=True,

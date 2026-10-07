@@ -34,7 +34,7 @@ from ocadb.models.s3_presigned_url import S3PresignedUrl, S3PresignedUrlBatchLis
 from api.services.auth_service import AuthService
 from api.routers.api_auth import read_users_me
 from api.services.s3_api_service import S3Connection
-from api.schemas import DownloadScriptRequest, TabularExportRequest
+from api.schemas import DownloadScriptRequest, TabularExportRequest, RequestFilesRequest
 from pydantic import BaseModel
 
 class SearchTagCreate(BaseModel):
@@ -310,6 +310,32 @@ async def _observation_ids_with_requested_files() -> List[PydanticObjectId]:
     return await FITSFile.distinct("observation_id", {"filename": {"$in": list(relevant)}})
 
 
+async def _requested_by_for_observations(observations: List[Observation]) -> Dict[str, List[str]]:
+    """For each of the given observations, who has requested a file — either one of the
+    observation's own direct files, or a calibration file reachable via source_filenames
+    (see _collect_observation_entries). Only meant to run over a small set (a single
+    results page), since it does a per-observation calibration traversal.
+
+    Returns obs_id (str) -> sorted list of distinct usernames from those files'
+    upload_requests, newest request first per file but deduplicated across files.
+    """
+    result: Dict[str, List[str]] = {}
+    for obs in observations:
+        entries = await _collect_observation_entries([obs], include_calibration=True)
+        if not entries:
+            continue
+        requested_files = await FITSFile.find({
+            "filename": {"$in": list(entries.keys())},
+            "file_status.cloud.status": StorageStatusType.REQUESTED.value,
+        }).to_list()
+        usernames: set = set()
+        for f in requested_files:
+            usernames.update(r.requested_by for r in f.upload_requests)
+        if usernames:
+            result[str(obs.id)] = sorted(usernames)
+    return result
+
+
 @router.post('/search', response_description="Search Observations by multi parameter query", response_model=dict[str, Union[List[Observation], Any]])
 async def search_multi(
         search_form: Annotated[MultiSearchForm, Body(...)],
@@ -362,6 +388,15 @@ async def search_multi(
 
     if not observations or not observations[0].get("data"):
         raise HTTPException(status_code=404, detail=f"No observations found")
+
+    # Only this page's observations, not the whole matched set — _requested_by_for_observations
+    # does a per-observation calibration traversal, so keep it scoped to what's actually shown.
+    if search_form.has_requested_files:
+        page_ids = [PydanticObjectId(d["_id"]) for d in observations[0]["data"]]
+        page_observations = await Observation.find(In(Observation.id, page_ids)).to_list()
+        requested_by_map = await _requested_by_for_observations(page_observations)
+        for d in observations[0]["data"]:
+            d["requested_by"] = requested_by_map.get(str(d["_id"]), [])
 
     return observations[0]
 
@@ -1497,6 +1532,25 @@ async def export_filepaths(
         media_type="text/plain",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
+
+@router.post("/request-files", response_description="Flag files for cloud upload without generating a downloader script")
+async def request_files(
+        request: Annotated[RequestFilesRequest, Body(...)],
+        token: Annotated[str, Depends(AuthService.validate_token)]
+):
+    """Same file-type resolution/filtering as the downloader script and filepaths
+    export, but the only effect is flagging matching not-yet-cloud-stored files (e.g.
+    ON_DEMAND) as REQUESTED — no script is generated and nothing is downloaded.
+    """
+    user = await read_users_me(token)
+
+    _, filenames = await _resolve_export_filenames(
+        request.obs_ids, request.include_calibration, request.file_types
+    )
+
+    requested_count = await FITSFile.request_cloud_uploads(filenames, user.username)
+    return {"requested_count": requested_count, "file_count": len(filenames)}
 
 
 # Columns replicate the main results table (see frontend app.component.html observations

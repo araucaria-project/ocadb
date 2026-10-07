@@ -35,3 +35,9 @@ class TabularExportRequest(BaseModel):
     obs_ids: List[str]
     format: str = 'ecsv'  # 'ecsv' or 'fixed_width'
     coord_format: str = 'deg'  # 'deg' or 'sexagesimal' — matches the frontend's RA/Dec unit toggle
+
+
+class RequestFilesRequest(BaseModel):
+    obs_ids: List[str]
+    include_calibration: bool = False
+    file_types: List[str] | None = None  # None = all types

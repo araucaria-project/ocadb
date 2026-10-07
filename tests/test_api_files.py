@@ -233,6 +233,44 @@ async def test_upsert_updates_existing_file(client, auth_headers, regular_user):
     assert resp.status_code in (200, 201)
 
 
+async def test_upsert_does_not_overwrite_existing_file_status(client, auth_headers, regular_user):
+    """Independent SROCA instances at different locations each upsert the same file with
+    only their own location's status correctly known — an upsert on an existing record
+    must never clobber file_status, only PUT /file-status/{filename}/{stage}/ should."""
+    create = await client.post(
+        "/api/v2/files/upsert",
+        json=make_file_payload(
+            filename="upsert_status.fits",
+            file_status={
+                "observatory": {"ready": True, "check_needed": False, "status": "stored"},
+                "hub": {"ready": False, "check_needed": False, "status": "not_stored"},
+                "cloud": {"ready": False, "check_needed": False, "status": "not_stored"},
+            },
+        ),
+        headers=auth_headers,
+    )
+    assert create.status_code == 201
+
+    resp = await client.post(
+        "/api/v2/files/upsert",
+        json=make_file_payload(
+            filename="upsert_status.fits",
+            filesize=12345,
+            file_status={
+                "observatory": {"ready": False, "check_needed": False, "status": "not_stored"},
+                "hub": {"ready": True, "check_needed": False, "status": "stored"},
+                "cloud": {"ready": False, "check_needed": False, "status": "not_stored"},
+            },
+        ),
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["filesize"] == 12345
+    assert body["file_status"]["observatory"]["status"] == "stored"
+    assert body["file_status"]["hub"]["status"] == "not_stored"
+
+
 async def test_upsert_sets_observation_id_on_new_file(client, auth_headers, regular_user):
     """Regression test: upsert used to link the file into the observation's own
     `files` list without ever writing `observation_id` back onto the FITSFile

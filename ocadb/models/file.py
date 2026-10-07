@@ -89,19 +89,24 @@ class FITSFile(FITSFileBase, Document):
         validate_assignment = True
 
     @classmethod
-    async def request_cloud_uploads(cls, filenames: List[str], username: str) -> None:
+    async def request_cloud_uploads(cls, filenames: List[str], username: str) -> int:
         """Flag files that aren't in cloud storage as REQUESTED and log the requester.
 
         Called when a user asks to download files (e.g. via the download-script
-        endpoint). Files already stored/scheduled/queued/storing in cloud are left
-        untouched — this is purely a signal for an operator to review and decide
-        whether/when to actually run the upload. ON_DEMAND files (available at the
-        producer but not proactively uploaded) are flipped to REQUESTED just like
+        endpoint), or explicitly requests files without downloading anything (the
+        request-files endpoint). Files already stored/scheduled/queued/storing in cloud
+        are left untouched — this is purely a signal for an operator to review and
+        decide whether/when to actually run the upload. ON_DEMAND files (available at
+        the producer but not proactively uploaded) are flipped to REQUESTED just like
         NOT_STORED/DELETED/CORRUPTED, since a download request is exactly the signal
         they were waiting for.
+
+        Returns the number of files newly flipped to REQUESTED (not counting ones that
+        were already REQUESTED, which still get an upload_requests entry logged but
+        aren't a status change).
         """
         if not filenames:
-            return
+            return 0
 
         now = datetime.utcnow()
         entry = {"requested_by": username, "requested_at": now}
@@ -117,7 +122,7 @@ class FITSFile(FITSFileBase, Document):
         })
 
         # Only flip the status the first time — don't stomp on an in-flight upload.
-        await cls.find({
+        result = await cls.find({
             "filename": {"$in": filenames},
             "file_status.cloud.status": {"$in": _CLOUD_UPLOAD_PENDING_STATUSES},
         }).update({
@@ -126,6 +131,7 @@ class FITSFile(FITSFileBase, Document):
                 "file_status.cloud.check_needed": True,
             },
         })
+        return result.modified_count if result is not None else 0
 
     @classmethod
     async def approve_uploads(cls, filenames: List[str], username: str) -> int:

@@ -2,7 +2,7 @@ import { Injectable, signal, computed, inject } from '@angular/core';
 import { environment } from '../environments/environment';
 
 export type FileClassification = 'raw' | 'zdf' | 'master' | 'source' | 'tmp' | 'test';
-export type StorageStatusType = 'not_stored' | 'deleted' | 'stored' | 'corrupted' | 'requested' | 'scheduled' | 'queued' | 'storing';
+export type StorageStatusType = 'not_stored' | 'deleted' | 'stored' | 'corrupted' | 'requested' | 'scheduled' | 'on_demand' | 'queued' | 'storing';
 
 export interface StorageLocationStatus {
   ready: boolean;
@@ -79,6 +79,9 @@ export interface Observation {
   created_at?: string | null;
   updated_at?: string | null;
   oca_jd?: number | null;
+  /** Only populated by /search when has_requested_files is set — usernames who
+   * requested a file (direct or calibration) belonging to this observation. */
+  requested_by?: string[] | null;
 }
 
 export interface FileLineageNode {
@@ -491,6 +494,29 @@ export class OcadbService {
       const data = await response.json();
       return data.approved_count ?? 0;
     } catch {
+      return null;
+    }
+  }
+
+  async requestFiles(ids: string[], includeCalibration = false, fileTypes?: string[]): Promise<number | null> {
+    try {
+      const response = await this.authenticatedFetch(`${this.v2BaseUrl}/observations/request-files`, {
+        method: 'POST',
+        body: JSON.stringify({
+          obs_ids: ids,
+          include_calibration: includeCalibration,
+          ...(fileTypes ? { file_types: fileTypes } : {})
+        })
+      });
+      if (!response.ok) {
+        const msg = await this.extractErrorMessage(response, `Request files failed (${response.status})`);
+        this.error.set(msg);
+        return null;
+      }
+      const data = await response.json();
+      return data.requested_count ?? 0;
+    } catch (e: any) {
+      this.handleFetchError(e, 'Request files');
       return null;
     }
   }
