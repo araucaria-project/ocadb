@@ -1,7 +1,7 @@
 class AggregationQueryBuilder:
     # Exact counts over a large unfiltered result set are O(collection size); above this
-    # the API reports the count as capped and the UI shows "10,000+".
-    COUNT_CAP = 10_000
+    # the API reports the count as capped and the UI shows e.g. "100,000+".
+    COUNT_CAP = 100_000
 
     # Must match the {access_tags, date_obs, _id} compound index on Observation, so the
     # default listing is served straight from the index instead of a blocking sort.
@@ -51,6 +51,22 @@ class AggregationQueryBuilder:
         sort = dict(sort_expr or AggregationQueryBuilder.DEFAULT_SORT)
         sort.setdefault("_id", next(iter(sort.values())))
         return sort
+
+    # The {access_tags, <key>, _id} compound index on Observation serving each sortable column.
+    SORT_INDEXES = {
+        "date_obs": "access_tags_date_obs_id",
+        "fits_header.AIRMASS": "access_tags_airmass_id",
+        "fits_header.EXPTIME": "access_tags_exptime_id",
+    }
+
+    @staticmethod
+    def sort_hint(sort_expr):
+        # For deep pages the planner trial-runs every candidate index through the whole
+        # $skip, which dominates the query (page 334: ~2.3s planning vs ~65ms hinted).
+        # Only safe for unfiltered searches - with a selective filter (object, cone, ...)
+        # forcing the sort index would walk every accessible observation instead.
+        sort_key = next(iter(AggregationQueryBuilder.stable_sort(sort_expr)))
+        return AggregationQueryBuilder.SORT_INDEXES.get(sort_key)
 
     @staticmethod
     def page(access_tags, page, page_size, sort_expr, projection=None):

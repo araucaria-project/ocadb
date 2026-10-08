@@ -142,7 +142,7 @@ export interface PaginationState {
   page: number;
   pageSize: number;
   total: number;
-  /** The API stops counting at its cap (10,000) — `total` is then the cap, not the real count. */
+  /** The API stops counting at its cap (100,000) — `total` is then the cap, not the real count. */
   totalCapped?: boolean;
 }
 

@@ -387,8 +387,9 @@ async def search_multi(
                                                  sort_expr=search_form.sort_expr,
                                                  projection=AggregationQueryBuilder.LIST_PROJECTION)
     page_pipeline.append({"$addFields": {"files": []}})
+    page_hint = AggregationQueryBuilder.sort_hint(search_form.sort_expr) if not observations.get_filter_query() else None
     data, count = await asyncio.gather(
-        observations.aggregate(page_pipeline).to_list(),
+        observations.aggregate(page_pipeline, **({"hint": page_hint} if page_hint else {})).to_list(),
         observations.aggregate(AggregationQueryBuilder.capped_count(access_tags=user.access_tags)).to_list(),
     )
 

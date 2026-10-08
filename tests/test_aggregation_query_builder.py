@@ -144,6 +144,17 @@ def test_list_projection_keeps_table_fields():
     assert "fits_header" not in projection
 
 
+def test_sort_hint_maps_sortable_columns_to_compound_indexes():
+    assert AggregationQueryBuilder.sort_hint(None) == "access_tags_date_obs_id"
+    assert AggregationQueryBuilder.sort_hint({"date_obs": 1}) == "access_tags_date_obs_id"
+    assert AggregationQueryBuilder.sort_hint({"fits_header.AIRMASS": -1}) == "access_tags_airmass_id"
+    assert AggregationQueryBuilder.sort_hint({"fits_header.EXPTIME": 1}) == "access_tags_exptime_id"
+
+
+def test_sort_hint_none_for_unindexed_column():
+    assert AggregationQueryBuilder.sort_hint({"fits_header.FILTER": 1}) is None
+
+
 def test_capped_count_limits_before_counting():
     pipeline = AggregationQueryBuilder.capped_count(access_tags=["x"], cap=100)
     assert pipeline == [
