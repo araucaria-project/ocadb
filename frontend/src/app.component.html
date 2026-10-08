@@ -880,6 +880,9 @@
               Found {{ ocadbService.totalLabel() }} observation{{ ocadbService.pagination().total === 1 ? '' : 's' }} for:
             } @else {
               {{ ocadbService.totalLabel() }} observation{{ ocadbService.pagination().total === 1 ? '' : 's' }} in OCADB
+              @if (ocadbService.pagination().totalCapped) {
+                <span class="text-slate-500">· limiting search to 10,000 observations. Apply filters to override</span>
+              }
             }
           </span>
 
