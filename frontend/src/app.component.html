@@ -877,9 +877,9 @@
           <!-- Left: count -->
           <span class="text-xs text-slate-400 shrink-0">
             @if (searchChips().length > 0) {
-              Found {{ ocadbService.pagination().total }} observation{{ ocadbService.pagination().total === 1 ? '' : 's' }} for:
+              Found {{ ocadbService.totalLabel() }} observation{{ ocadbService.pagination().total === 1 ? '' : 's' }} for:
             } @else {
-              {{ ocadbService.pagination().total }} observation{{ ocadbService.pagination().total === 1 ? '' : 's' }} in OCADB
+              {{ ocadbService.totalLabel() }} observation{{ ocadbService.pagination().total === 1 ? '' : 's' }} in OCADB
             }
           </span>
 

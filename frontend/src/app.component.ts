@@ -1559,7 +1559,7 @@ export class AppComponent implements OnInit {
       this.ocadbService.isInitialLoad.set(false);
       const results = obs ? [obs] : [];
       this.displayedObservations.set(results);
-      this.ocadbService.pagination.update(p => ({ ...p, total: results.length, page: 1 }));
+      this.ocadbService.pagination.update(p => ({ ...p, total: results.length, totalCapped: false, page: 1 }));
       this.loadDropdowns();
       this.syncSearchUrl();
       return;

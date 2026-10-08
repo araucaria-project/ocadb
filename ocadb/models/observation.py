@@ -199,8 +199,19 @@ class Observation(ObservationBase, Document):
             "fits_header.EXPTIME",
             "oca_jd",
             "access_tags",
+            # Serve the search listing (access-tag filter + sortable table column, _id as
+            # tie-breaker) from the index; see AggregationQueryBuilder.stable_sort.
+            IndexModel([("access_tags", pymongo.ASCENDING), ("date_obs", pymongo.DESCENDING), ("_id", pymongo.DESCENDING)],
+                       name="access_tags_date_obs_id"),
+            IndexModel([("access_tags", pymongo.ASCENDING), ("fits_header.AIRMASS", pymongo.ASCENDING), ("_id", pymongo.ASCENDING)],
+                       name="access_tags_airmass_id"),
+            IndexModel([("access_tags", pymongo.ASCENDING), ("fits_header.EXPTIME", pymongo.ASCENDING), ("_id", pymongo.ASCENDING)],
+                       name="access_tags_exptime_id"),
             "obs_tags",
-            IndexModel([("telescope_coordinates.lon_lat", pymongo.GEOSPHERE)], name="skycoord_spatial_index"), # geospatial index
+            # 2dsphereIndexVersion is spelled out because MongoDB stores it on the index; without
+            # it Beanie sees a changed definition and drops/rebuilds the index on every startup.
+            IndexModel([("telescope_coordinates.lon_lat", pymongo.GEOSPHERE)], name="skycoord_spatial_index",
+                       **{"2dsphereIndexVersion": 3}),
         ]
         validate_assignment = True
 

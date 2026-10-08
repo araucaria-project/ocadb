@@ -142,6 +142,8 @@ export interface PaginationState {
   page: number;
   pageSize: number;
   total: number;
+  /** The API stops counting at its cap (10,000) — `total` is then the cap, not the real count. */
+  totalCapped?: boolean;
 }
 
 @Injectable({
@@ -166,6 +168,10 @@ export class OcadbService {
   isAuthenticated = computed(() => !!this.token());
 
   pagination = signal<PaginationState>({ page: 1, pageSize: 30, total: 0 });
+  totalLabel = computed(() => {
+    const { total, totalCapped } = this.pagination();
+    return total.toLocaleString('en-US') + (totalCapped ? '+' : '');
+  });
 
   viewerConf = signal<ViewerConf>(DEFAULT_VIEWER_CONF);
 
@@ -357,7 +363,7 @@ export class OcadbService {
         if (response.status === 404) {
           this.lastRequestInfo.set('No results found');
           this.loading.set(false);
-          this.pagination.update(p => ({ ...p, total: 0, page: 1 }));
+          this.pagination.update(p => ({ ...p, total: 0, totalCapped: false, page: 1 }));
           return [];
         }
         if (response.status === 422) {
@@ -370,10 +376,11 @@ export class OcadbService {
         throw new Error(`API Error: ${response.status} ${response.statusText}`);
       }
 
-      const result: { data: Observation[]; metadata: { total_count: number }[] } = await response.json();
+      const result: { data: Observation[]; metadata: { total_count: number; total_capped?: boolean }[] } = await response.json();
       const total = result.metadata?.[0]?.total_count ?? 0;
-      this.pagination.update(p => ({ ...p, total, page: currentPage }));
-      this.lastRequestInfo.set(`Loaded ${result.data.length} of ${total} observations (page ${currentPage})`);
+      const totalCapped = result.metadata?.[0]?.total_capped ?? false;
+      this.pagination.update(p => ({ ...p, total, totalCapped, page: currentPage }));
+      this.lastRequestInfo.set(`Loaded ${result.data.length} of ${this.totalLabel()} observations (page ${currentPage})`);
       this.loading.set(false);
       return result.data ?? [];
     } catch (e: any) {

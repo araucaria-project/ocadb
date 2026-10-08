@@ -382,12 +382,25 @@ async def search_multi(
         requested_obs_ids = await _observation_ids_with_requested_files()
         observations = observations.find(In(Observation.id, requested_obs_ids))
 
-    pipeline = AggregationQueryBuilder.aggregate(access_tags=user.access_tags, page=page, page_size=page_size, sort_expr=search_form.sort_expr)
-    pipeline[-1]['$facet']['data'].append({"$addFields": {"files": []}})
-    observations = await observations.find(fetch_links=False).aggregate(pipeline).to_list()
+    observations = observations.find(fetch_links=False)
+    page_pipeline = AggregationQueryBuilder.page(access_tags=user.access_tags, page=page, page_size=page_size,
+                                                 sort_expr=search_form.sort_expr,
+                                                 projection=AggregationQueryBuilder.LIST_PROJECTION)
+    page_pipeline.append({"$addFields": {"files": []}})
+    data, count = await asyncio.gather(
+        observations.aggregate(page_pipeline).to_list(),
+        observations.aggregate(AggregationQueryBuilder.capped_count(access_tags=user.access_tags)).to_list(),
+    )
 
-    if not observations or not observations[0].get("data"):
+    if not data:
         raise HTTPException(status_code=404, detail=f"No observations found")
+
+    total = count[0]["total_count"] if count else 0
+    capped = total > AggregationQueryBuilder.COUNT_CAP
+    observations = [{
+        "metadata": [{"total_count": min(total, AggregationQueryBuilder.COUNT_CAP), "total_capped": capped}],
+        "data": data,
+    }]
 
     # Only this page's observations, not the whole matched set — _requested_by_for_observations
     # does a per-observation calibration traversal, so keep it scoped to what's actually shown.

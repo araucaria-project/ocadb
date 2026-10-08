@@ -17,26 +17,26 @@ def test_aggregate_with_sort_has_three_stages():
     assert len(pipeline) == 3
 
 
-def test_aggregate_first_stage_with_sort_is_sort():
+def test_aggregate_access_match_is_first_stage():
+    for sort_expr in (None, {"date_obs": -1}):
+        pipeline = AggregationQueryBuilder.aggregate(
+            access_tags=["a", "b"], page=1, page_size=10, sort_expr=sort_expr
+        )
+        assert pipeline[0] == {"$match": {"access_tags": {"$in": ["a", "b"]}}}
+
+
+def test_aggregate_sort_follows_access_match():
     pipeline = AggregationQueryBuilder.aggregate(
         access_tags=["tag1"], page=1, page_size=10, sort_expr={"date_obs": -1}
     )
-    assert "$sort" in pipeline[0]
-    assert pipeline[0]["$sort"] == {"date_obs": -1}
+    assert pipeline[1] == {"$sort": {"date_obs": -1}}
 
 
-def test_aggregate_redact_stage_present_without_sort():
-    pipeline = AggregationQueryBuilder.aggregate(
-        access_tags=["tag1"], page=1, page_size=10, sort_expr=None
-    )
-    assert "$redact" in pipeline[0]
-
-
-def test_aggregate_redact_stage_present_with_sort():
+def test_aggregate_has_no_redact():
     pipeline = AggregationQueryBuilder.aggregate(
         access_tags=["tag1"], page=1, page_size=10, sort_expr={"date_obs": -1}
     )
-    assert "$redact" in pipeline[1]
+    assert not any("$redact" in stage for stage in pipeline)
 
 
 def test_aggregate_facet_stage_last():
@@ -73,15 +73,6 @@ def test_aggregate_data_has_skip_and_limit():
     assert "$limit" in stage_keys
 
 
-def test_aggregate_page_1_skip_is_zero():
-    pipeline = AggregationQueryBuilder.aggregate(
-        access_tags=["tag1"], page=1, page_size=10, sort_expr=None
-    )
-    data = pipeline[-1]["$facet"]["data"]
-    skip_stage = next(s for s in data if "$skip" in s)
-    assert skip_stage["$skip"] == 0
-
-
 def test_aggregate_page_2_skip_equals_page_size():
     pipeline = AggregationQueryBuilder.aggregate(
         access_tags=["tag1"], page=2, page_size=25, sort_expr=None
@@ -91,46 +82,77 @@ def test_aggregate_page_2_skip_equals_page_size():
     assert skip_stage["$skip"] == 25
 
 
-def test_aggregate_limit_equals_page_size():
-    pipeline = AggregationQueryBuilder.aggregate(
-        access_tags=["tag1"], page=1, page_size=30, sort_expr=None
-    )
-    data = pipeline[-1]["$facet"]["data"]
-    limit_stage = next(s for s in data if "$limit" in s)
-    assert limit_stage["$limit"] == 30
-
-
-def test_aggregate_redact_uses_set_intersection():
-    pipeline = AggregationQueryBuilder.aggregate(
-        access_tags=["a", "b"], page=1, page_size=10, sort_expr=None
-    )
-    redact = pipeline[0]["$redact"]
-    cond_str = str(redact)
-    assert "setIntersection" in cond_str
-    assert "access_tags" in cond_str
-
-
-def test_aggregate_redact_keep_prune_logic():
-    pipeline = AggregationQueryBuilder.aggregate(
-        access_tags=["a"], page=1, page_size=10, sort_expr=None
-    )
-    redact = pipeline[0]["$redact"]
-    cond_str = str(redact)
-    assert "KEEP" in cond_str
-    assert "PRUNE" in cond_str
-
-
-def test_aggregate_empty_access_tags():
+def test_aggregate_empty_access_tags_matches_nothing():
     pipeline = AggregationQueryBuilder.aggregate(
         access_tags=[], page=1, page_size=10, sort_expr=None
     )
-    assert len(pipeline) >= 2
+    assert pipeline[0] == {"$match": {"access_tags": {"$in": []}}}
 
 
-def test_aggregate_page_3():
+def test_aggregate_none_access_tags_matches_nothing():
     pipeline = AggregationQueryBuilder.aggregate(
-        access_tags=["x"], page=3, page_size=20, sort_expr=None
+        access_tags=None, page=1, page_size=10, sort_expr=None
     )
-    data = pipeline[-1]["$facet"]["data"]
-    skip_stage = next(s for s in data if "$skip" in s)
-    assert skip_stage["$skip"] == 40
+    assert pipeline[0] == {"$match": {"access_tags": {"$in": []}}}
+
+
+def test_page_stage_order():
+    pipeline = AggregationQueryBuilder.page(
+        access_tags=["x"], page=3, page_size=20, sort_expr={"fits_header.EXPTIME": 1}
+    )
+    assert pipeline == [
+        {"$match": {"access_tags": {"$in": ["x"]}}},
+        {"$sort": {"fits_header.EXPTIME": 1, "_id": 1}},
+        {"$skip": 40},
+        {"$limit": 20},
+    ]
+
+
+def test_page_uses_default_sort_without_sort_expr():
+    for sort_expr in (None, {}):
+        pipeline = AggregationQueryBuilder.page(
+            access_tags=["x"], page=1, page_size=10, sort_expr=sort_expr
+        )
+        assert pipeline[1] == {"$sort": AggregationQueryBuilder.DEFAULT_SORT}
+
+
+def test_stable_sort_appends_id_in_same_direction():
+    assert AggregationQueryBuilder.stable_sort({"fits_header.AIRMASS": 1}) == {"fits_header.AIRMASS": 1, "_id": 1}
+    assert AggregationQueryBuilder.stable_sort({"date_obs": -1}) == {"date_obs": -1, "_id": -1}
+
+
+def test_stable_sort_keeps_explicit_id_and_does_not_mutate_input():
+    sort_expr = {"_id": 1}
+    assert AggregationQueryBuilder.stable_sort(sort_expr) == {"_id": 1}
+    sort_expr = {"date_obs": 1}
+    AggregationQueryBuilder.stable_sort(sort_expr)
+    assert sort_expr == {"date_obs": 1}
+
+
+def test_page_appends_projection():
+    pipeline = AggregationQueryBuilder.page(
+        access_tags=["x"], page=1, page_size=10, sort_expr=None,
+        projection=AggregationQueryBuilder.LIST_PROJECTION,
+    )
+    assert pipeline[-1] == {"$project": AggregationQueryBuilder.LIST_PROJECTION}
+
+
+def test_list_projection_keeps_table_fields():
+    projection = AggregationQueryBuilder.LIST_PROJECTION
+    for field in ("obs_name", "obs_tags", "fits_header.DATE-OBS", "fits_header.OBJECT", "fits_header.EXPTIME"):
+        assert projection[field] == 1
+    assert "fits_header" not in projection
+
+
+def test_capped_count_limits_before_counting():
+    pipeline = AggregationQueryBuilder.capped_count(access_tags=["x"], cap=100)
+    assert pipeline == [
+        {"$match": {"access_tags": {"$in": ["x"]}}},
+        {"$limit": 101},
+        {"$count": "total_count"},
+    ]
+
+
+def test_capped_count_default_cap():
+    pipeline = AggregationQueryBuilder.capped_count(access_tags=["x"])
+    assert pipeline[1] == {"$limit": AggregationQueryBuilder.COUNT_CAP + 1}
