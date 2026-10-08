@@ -85,6 +85,9 @@ class FITSFile(FITSFileBase, Document):
             IndexModel([("access_tags", pymongo.ASCENDING)]),
             IndexModel([("created_at", pymongo.DESCENDING)]),
             IndexModel([("observation_id", pymongo.ASCENDING)]),
+            # Reverse lineage lookups ("which files consume these?"), e.g. the requested-files
+            # search filter walking calibration chains — a full collection scan per level without it.
+            IndexModel([("source_filenames", pymongo.ASCENDING)]),
         ]
         validate_assignment = True
 

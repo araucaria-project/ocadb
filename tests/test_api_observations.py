@@ -537,6 +537,59 @@ async def test_multi_search_has_requested_files_filter(client, auth_headers, reg
     assert obs_names == ["search_has_requested"]
 
 
+def _file_payload(filename, obs_name, file_class="raw", source_filenames=None):
+    return {
+        "filename": filename,
+        "file_class": file_class,
+        "obs_name": obs_name,
+        "file_status": {
+            "observatory": {"ready": False, "check_needed": False, "status": "not_stored"},
+            "hub": {"ready": False, "check_needed": False, "status": "not_stored"},
+            "cloud": {"ready": False, "check_needed": False, "status": "not_stored"},
+        },
+        "fits_header": make_fits_header().model_dump(by_alias=True),
+        "access_tags": [],
+        "source_filenames": source_filenames or [],
+    }
+
+
+async def test_multi_search_has_requested_files_follows_calibration_chain(client, auth_headers, regular_user):
+    """A request on a raw calibration frame, two source_filenames levels below a science
+    file, marks every observation consuming it, and requested_by lists every requester of
+    the observation's own and calibration files."""
+    from ocadb.models.file import FITSFile
+
+    # Calibration chain with no parent observation: flat raw -> master flat
+    calib = {
+        "chain_flat_raw.fits": ("raw", []),
+        "chain_master_flat.fits": ("master", ["chain_flat_raw.fits"]),
+    }
+    for filename, (file_class, sources) in calib.items():
+        payload = _file_payload(filename, "chain_calibration", file_class, sources)
+        payload.pop("fits_header")
+        await FITSFile.model_validate(payload).insert()
+
+    # chain_a: raw + zdf (calibrated with the master flat); chain_b: zdf only, same master
+    # flat; chain_c: unrelated raw file
+    for obs_name, files in {
+        "chain_a": [("chain_a_raw.fits", "raw", []), ("chain_a_zdf.fits", "zdf", ["chain_a_raw.fits", "chain_master_flat.fits"])],
+        "chain_b": [("chain_b_zdf.fits", "zdf", ["chain_master_flat.fits"])],
+        "chain_c": [("chain_c_raw.fits", "raw", [])],
+    }.items():
+        await client.post("/api/v2/observations/", json=make_obs_payload(obs_name=obs_name), headers=auth_headers)
+        for filename, file_class, sources in files:
+            resp = await client.post("/api/v2/files/", json=_file_payload(filename, obs_name, file_class, sources), headers=auth_headers)
+            assert resp.status_code == 201
+
+    await FITSFile.request_cloud_uploads(["chain_flat_raw.fits"], "alice")
+    await FITSFile.request_cloud_uploads(["chain_a_raw.fits"], "bob")
+
+    resp = await client.post("/api/v2/observations/search", json={"has_requested_files": True}, headers=auth_headers)
+    assert resp.status_code == 200
+    requested_by = {o["obs_name"]: o["requested_by"] for o in resp.json()["data"]}
+    assert requested_by == {"chain_a": ["alice", "bob"], "chain_b": ["alice"]}
+
+
 async def test_multi_search_empty_result_returns_404(client, auth_headers, regular_user):
     resp = await client.post(
         "/api/v2/observations/search",

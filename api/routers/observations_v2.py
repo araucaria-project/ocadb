@@ -313,24 +313,48 @@ async def _observation_ids_with_requested_files() -> List[PydanticObjectId]:
 async def _requested_by_for_observations(observations: List[Observation]) -> Dict[str, List[str]]:
     """For each of the given observations, who has requested a file — either one of the
     observation's own direct files, or a calibration file reachable via source_filenames
-    (see _collect_observation_entries). Only meant to run over a small set (a single
-    results page), since it does a per-observation calibration traversal.
+    (same file set as _collect_observation_entries with include_calibration). Meant for a
+    single results page.
+
+    The calibration chains of all observations are walked together, one query per
+    source_filenames level, and each observation's closure is then resolved in memory —
+    a page shares most of its master calibrations, and walking them per observation cost
+    several sequential round trips each.
 
     Returns obs_id (str) -> sorted list of distinct usernames from those files'
-    upload_requests, newest request first per file but deduplicated across files.
+    upload_requests.
     """
+    def link_id(link):
+        # obs.files holds Link refs unless the observation was loaded with fetch_links
+        return link.id if isinstance(link, FITSFile) else link.ref.id
+
+    link_ids = {link_id(link) for obs in observations for link in (obs.files or [])}
+    direct_files = await FITSFile.find(In(FITSFile.id, list(link_ids))).to_list() if link_ids else []
+    files: Dict[str, FITSFile] = {f.filename: f for f in direct_files}
+    filename_by_id = {f.id: f.filename for f in direct_files}
+
+    seen = set(files)
+    frontier = {s for f in direct_files for s in (f.source_filenames or [])} - seen
+    while frontier:
+        seen |= frontier
+        found = await FITSFile.find({"filename": {"$in": list(frontier)}}).to_list()
+        files.update((f.filename, f) for f in found)
+        frontier = {s for f in found for s in (f.source_filenames or [])} - seen
+
     result: Dict[str, List[str]] = {}
     for obs in observations:
-        entries = await _collect_observation_entries([obs], include_calibration=True)
-        if not entries:
-            continue
-        requested_files = await FITSFile.find({
-            "filename": {"$in": list(entries.keys())},
-            "file_status.cloud.status": StorageStatusType.REQUESTED.value,
-        }).to_list()
-        usernames: set = set()
-        for f in requested_files:
-            usernames.update(r.requested_by for r in f.upload_requests)
+        stack = [filename_by_id[link_id(link)] for link in (obs.files or []) if link_id(link) in filename_by_id]
+        reachable: set = set()
+        while stack:
+            name = stack.pop()
+            if name in reachable:
+                continue
+            reachable.add(name)
+            if name in files:
+                stack.extend(files[name].source_filenames or [])
+        usernames = {r.requested_by for name in reachable if name in files
+                     and files[name].file_status.cloud.status == StorageStatusType.REQUESTED
+                     for r in files[name].upload_requests}
         if usernames:
             result[str(obs.id)] = sorted(usernames)
     return result
