@@ -29,6 +29,8 @@ const LINEAGE_NODE_COLORS: Record<string, { bg: string; border: string; text: st
 export class AppComponent implements OnInit {
   ocadbService = inject(OcadbService);
   private _lastCalibrationKey: string | null = null;
+  private calibrationRefreshTick = signal(0);
+  private _lastCalibrationRefreshTick = 0;
   private _lastSourceKey: string | null = null;
   private _coneObjectKey: string | null = null;
 
@@ -224,15 +226,7 @@ export class AppComponent implements OnInit {
       const obs = this.selectedObservation();
       if (!obs?._id) return;
 
-      const intervalId = setInterval(async () => {
-        const fresh = await this.ocadbService.fetchObservationById(obs._id!);
-        if (!fresh) return;
-        if (this.selectedObservation()?._id !== obs._id) return;
-        this.selectedObservation.set(fresh);
-        this.displayedObservations.update(list =>
-          list.map(o => o._id === fresh._id ? fresh : o)
-        );
-      }, 10000);
+      const intervalId = setInterval(() => this.refreshSelectedObservation(obs._id!), 10000);
 
       onCleanup(() => clearInterval(intervalId));
     });
@@ -252,6 +246,10 @@ export class AppComponent implements OnInit {
 
       const keyChanged = key !== this._lastCalibrationKey;
       this._lastCalibrationKey = key;
+      // Bumped by refreshModalFileStatuses() to re-fetch now instead of on the next poll.
+      const refreshTick = this.calibrationRefreshTick();
+      const refreshRequested = refreshTick !== this._lastCalibrationRefreshTick;
+      this._lastCalibrationRefreshTick = refreshTick;
 
       if (!names.length) {
         this.calibrationFiles.set([]);
@@ -277,6 +275,7 @@ export class AppComponent implements OnInit {
       };
 
       if (keyChanged) doFetch(true);
+      else if (refreshRequested) doFetch(false);
       const intervalId = setInterval(() => doFetch(false), 10000);
       onCleanup(() => clearInterval(intervalId));
     });
@@ -1842,10 +1841,36 @@ export class AppComponent implements OnInit {
     const includeCalib = this.requestFilesIncludeCalibration();
     const fileTypes = this.selectedFileTypes(this.requestFilesTypes(), includeCalib);
     const count = await this.ocadbService.requestFiles(ids, includeCalib, fileTypes);
-    this.requestFilesLoading.set(false);
     if (count !== null) {
       this.ocadbService.lastRequestInfo.set(`Requested ${count} file(s) for upload.`);
+      const openObsId = this.selectedObservation()?._id;
+      if (openObsId && ids.includes(openObsId)) await this.refreshModalFileStatuses(openObsId);
     }
+    this.requestFilesLoading.set(false);
+  }
+
+  /** Re-fetches the observation modal's file statuses right away (direct files,
+   * calibration files and, if open, the lineage graph) rather than waiting for the
+   * 10s poll — used after an action that changes them, like requesting files. The
+   * statuses come from the server rather than being set optimistically, since which
+   * files a request actually flips depends on server-side rules. */
+  private async refreshModalFileStatuses(obsId: string) {
+    this.calibrationRefreshTick.update(t => t + 1);
+    const lineage = this.selectedLineage();
+    await Promise.all([
+      this.refreshSelectedObservation(obsId),
+      lineage ? this.fetchLineageFileStatuses(Object.keys(lineage.nodes)) : Promise.resolve(),
+    ]);
+  }
+
+  private async refreshSelectedObservation(obsId: string) {
+    const fresh = await this.ocadbService.fetchObservationById(obsId);
+    if (!fresh) return;
+    if (this.selectedObservation()?._id !== obsId) return;
+    this.selectedObservation.set(fresh);
+    this.displayedObservations.update(list =>
+      list.map(o => o._id === fresh._id ? fresh : o)
+    );
   }
 
   async exportTabularData() {
