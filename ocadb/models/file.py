@@ -24,12 +24,10 @@ __all__ = [
     "UploadRequest", "FITSFile", "document_models",
 ]
 
-# Statuses that mean "not sitting in cloud storage yet" — a download request
-# against a file in one of these states is a signal an operator needs to act on.
+# Statuses a download request can flip to REQUESTED. Only ON_DEMAND: the hub has the
+# file and can upload it once approved. NOT_STORED/DELETED/CORRUPTED files aren't
+# requestable — e.g. an observatory-only file has no copy the hub could upload.
 _CLOUD_UPLOAD_PENDING_STATUSES = [
-    StorageStatusType.NOT_STORED.value,
-    StorageStatusType.DELETED.value,
-    StorageStatusType.CORRUPTED.value,
     StorageStatusType.ON_DEMAND.value,
 ]
 _CLOUD_UPLOAD_ALREADY_FLAGGED_STATUSES = _CLOUD_UPLOAD_PENDING_STATUSES + [StorageStatusType.REQUESTED.value]
@@ -99,10 +97,10 @@ class FITSFile(FITSFileBase, Document):
         endpoint), or explicitly requests files without downloading anything (the
         request-files endpoint). Files already stored/scheduled/queued/storing in cloud
         are left untouched — this is purely a signal for an operator to review and
-        decide whether/when to actually run the upload. ON_DEMAND files (available at
-        the producer but not proactively uploaded) are flipped to REQUESTED just like
-        NOT_STORED/DELETED/CORRUPTED, since a download request is exactly the signal
-        they were waiting for.
+        decide whether/when to actually run the upload. Only ON_DEMAND files (held by
+        the hub but not proactively uploaded) are flipped to REQUESTED, since a download
+        request is exactly the signal they were waiting for; NOT_STORED/DELETED/CORRUPTED
+        files have no hub copy to upload and are left untouched.
 
         Returns the number of files newly flipped to REQUESTED (not counting ones that
         were already REQUESTED, which still get an upload_requests entry logged but

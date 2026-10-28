@@ -4,7 +4,7 @@ from pymongo import ReturnDocument
 
 from fastapi import APIRouter, HTTPException, status, Body, Depends
 from beanie import PydanticObjectId, exceptions
-from typing import List, Annotated, Dict, Any, Tuple, Optional
+from typing import List, Annotated, Dict, Any, Tuple, Optional, Literal
 from datetime import datetime, timedelta
 from fastapi import Response
 
@@ -74,8 +74,15 @@ async def create_file(
 async def upsert_fitsfile(
         file_data: Annotated[FITSFile, Body(...)],
         response: Response,
-        token: Annotated[str, Depends(AuthService.validate_token)]
+        token: Annotated[str, Depends(AuthService.validate_token)],
+        location: Optional[Literal["observatory", "hub"]] = None,
 ):
+    # The observatory and the hub don't share disk, and the hub's copy is the one later
+    # uploaded to the cloud (UploadQueuePoller reads `path`) — so the hub's path takes
+    # priority. An observatory upsert only sets `path` on a record that has none yet.
+    # No `location` (older SROCA clients) keeps the previous always-overwrite behaviour.
+    path = str(file_data.path) if file_data.path else None
+    path_wins = location != "observatory"
     result = await FITSFile.find_one(
         FITSFile.filename == file_data.filename
     ).update(
@@ -83,7 +90,7 @@ async def upsert_fitsfile(
             "$set": {
                 "obs_name": file_data.obs_name,
                 "file_class": file_data.file_class,
-                "path": str(file_data.path) if file_data.path else None,
+                **({"path": path} if path_wins else {}),
                 "filesize": file_data.filesize,
                 "mtime": file_data.mtime,
                 "digest": file_data.digest,
@@ -100,10 +107,13 @@ async def upsert_fitsfile(
                 # at different locations each only know their own location's true status.
                 # Use PUT /file-status/{filename}/{stage}/ to update a single location safely.
                 "file_status": file_data.file_status,
+                **({} if path_wins else {"path": path}),
             },
         },
         upsert=True,
     )
+    if not path_wins and path and not result.upserted_id:
+        await FITSFile.find_one({"filename": file_data.filename, "path": None}).update({"$set": {"path": path}})
 
     response.status_code = 201 if result.upserted_id else 200
 

@@ -542,10 +542,11 @@ def _file_payload(filename, obs_name, file_class="raw", source_filenames=None):
         "filename": filename,
         "file_class": file_class,
         "obs_name": obs_name,
+        # held by the hub, not yet uploaded — the only requestable cloud state
         "file_status": {
-            "observatory": {"ready": False, "check_needed": False, "status": "not_stored"},
-            "hub": {"ready": False, "check_needed": False, "status": "not_stored"},
-            "cloud": {"ready": False, "check_needed": False, "status": "not_stored"},
+            "observatory": {"ready": True, "check_needed": False, "status": "stored"},
+            "hub": {"ready": True, "check_needed": False, "status": "stored"},
+            "cloud": {"ready": False, "check_needed": False, "status": "on_demand"},
         },
         "fits_header": make_fits_header().model_dump(by_alias=True),
         "access_tags": [],
@@ -588,6 +589,62 @@ async def test_multi_search_has_requested_files_follows_calibration_chain(client
     assert resp.status_code == 200
     requested_by = {o["obs_name"]: o["requested_by"] for o in resp.json()["data"]}
     assert requested_by == {"chain_a": ["alice", "bob"], "chain_b": ["alice"]}
+
+
+async def test_request_cloud_uploads_flips_only_on_demand(client, auth_headers, regular_user):
+    """Only ON_DEMAND files (held by the hub) are requestable — e.g. an observatory-only
+    NOT_STORED file has no copy the hub could upload after approval."""
+    from ocadb.models.file import FITSFile
+
+    statuses = ["on_demand", "not_stored", "deleted", "corrupted", "stored"]
+    for status in statuses:
+        payload = _file_payload(f"req_status_{status}.fits", "req_status")
+        payload["file_status"]["cloud"]["status"] = status
+        payload.pop("fits_header")
+        await FITSFile.model_validate(payload).insert()
+
+    flipped = await FITSFile.request_cloud_uploads([f"req_status_{s}.fits" for s in statuses], "alice")
+
+    assert flipped == 1
+    for status in statuses:
+        f = await FITSFile.find_one(FITSFile.filename == f"req_status_{status}.fits")
+        assert f.file_status.cloud.status.value == ("requested" if status == "on_demand" else status)
+
+
+@pytest.mark.parametrize("file_class, image_type, expected", [
+    ("raw", "science", "raw"),
+    ("raw", "object", "raw"),
+    ("zdf", "OBJECT", "zdf"),
+    ("zdf", " Science ", "zdf"),
+    ("raw", "flat", "flat"),
+    ("master", "Zero", "master_zero"),
+    ("master", "object", "unknown"),
+    ("raw", None, "unknown"),
+    (None, None, "unknown"),
+])
+def test_classify_file(file_class, image_type, expected):
+    from api.routers.observations_v2 import _classify_file
+    assert _classify_file(file_class, image_type) == expected
+
+
+async def test_request_files_matches_object_imagetyp_science_frames(client, auth_headers, regular_user):
+    """Science frames with FITS IMAGETYP 'object' (any case) count as raw/zdf — they used
+    to classify as 'unknown', so the modal's default raw+zdf request 404'd with
+    "No files found for the selected observations"."""
+    resp = await client.post("/api/v2/observations/", json=make_obs_payload(obs_name="req_object"), headers=auth_headers)
+    obs_id = resp.json()["_id"]
+    for filename, file_class, imagetyp in [("req_object_raw.fits", "raw", "object"),
+                                           ("req_object_zdf.fits", "zdf", "OBJECT"),
+                                           ("req_object_flat.fits", "raw", "flat")]:
+        payload = _file_payload(filename, "req_object", file_class)
+        payload["fits_header"] = make_fits_header(IMAGETYP=imagetyp).model_dump(by_alias=True)
+        assert (await client.post("/api/v2/files/", json=payload, headers=auth_headers)).status_code == 201
+
+    resp = await client.post("/api/v2/observations/request-files",
+                             json={"obs_ids": [obs_id], "include_calibration": False, "file_types": ["zdf", "raw"]},
+                             headers=auth_headers)
+    assert resp.status_code == 200
+    assert resp.json()["file_count"] == 2
 
 
 async def test_multi_search_empty_result_returns_404(client, auth_headers, regular_user):

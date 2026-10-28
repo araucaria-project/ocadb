@@ -271,6 +271,46 @@ async def test_upsert_does_not_overwrite_existing_file_status(client, auth_heade
     assert body["file_status"]["hub"]["status"] == "not_stored"
 
 
+OBS_PATH = "/data/fits/wk06/raw/1334/upsert_path.fits"
+HUB_PATH = "/work/vela/oca/fits/wk06/raw/1334/upsert_path.fits"
+
+
+async def _upsert_path(client, auth_headers, filename, path, location=None):
+    params = {"location": location} if location else None
+    return await client.post("/api/v2/files/upsert", params=params,
+                             json=make_file_payload(filename=filename, path=path), headers=auth_headers)
+
+
+async def test_upsert_hub_path_overwrites_observatory_path(client, auth_headers, regular_user):
+    """The observatory and the hub don't share disk; the hub's copy is the one uploaded to
+    the cloud, so the hub's path must replace the observatory's."""
+    assert (await _upsert_path(client, auth_headers, "path_a.fits", OBS_PATH, "observatory")).status_code == 201
+    resp = await _upsert_path(client, auth_headers, "path_a.fits", HUB_PATH, "hub")
+    assert resp.status_code == 200
+    assert resp.json()["path"] == HUB_PATH
+
+
+async def test_upsert_observatory_path_does_not_overwrite_hub_path(client, auth_headers, regular_user):
+    """A late observatory upsert (retry, manual upload, hub arriving first) keeps the hub's path."""
+    assert (await _upsert_path(client, auth_headers, "path_b.fits", HUB_PATH, "hub")).status_code == 201
+    resp = await _upsert_path(client, auth_headers, "path_b.fits", OBS_PATH, "observatory")
+    assert resp.status_code == 200
+    assert resp.json()["path"] == HUB_PATH
+
+
+async def test_upsert_observatory_path_fills_missing_path(client, auth_headers, regular_user):
+    assert (await _upsert_path(client, auth_headers, "path_c.fits", None, "hub")).status_code == 201
+    resp = await _upsert_path(client, auth_headers, "path_c.fits", OBS_PATH, "observatory")
+    assert resp.json()["path"] == OBS_PATH
+
+
+async def test_upsert_without_location_overwrites_path(client, auth_headers, regular_user):
+    """Older SROCA clients send no location — keep the previous last-writer-wins behaviour."""
+    await _upsert_path(client, auth_headers, "path_d.fits", HUB_PATH)
+    resp = await _upsert_path(client, auth_headers, "path_d.fits", OBS_PATH)
+    assert resp.json()["path"] == OBS_PATH
+
+
 async def test_upsert_sets_observation_id_on_new_file(client, auth_headers, regular_user):
     """Regression test: upsert used to link the file into the observation's own
     `files` list without ever writing `observation_id` back onto the FITSFile

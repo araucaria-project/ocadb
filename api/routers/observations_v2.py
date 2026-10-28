@@ -1396,24 +1396,29 @@ async def migrate_observation_id_status(
     return job
 
 
-# Field-based classification: (file_class, image_type) pairs with clean, unambiguous
+# Field-based classification: (file_class, image_types) pairs with clean, unambiguous
 # criteria. A file matches type_name if its file_class equals the tuple's first element
-# and its image_type equals the second. Anything not matching any of these is 'unknown'.
-_FIELD_BASED_TYPES: Dict[str, Tuple[str, str]] = {
-    'zdf': ('zdf', 'science'),
-    'raw': ('raw', 'science'),
-    'flat': ('raw', 'flat'),
-    'zero': ('raw', 'zero'),
-    'dark': ('raw', 'dark'),
-    'master_flat': ('master', 'flat'),
-    'master_dark': ('master', 'dark'),
-    'master_zero': ('master', 'zero'),
+# and its image_type (the FITS IMAGETYP, compared case-insensitively) is one of the
+# second. Anything not matching any of these is 'unknown'.
+# Science frames carry IMAGETYP 'object' (the FITS convention) or 'science' depending on
+# the producer — both must count, or a request/download for raw/zdf silently matches nothing.
+_SCIENCE_IMAGE_TYPES = frozenset({'science', 'object'})
+_FIELD_BASED_TYPES: Dict[str, Tuple[str, frozenset]] = {
+    'zdf': ('zdf', _SCIENCE_IMAGE_TYPES),
+    'raw': ('raw', _SCIENCE_IMAGE_TYPES),
+    'flat': ('raw', frozenset({'flat'})),
+    'zero': ('raw', frozenset({'zero'})),
+    'dark': ('raw', frozenset({'dark'})),
+    'master_flat': ('master', frozenset({'flat'})),
+    'master_dark': ('master', frozenset({'dark'})),
+    'master_zero': ('master', frozenset({'zero'})),
 }
 
 
 def _classify_file(file_class: Optional[str], image_type: Optional[str]) -> str:
-    for type_name, (fclass, itype) in _FIELD_BASED_TYPES.items():
-        if file_class == fclass and image_type == itype:
+    itype = image_type.strip().lower() if image_type else None
+    for type_name, (fclass, itypes) in _FIELD_BASED_TYPES.items():
+        if file_class == fclass and itype in itypes:
             return type_name
     return 'unknown'
 
