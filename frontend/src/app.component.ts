@@ -41,7 +41,7 @@ export class AppComponent implements OnInit {
     )
   );
 
-  loginData = { username: '', password: '' };
+  loginData = { username: '', password: '', remember: this.loadRememberDevice() };
 
   displayedObservations = signal<Observation[]>([]);
   filesLoading = signal(false);
@@ -530,9 +530,14 @@ export class AppComponent implements OnInit {
     this.syncModalUrl();
   }
 
+  private loadRememberDevice(): boolean {
+    try { return localStorage.getItem('ocadb_remember_device') === 'true'; } catch { return false; }
+  }
+
   async handleLogin(event: Event) {
     event.preventDefault();
-    const success = await this.ocadbService.login(this.loginData.username, this.loginData.password);
+    try { localStorage.setItem('ocadb_remember_device', String(this.loginData.remember)); } catch {}
+    const success = await this.ocadbService.login(this.loginData.username, this.loginData.password, this.loginData.remember);
     if (success) {
       // Not search(): a shared/reloaded URL's filters, oca-jd toggle, and open
       // observation/file are still sitting in the address bar at this point (ngOnInit
@@ -901,7 +906,7 @@ export class AppComponent implements OnInit {
 
   handleLogout() {
     this.ocadbService.logout();
-    this.loginData = { username: '', password: '' };
+    this.loginData = { username: '', password: '', remember: this.loadRememberDevice() };
     this.displayedObservations.set([]);
   }
 

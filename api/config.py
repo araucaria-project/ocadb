@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: str = "30"
     REFRESH_TOKEN_EXPIRE_DAYS: str = "7"
+    REMEMBER_DEVICE_REFRESH_TOKEN_EXPIRE_DAYS: str = "90"
 
     # administration information
     app_name: str = "ocadb_api"

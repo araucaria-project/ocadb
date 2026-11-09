@@ -196,7 +196,7 @@ export class OcadbService {
     this.error.set(null);
   }
 
-  async login(username: string, password: string): Promise<boolean> {
+  async login(username: string, password: string, remember = false): Promise<boolean> {
     this.loading.set(true);
     this.error.set(null);
     this.lastRequestInfo.set(`Authenticating as ${username}...`);
@@ -212,6 +212,7 @@ export class OcadbService {
       params.append('grant_type', 'password');
       params.append('username', username);
       params.append('password', password);
+      if (remember) params.append('remember', 'true');
 
       const response = await fetch(`${this.baseUrl}/auth/token/`, {
         method: 'POST',
@@ -259,6 +260,16 @@ export class OcadbService {
   }
 
   logout() {
+    // Revoke server-side too, otherwise a remembered device's token stays valid for 90 days.
+    const rt = localStorage.getItem('ocadb_refresh_token') ?? this.refreshToken();
+    if (rt) {
+      fetch(`${this.baseUrl}/auth/logout/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: rt }),
+        keepalive: true
+      }).catch(() => {});
+    }
     this.token.set(null);
     this.refreshToken.set(null);
     this.currentUser.set(null);
@@ -290,7 +301,19 @@ export class OcadbService {
     return this._refreshPromise;
   }
 
+  // Another tab may have rotated the refresh token already; the old one is then
+  // revoked, so take over that tab's tokens instead of failing.
+  private adoptTokensFromOtherTab(): boolean {
+    const storedToken = localStorage.getItem('ocadb_token');
+    const storedRefresh = localStorage.getItem('ocadb_refresh_token');
+    if (!storedToken || storedToken === this.token()) return false;
+    this.token.set(storedToken);
+    this.refreshToken.set(storedRefresh);
+    return true;
+  }
+
   private async _doRefresh(): Promise<boolean> {
+    if (this.adoptTokensFromOtherTab()) return true;
     const rt = this.refreshToken();
     if (!rt) return false;
     try {
@@ -299,7 +322,7 @@ export class OcadbService {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refresh_token: rt })
       });
-      if (!res.ok) return false;
+      if (!res.ok) return this.adoptTokensFromOtherTab();
       const data = await res.json();
       this.token.set(data.access_token);
       this.refreshToken.set(data.refresh_token ?? null);
