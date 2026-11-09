@@ -103,6 +103,9 @@ Managed via `pydantic-settings` in `api/config.py` with `.env` file support (pre
 | `MONGODB_DATABASE` | `ocadb` | Database name |
 | `JWT_SECRET_KEY` | dev fallback | JWT signing (set properly in production) |
 | `S3_KEY_ID`, `S3_SECRET`, `S3_REGION`, `ENDPOINT`, `BUCKET_NAME` | dev defaults | Backblaze B2 / S3 storage |
+| `EMAIL_BACKEND` | `console` | `console` logs emails (incl. login codes) instead of sending; `smtp` sends |
+| `EMAIL_FROM`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_STARTTLS` | dev defaults | SMTP backend settings |
+| `FRONTEND_URL` | `http://localhost:8085` | Base URL of links in emails |
 
 ## Testing
 

@@ -50,9 +50,10 @@ class AuthService:
     @staticmethod
     async def authenticate_user(username: str, password: str):
         user = await DatabaseConnection.get_user(username)
-        hashed_password = user.hashed_password if user else AuthService._DUMMY_PASSWORD_HASH
+        has_password = bool(user and user.hashed_password)
+        hashed_password = user.hashed_password if has_password else AuthService._DUMMY_PASSWORD_HASH
         password_ok = CryptoService.verify_password(password, hashed_password)
-        if not user or not password_ok or user.disabled:
+        if not has_password or not password_ok or user.disabled:
             return False
         return user
 
@@ -150,6 +151,19 @@ class AuthService:
             doc.revoked = True
             doc.revoked_at = now
             await doc.replace()
+
+    @staticmethod
+    async def revoke_user_refresh_tokens(username: str, keep_refresh_token: str | None = None) -> None:
+        """Log the user out everywhere, except the login that ``keep_refresh_token`` belongs to."""
+        query: dict = {"username": username, "revoked": False}
+        if keep_refresh_token:
+            token_hash = hashlib.sha256(keep_refresh_token.encode()).hexdigest()
+            keep = await RefreshTokenDocument.find_one(RefreshTokenDocument.token_hash == token_hash)
+            if keep is not None and keep.username == username and keep.family_id:
+                query["family_id"] = {"$ne": keep.family_id}
+        await RefreshTokenDocument.get_motor_collection().update_many(
+            query, {"$set": {"revoked": True, "revoked_at": datetime.now(timezone.utc)}},
+        )
 
     @staticmethod
     async def user_from_token(token: str) -> UserInDB:

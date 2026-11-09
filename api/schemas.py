@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class Token(BaseModel):
@@ -17,6 +17,23 @@ class TokenPair(BaseModel):
 
 class RefreshRequest(BaseModel):
     refresh_token: str
+
+
+class CodeRequest(BaseModel):
+    identifier: str = Field(min_length=1, max_length=254, description="Araucaria ID or email")
+    return_to: str | None = Field(None, max_length=2048, description="Frontend path the emailed link should open")
+
+
+class CodeVerifyRequest(BaseModel):
+    identifier: str = Field(min_length=1, max_length=254)
+    code: str = Field(min_length=1, max_length=16)
+    remember: bool = False
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str | None = Field(None, description="Required if the account already has a password")
+    new_password: str = Field(min_length=8, max_length=128)
+    keep_refresh_token: str | None = Field(None, description="Refresh token of this session, which stays logged in")
 
 
 class TokenData(BaseModel):

@@ -17,7 +17,7 @@ TEST_DB_NAME = "ocadb_test"
 _COLLECTIONS = [
     "observations", "fits_files", "users", "refresh_tokens",
     "search_objects", "search_tags", "Object", "migration_jobs",
-    "download_script_events",
+    "download_script_events", "login_codes", "rate_limits",
 ]
 
 

@@ -9,6 +9,17 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: str = "7"
     REMEMBER_DEVICE_REFRESH_TOKEN_EXPIRE_DAYS: str = "90"
 
+    # outgoing email: "console" logs messages instead of sending them
+    EMAIL_BACKEND: str = "console"
+    EMAIL_FROM: str = "OCADB <no-reply@ocadb.space>"
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_STARTTLS: bool = True
+    # where links in emails point to
+    FRONTEND_URL: str = "http://localhost:8085"
+
     # administration information
     app_name: str = "ocadb_api"
     admin_email: str = ""
