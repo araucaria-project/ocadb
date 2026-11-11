@@ -1,10 +1,13 @@
-import { Component, signal, computed, inject, OnInit, ElementRef, ViewChild, effect, WritableSignal } from '@angular/core';
+import { Component, signal, computed, inject, OnInit, ElementRef, ViewChild, effect, untracked, WritableSignal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { OcadbService, Observation, SearchFilters, SearchObject, SearchTag, FitsFile, StorageStatusType, StorageStatus, ViewerConf, DEFAULT_VIEWER_CONF, FileLineage } from './services/ocadb.service';
 import { FlatpickrDirective } from './flatpickr.directive';
 import { InfoIconComponent } from './info-icon.component';
+import { LoginComponent } from './login.component';
+import { LoginLink, consumeLoginLink } from './login-link';
+import { lastIdentifier, rememberLoginMethod } from './login-methods';
 import { buildSearchParams, parseSearchParams, UrlSearchState, UrlViewState } from './url-state';
 import cytoscape from 'cytoscape';
 import fcose from 'cytoscape-fcose';
@@ -23,7 +26,7 @@ const LINEAGE_NODE_COLORS: Record<string, { bg: string; border: string; text: st
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, FormsModule, FlatpickrDirective, InfoIconComponent],
+  imports: [CommonModule, FormsModule, FlatpickrDirective, InfoIconComponent, LoginComponent],
   templateUrl: './app.component.html'
 })
 export class AppComponent implements OnInit {
@@ -34,14 +37,14 @@ export class AppComponent implements OnInit {
   private _lastSourceKey: string | null = null;
   private _coneObjectKey: string | null = null;
 
-  private static readonly LOGIN_BACKGROUNDS = Array.from({length: 23}, (_, i) => `/${i + 1}b.JPG`);
-  loginBackground = signal(
-    inject(DomSanitizer).bypassSecurityTrustStyle(
-      `url(${AppComponent.LOGIN_BACKGROUNDS[Math.floor(Math.random() * AppComponent.LOGIN_BACKGROUNDS.length)]})`
-    )
-  );
+  /** Login link from a code email, handed to the login screen. */
+  pendingLoginLink = signal<LoginLink | null>(null);
 
-  loginData = { username: '', password: '', remember: this.loadRememberDevice() };
+  passwordDialogOpen = signal(false);
+  passwordForm = { current: '', next: '', confirm: '' };
+  passwordError = signal<string | null>(null);
+  passwordSaving = signal(false);
+  passwordSaved = signal(false);
 
   displayedObservations = signal<Observation[]>([]);
   filesLoading = signal(false);
@@ -217,9 +220,16 @@ export class AppComponent implements OnInit {
   });
 
   constructor() {
+    this.handleLoginLink();
+
+    // Runs after any login (password, code, link, or another tab), not on startup
+    // (ngOnInit covers that). Not an output of <app-login>: it is destroyed as soon
+    // as the token is set, before its login call returns.
+    let wasAuthenticated = this.ocadbService.isAuthenticated();
     effect(() => {
-      const expired = this.ocadbService.sessionExpiredUser();
-      if (expired) this.loginData.username = expired;
+      const authenticated = this.ocadbService.isAuthenticated();
+      if (authenticated && !wasAuthenticated) untracked(() => this.onLoggedIn());
+      wasAuthenticated = authenticated;
     });
 
     effect((onCleanup) => {
@@ -530,20 +540,57 @@ export class AppComponent implements OnInit {
     this.syncModalUrl();
   }
 
-  private loadRememberDevice(): boolean {
-    try { return localStorage.getItem('ocadb_remember_device') === 'true'; } catch { return false; }
+  private handleLoginLink() {
+    const link = consumeLoginLink();
+    if (!link) return;
+    if (!this.ocadbService.isAuthenticated()) {
+      this.pendingLoginLink.set(link);
+      return;
+    }
+    const current = this.ocadbService.currentUser() ?? '';
+    if (current.toLowerCase() === link.identifier.toLowerCase()) return;
+    if (window.confirm(`This login link is for ${link.identifier}, but you are logged in as ${current}. Log out and continue as ${link.identifier}?`)) {
+      this.ocadbService.logout();
+      this.pendingLoginLink.set(link);
+    }
   }
 
-  async handleLogin(event: Event) {
+  private onLoggedIn() {
+    this.pendingLoginLink.set(null);
+    // Not search(): a shared/reloaded URL's filters, oca-jd toggle, and open
+    // observation/file are still sitting in the address bar at this point (ngOnInit
+    // skipped restoring them since the user wasn't authenticated yet) — restore from
+    // them now instead of dropping straight to a blank default search.
+    this.restoreStateFromUrl();
+  }
+
+  openPasswordDialog() {
+    this.passwordForm = { current: '', next: '', confirm: '' };
+    this.passwordError.set(null);
+    this.passwordSaved.set(false);
+    this.passwordDialogOpen.set(true);
+  }
+
+  async savePassword(event: Event) {
     event.preventDefault();
-    try { localStorage.setItem('ocadb_remember_device', String(this.loginData.remember)); } catch {}
-    const success = await this.ocadbService.login(this.loginData.username, this.loginData.password, this.loginData.remember);
-    if (success) {
-      // Not search(): a shared/reloaded URL's filters, oca-jd toggle, and open
-      // observation/file are still sitting in the address bar at this point (ngOnInit
-      // skipped restoring them since the user wasn't authenticated yet) — restore from
-      // them now instead of dropping straight to a blank default search.
-      this.restoreStateFromUrl();
+    if (this.passwordForm.next.length < 8) {
+      this.passwordError.set('The new password must be at least 8 characters long.');
+      return;
+    }
+    if (this.passwordForm.next !== this.passwordForm.confirm) {
+      this.passwordError.set('The passwords do not match.');
+      return;
+    }
+    this.passwordSaving.set(true);
+    const current = this.ocadbService.hasPassword() ? this.passwordForm.current : null;
+    const error = await this.ocadbService.changePassword(current, this.passwordForm.next);
+    this.passwordSaving.set(false);
+    this.passwordError.set(error);
+    if (!error) {
+      this.passwordForm = { current: '', next: '', confirm: '' };
+      this.passwordSaved.set(true);
+      // Next time this browser offers the password screen first.
+      rememberLoginMethod([this.ocadbService.currentUser(), lastIdentifier()], 'password');
     }
   }
 
@@ -906,7 +953,6 @@ export class AppComponent implements OnInit {
 
   handleLogout() {
     this.ocadbService.logout();
-    this.loginData = { username: '', password: '', remember: this.loadRememberDevice() };
     this.displayedObservations.set([]);
   }
 

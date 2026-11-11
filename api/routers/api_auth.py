@@ -113,7 +113,8 @@ async def change_password(body: PasswordChangeRequest,
     """Set or change the password; logs out all other sessions."""
     if user.hashed_password and not (
             body.current_password and CryptoService.verify_password(body.current_password, user.hashed_password)):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Current password is incorrect")
+        # 400, not 403: clients treat 401/403 as an expired session.
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect")
     await user.set({UserInDB.hashed_password: CryptoService.get_password_hash(body.new_password)})
     await AuthService.revoke_user_refresh_tokens(user.username, keep_refresh_token=body.keep_refresh_token)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -121,6 +122,14 @@ async def change_password(body: PasswordChangeRequest,
 
 def _email_in_use() -> HTTPException:
     return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already in use")
+
+
+class UserMe(User):
+    has_password: bool = False
+
+
+class UserListItem(User):
+    has_password: bool = False
 
 
 def _public_user(user: UserInDB) -> User:
@@ -168,14 +177,21 @@ async def register_user(user_data: UserCreate,
         access_tags=user_data.access_tags
     )
 
-@router.get("/me/", response_model=User)
+@router.get("/me/", response_model=UserMe)
 async def read_users_me(token: Annotated[str, Depends(AuthService.oauth2_scheme)]):
     """Get current user info.
 
     Also called directly as ``read_users_me(token)`` by other routers.
     """
     user = await AuthService.user_from_token(token)
-    return _public_user(user)
+    return UserMe(**_public_user(user).model_dump(), has_password=bool(user.hashed_password))
+
+
+@router.get("/users/", response_model=list[UserListItem])
+async def list_users(mod_user: Annotated[UserInDB, Depends(AuthService.current_moderator)]):
+    """All accounts, sorted by Araucaria ID. Moderators only."""
+    users = await UserInDB.find_all().sort("username").to_list()
+    return [UserListItem(**_public_user(u).model_dump(), has_password=bool(u.hashed_password)) for u in users]
 
 @router.get("/user/{username}/", response_model=User)
 async def read_users_username(mod_user: Annotated[UserInDB, Depends(AuthService.current_moderator)],

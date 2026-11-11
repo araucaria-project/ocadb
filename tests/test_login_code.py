@@ -213,6 +213,28 @@ async def test_users_without_email_do_not_collide(beanie):
     await UserInDB(username="b", email="", hashed_password=None).insert()
 
 
+async def test_code_login_with_email_as_araucaria_id(client, outbox):
+    await UserInDB(username="rolf.chini@gmx.de", email="rolf.chini@gmx.de").insert()
+    await _request(client, "Rolf.Chini@gmx.de")
+    assert "#login_id=rolf.chini%40gmx.de&login_code=" in outbox[0].text
+    # The emailed link carries the ID, which is looked up like an email.
+    resp = await _verify(client, "rolf.chini@gmx.de", _code(outbox[0]))
+    assert resp.status_code == 200
+
+
+async def test_email_as_araucaria_id_survives_email_change(beanie):
+    await UserInDB(username="rolf.chini@gmx.de", email="rolf@new.example").insert()
+    for identifier in ("rolf.chini@gmx.de", "rolf@new.example"):
+        user = await DatabaseConnection.get_user_by_identifier(identifier)
+        assert user is not None and user.username == "rolf.chini@gmx.de"
+
+
+async def test_address_matching_two_users_is_refused(beanie):
+    await UserInDB(username="a@example.com").insert()
+    await UserInDB(username="other", email="a@example.com").insert()
+    assert await DatabaseConnection.get_user_by_identifier("a@example.com") is None
+
+
 async def test_identifier_lookup_matches_unnormalized_stored_email(beanie):
     await UserInDB.get_motor_collection().insert_one({"username": "legacy", "email": "Jan.Kowalski@CAMK.edu.pl"})
     user = await DatabaseConnection.get_user_by_identifier("jan.kowalski@camk.edu.pl")
@@ -237,10 +259,10 @@ async def test_codeonly_user_sets_password(client, codeonly_user, outbox):
 
 async def test_change_password_requires_current(client, regular_user, auth_headers):
     resp = await client.post("/api/v1/auth/password/", json={"new_password": "another-pass"}, headers=auth_headers)
-    assert resp.status_code == 403
+    assert resp.status_code == 400
     resp = await client.post("/api/v1/auth/password/",
                              json={"current_password": "wrong", "new_password": "another-pass"}, headers=auth_headers)
-    assert resp.status_code == 403
+    assert resp.status_code == 400
 
 
 async def test_change_password_too_short(client, regular_user, auth_headers):

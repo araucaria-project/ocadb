@@ -48,8 +48,9 @@ class AuthService:
         return encoded_jwt
 
     @staticmethod
-    async def authenticate_user(username: str, password: str):
-        user = await DatabaseConnection.get_user(username)
+    async def authenticate_user(identifier: str, password: str):
+        """Check a password for an Araucaria ID (username) or email."""
+        user = await DatabaseConnection.get_user_by_identifier(identifier)
         has_password = bool(user and user.hashed_password)
         hashed_password = user.hashed_password if has_password else AuthService._DUMMY_PASSWORD_HASH
         password_ok = CryptoService.verify_password(password, hashed_password)

@@ -15,19 +15,24 @@ class DatabaseConnection:
 
     @staticmethod
     async def get_user_by_identifier(identifier: str) -> UserInDB | None:
-        """Find a user by Araucaria ID (username) or, if it contains '@', by email."""
+        """Find a user by Araucaria ID (username) or, if it contains '@', by email.
+
+        An identifier with '@' also matches an Araucaria ID that is an email address,
+        so such users can still log in after their email changes.
+        """
         identifier = identifier.strip()
         if "@" not in identifier:
             return await DatabaseConnection.get_user(identifier)
         email = normalize_email(identifier)
         if email is None:
             return None
-        # Case-insensitive, so emails stored before normalization still match.
+        # Case-insensitive, so emails and IDs stored before normalization still match.
+        pattern = {"$regex": f"^{re.escape(email)}$", "$options": "i"}
         users = await UserInDB.find(
-            {"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}}
+            {"$or": [{"email": pattern}, {"username": pattern}]}
         ).limit(2).to_list()
         if len(users) > 1:
-            log.warning("Email %s matches several users; refusing to pick one", email)
+            log.warning("%s matches several users; refusing to pick one", email)
             return None
         return users[0] if users else None
 

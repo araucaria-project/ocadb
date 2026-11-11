@@ -281,3 +281,34 @@ async def test_update_user_as_moderator(client, moderator_user, mod_headers, reg
     assert resp.status_code == 200
     assert resp.json()["full_name"] == "Renamed"
     assert "hashed_password" not in resp.json()
+
+
+# --- identifier login, /me has_password, user list ---
+
+async def test_password_login_with_email(client, regular_user):
+    resp = await client.post(
+        "/api/v1/auth/token/",
+        data={"username": "Test@Example.com", "password": "testpass123", "grant_type": "password"},
+    )
+    assert resp.status_code == 200
+    me = await client.get("/api/v1/auth/me/", headers={"Authorization": f"Bearer {resp.json()['access_token']}"})
+    assert me.json()["username"] == "testuser"
+
+
+async def test_me_reports_has_password(client, regular_user, auth_headers):
+    resp = await client.get("/api/v1/auth/me/", headers=auth_headers)
+    assert resp.json()["has_password"] is True
+
+
+async def test_list_users_as_moderator(client, regular_user, moderator_user, mod_headers):
+    resp = await client.get("/api/v1/auth/users/", headers=mod_headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert [u["username"] for u in body] == ["moduser", "testuser"]
+    assert all("hashed_password" not in u for u in body)
+    assert body[1]["has_password"] is True
+
+
+async def test_list_users_as_non_moderator_returns_403(client, regular_user, auth_headers):
+    resp = await client.get("/api/v1/auth/users/", headers=auth_headers)
+    assert resp.status_code == 403

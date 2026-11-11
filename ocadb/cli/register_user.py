@@ -4,6 +4,8 @@ Register a user of OCADB.
 """
 from enum import verify
 from getpass import getpass
+from pathlib import Path
+from typing import Annotated
 from ocadb.models import User, UserInDB
 from api.services.database_connection import DatabaseConnection
 from api.services.crypto_service import CryptoService
@@ -54,10 +56,31 @@ async def insert_user_into_db(user: UserInDB):
     print(inserted_user)
 
 
+@app.command("seed")
+def seed(
+        file: Annotated[Path, typer.Argument(exists=True, dir_okay=False, help="YAML file with users")],
+        replace_tags: Annotated[bool, typer.Option(help="Replace access tags instead of adding to them")] = False,
+        dry_run: Annotated[bool, typer.Option(help="Only print what would change")] = False,
+):
+    """Create or update users from a YAML file (araucaria_id, email, full_name, access_tags).
 
+    Never changes passwords, moderator or disabled flags. Safe to run repeatedly.
+    """
+    from ocadb.cli.seed_users import parse_seed_file, seed_users
 
-
-
-
-
+    entries, problems = parse_seed_file(file.read_text(encoding="utf-8"))
+    loop = asyncio.get_event_loop()
+    report = loop.run_until_complete(seed_users(entries, replace_tags=replace_tags, dry_run=dry_run))
+    prefix = "[dry run] " if dry_run else ""
+    for label, items in (("created", report.created), ("updated", report.updated),
+                         ("unchanged", report.unchanged)):
+        typer.echo(f"{prefix}{label}: {len(items)}")
+        for item in items if label != "unchanged" else []:
+            typer.echo(f"  {item}")
+    for w in report.warnings:
+        typer.echo(f"warning: {w}")
+    for p in problems + report.problems:
+        typer.echo(f"problem: {p}", err=True)
+    if problems or report.problems:
+        raise typer.Exit(code=1)
 

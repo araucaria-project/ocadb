@@ -2,94 +2,7 @@
 
   <!-- LOGIN SCREEN -->
   @if (!ocadbService.isAuthenticated()) {
-    <div class="h-full w-full flex items-center justify-center bg-cover bg-center" [style.background-image]="loginBackground()">
-      <div class="absolute inset-0 bg-space-950/80 backdrop-blur-sm"></div>
-
-      <div class="relative z-10 w-full max-w-md p-8 bg-space-900 border border-space-700 rounded-2xl shadow-2xl animate-fade-in flex flex-col">
-        <div class="text-center mb-8">
-          <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
-            OCADB Access
-          </h1>
-          <p class="text-slate-400 mt-2 text-sm">OCM Observatory Database</p>
-        </div>
-
-        <form (submit)="handleLogin($event)" class="space-y-4 flex-1">
-          <div>
-            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Username</label>
-            <input
-              type="text"
-              name="username"
-              [(ngModel)]="loginData.username"
-              placeholder="Enter username"
-              required
-              class="w-full bg-space-950 border border-space-700 rounded-lg px-4 py-3 text-sm focus:border-accent-500 focus:outline-none transition-colors text-slate-200 placeholder-slate-600"
-            >
-          </div>
-
-          <div>
-            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Password</label>
-            <input
-              type="password"
-              name="password"
-              [(ngModel)]="loginData.password"
-              placeholder="••••••••"
-              required
-              class="w-full bg-space-950 border border-space-700 rounded-lg px-4 py-3 text-sm focus:border-accent-500 focus:outline-none transition-colors text-slate-200 placeholder-slate-600"
-            >
-          </div>
-
-          <label class="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              name="remember"
-              [(ngModel)]="loginData.remember"
-              class="w-4 h-4 accent-accent-500 cursor-pointer"
-            >
-            Remember this device
-            <span class="text-xs text-slate-500">(stay signed in for 90 days)</span>
-          </label>
-
-          @if (ocadbService.error()) {
-            <div class="p-3 bg-red-900/20 border border-red-800 rounded-lg text-red-300 text-xs flex items-start justify-between gap-2">
-              <span>{{ ocadbService.error() }}</span>
-              <button (click)="ocadbService.clearError()" class="text-red-400 hover:text-white transition-colors shrink-0">
-                <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
-              </button>
-            </div>
-          }
-
-          <button
-            type="submit"
-            [disabled]="ocadbService.loading()"
-            class="w-full py-3 bg-accent-600 hover:bg-accent-500 text-white font-bold rounded-lg shadow-lg shadow-accent-600/20 transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
-          >
-            @if (ocadbService.loading()) {
-              <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-              Signing in...
-            } @else {
-              Sign In
-            }
-          </button>
-        </form>
-
-        <div class="mt-6 pt-4 border-t border-space-800 text-center">
-            <a href="https://akond.space/" target="_blank" class="inline-flex items-center justify-center gap-1.5 opacity-70 hover:opacity-100 transition-opacity decoration-none group">
-                <span class="text-[10px] text-slate-500 mb-0.5">by</span>
-                <svg viewBox="0 0 67.194 12.425" xmlns="http://www.w3.org/2000/svg" class="h-4 w-auto">
-                    <g transform="translate(-52.256057,-144.10628)">
-                        <g transform="matrix(0.82296259,0,0,0.82296259,16.586371,28.163141)">
-                        <line x1="46.658077" y1="152.3084" x2="49.303909" y2="144.3709" stroke="#60a5fa" stroke-width="1.48609" stroke-linecap="round" />
-                        <line x1="50.626827" y1="152.3084" x2="53.272659" y2="144.3709" stroke="#60a5fa" stroke-width="1.48609" stroke-linecap="round" />
-                        <line x1="54.595577" y1="152.3084" x2="57.241409" y2="144.3709" stroke="#60a5fa" stroke-width="1.48609" stroke-linecap="round" />
-                        </g>
-                        <text x="64.649742" y="153.89587" font-family="Arial, sans-serif" font-size="9.525px" fill="#f8fafc" style="stroke-width:0.264583">AkondAstro</text>
-                        <polygon points="500,70 502,76 508,76 503,80 505,86 500,82 495,86 497,80 492,76 498,76 " fill="#60a5fa" transform="matrix(0.26458333,0,0,0.26458333,-16.841949,127.17296)" />
-                    </g>
-                </svg>
-            </a>
-        </div>
-      </div>
-    </div>
+    <app-login [pendingLink]="pendingLoginLink()" />
   }
 
   <!-- MAIN APP -->
@@ -116,14 +29,28 @@
                   (click)="userMenuOpen.set(!userMenuOpen())"
                   class="flex items-center gap-1 h-[2.5em] text-xs bg-space-950 border border-space-700 rounded px-2 text-slate-400 hover:text-slate-200 hover:border-slate-500 transition-colors"
                 >
-                  <span class="text-xs truncate max-w-[120px]">{{ ocadbService.currentUser() }}</span>
+                  <span class="text-xs truncate max-w-[6rem]" [title]="ocadbService.currentUser()">{{ ocadbService.currentUser() }}</span>
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 transition-transform shrink-0" [class.rotate-180]="userMenuOpen()" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
                 @if (userMenuOpen()) {
                   <div class="fixed inset-0 z-10" (click)="userMenuOpen.set(false)"></div>
-                  <div class="absolute z-20 right-0 mt-1 bg-space-900 border border-space-700 rounded shadow-lg min-w-32 overflow-hidden">
+                  <div class="absolute z-20 right-0 mt-1 bg-space-900 border border-space-700 rounded shadow-lg min-w-32 max-w-[16rem] overflow-hidden">
+                    <!-- The full ID wraps here; IDs can be long email addresses. -->
+                    <div class="px-3 py-2 text-[10px] text-slate-500 border-b border-space-800">
+                      Araucaria ID
+                      <div class="text-slate-300 font-mono break-all">{{ ocadbService.currentUser() }}</div>
+                    </div>
+                    <button
+                      (click)="userMenuOpen.set(false); openPasswordDialog()"
+                      class="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-400 hover:text-slate-200 hover:bg-space-800 transition-colors text-left whitespace-nowrap"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                      </svg>
+                      {{ ocadbService.hasPassword() ? 'Change password' : 'Set password' }}
+                    </button>
                     <button
                       (click)="userMenuOpen.set(false); handleLogout()"
                       class="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-400 hover:text-red-400 hover:bg-space-800 transition-colors text-left"
@@ -2000,6 +1927,54 @@
     }
 
     <!-- Observation Not Found Modal -->
+    @if (passwordDialogOpen()) {
+      <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div class="relative bg-space-900 border border-space-700 rounded-xl shadow-2xl w-full max-w-sm m-4 p-5">
+          <div class="flex items-start justify-between gap-3 mb-4">
+            <span class="font-medium text-sm text-slate-200">{{ ocadbService.hasPassword() ? 'Change password' : 'Set password' }}</span>
+            <button (click)="passwordDialogOpen.set(false)" class="text-slate-500 hover:text-white transition-colors shrink-0">
+              <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+              </svg>
+            </button>
+          </div>
+
+          @if (passwordSaved()) {
+            <p class="text-sm text-emerald-400 mb-2">Password saved.</p>
+            <p class="text-xs text-slate-500 mb-4">You can now sign in with your Araucaria ID and this password. Other devices have been logged out.</p>
+            <button (click)="passwordDialogOpen.set(false)" class="w-full py-2 bg-accent-600 hover:bg-accent-500 text-white text-sm font-medium rounded-lg transition-colors">Close</button>
+          } @else {
+            <form (submit)="savePassword($event)" class="space-y-3">
+              <input type="text" name="username" autocomplete="username" [value]="ocadbService.currentUser()" class="hidden" tabindex="-1" aria-hidden="true">
+              @if (ocadbService.hasPassword()) {
+                <div>
+                  <label for="pw-current" class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Current password</label>
+                  <input id="pw-current" type="password" name="current" autocomplete="current-password" [(ngModel)]="passwordForm.current" required class="w-full bg-space-950 border border-space-700 rounded-lg px-3 py-2 text-sm focus:border-accent-500 focus:outline-none transition-colors text-slate-200">
+                </div>
+              } @else {
+                <p class="text-xs text-slate-500">You sign in with emailed codes. A password lets you sign in without waiting for an email.</p>
+              }
+              <div>
+                <label for="pw-new" class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">New password <span class="normal-case text-slate-600">(at least 8 characters)</span></label>
+                <input id="pw-new" type="password" name="next" autocomplete="new-password" minlength="8" [(ngModel)]="passwordForm.next" required class="w-full bg-space-950 border border-space-700 rounded-lg px-3 py-2 text-sm focus:border-accent-500 focus:outline-none transition-colors text-slate-200">
+              </div>
+              <div>
+                <label for="pw-confirm" class="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Repeat new password</label>
+                <input id="pw-confirm" type="password" name="confirm" autocomplete="new-password" [(ngModel)]="passwordForm.confirm" required class="w-full bg-space-950 border border-space-700 rounded-lg px-3 py-2 text-sm focus:border-accent-500 focus:outline-none transition-colors text-slate-200">
+              </div>
+              @if (passwordError()) {
+                <p class="p-2 bg-red-900/20 border border-red-800 rounded-lg text-red-300 text-xs">{{ passwordError() }}</p>
+              }
+              <p class="text-[11px] text-slate-500">Saving logs out your other devices.</p>
+              <button type="submit" [disabled]="passwordSaving()" class="w-full py-2 bg-accent-600 hover:bg-accent-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50">
+                {{ passwordSaving() ? 'Saving...' : 'Save password' }}
+              </button>
+            </form>
+          }
+        </div>
+      </div>
+    }
+
     @if (observationNotFoundName()) {
       <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
         <div class="relative bg-space-900 border border-space-700 rounded-xl shadow-2xl w-full max-w-sm m-4 p-5">
@@ -2383,7 +2358,7 @@
               </div>
               <div>
                 <div class="text-xs font-medium text-slate-200">Current user</div>
-                <div class="text-[11px] text-slate-500 font-mono">{{ ocadbService.currentUser() }}</div>
+                <div class="text-[11px] text-slate-500 font-mono break-all">{{ ocadbService.currentUser() }}</div>
               </div>
             </button>
 

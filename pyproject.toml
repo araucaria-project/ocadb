@@ -37,6 +37,7 @@ aioboto3 = "^15.2.0"
 datamodels = {git = "https://github.com/araucaria-project/datamodels.git", branch = "ocadb_shared_models"}
 astropy = "^8.0.1"
 aiosmtplib = "^5.1.3"
+pyyaml = "^6.0.3"
 
 [tool.poetry.extras]
 # API server dependencies (includes authentication)

@@ -19,6 +19,9 @@ poetry run ocadb-server
 # CLI tool
 poetry run ocadb --help
 poetry run ocadb import --help
+
+# Create/update users from YAML (idempotent; never touches passwords)
+poetry run ocadb --mongodb-url mongodb://... --database ocadb user seed araucarians.yaml --dry-run
 ```
 
 **Docker full-stack dev environment:**
