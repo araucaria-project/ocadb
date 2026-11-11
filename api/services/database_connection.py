@@ -1,4 +1,10 @@
+import logging
+import re
+
 from ocadb.models import UserInDB
+from ocadb.models.user import normalize_email
+
+log = logging.getLogger(__name__)
 
 
 class DatabaseConnection:
@@ -6,13 +12,36 @@ class DatabaseConnection:
     async def get_user(username: str):
         """Get user from MongoDB database"""
         return await UserInDB.find_one(UserInDB.username == username)
-    
+
     @staticmethod
-    async def create_user(username: str, email: str, full_name: str, hashed_password: str, disabled: bool = False, access_tags: list[str] = []):
+    async def get_user_by_identifier(identifier: str) -> UserInDB | None:
+        """Find a user by Araucaria ID (username) or, if it contains '@', by email.
+
+        An identifier with '@' also matches an Araucaria ID that is an email address,
+        so such users can still log in after their email changes.
+        """
+        identifier = identifier.strip()
+        if "@" not in identifier:
+            return await DatabaseConnection.get_user(identifier)
+        email = normalize_email(identifier)
+        if email is None:
+            return None
+        # Case-insensitive, so emails and IDs stored before normalization still match.
+        pattern = {"$regex": f"^{re.escape(email)}$", "$options": "i"}
+        users = await UserInDB.find(
+            {"$or": [{"email": pattern}, {"username": pattern}]}
+        ).limit(2).to_list()
+        if len(users) > 1:
+            log.warning("%s matches several users; refusing to pick one", email)
+            return None
+        return users[0] if users else None
+
+    @staticmethod
+    async def create_user(username: str, email: str | None, full_name: str, hashed_password: str | None, disabled: bool = False, access_tags: list[str] = []):
         """Create a new user in MongoDB database"""
         user = UserInDB(
             username=username,
-            email=email, 
+            email=email,
             full_name=full_name,
             hashed_password=hashed_password,
             disabled=disabled,
@@ -20,4 +49,3 @@ class DatabaseConnection:
         )
         await user.insert()
         return user
-

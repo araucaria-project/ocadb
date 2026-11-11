@@ -1,0 +1,28 @@
+"""Outgoing email. Pick the backend with the ``EMAIL_BACKEND`` setting: "console" or "smtp"."""
+from functools import lru_cache
+
+from api import config
+from api.services.email.base import EmailMessage, EmailSender
+from api.services.email.console import ConsoleEmailSender
+
+
+@lru_cache
+def get_email_sender() -> EmailSender:
+    """FastAPI dependency; override it in tests."""
+    settings = config.Settings()
+    if settings.EMAIL_BACKEND == "smtp":
+        from api.services.email.smtp import SmtpEmailSender
+        return SmtpEmailSender(
+            host=settings.SMTP_HOST,
+            port=settings.SMTP_PORT,
+            username=settings.SMTP_USER,
+            password=settings.SMTP_PASSWORD,
+            start_tls=settings.SMTP_STARTTLS,
+            sender=settings.EMAIL_FROM,
+        )
+    if settings.EMAIL_BACKEND != "console":
+        raise ValueError(f"Unknown EMAIL_BACKEND {settings.EMAIL_BACKEND!r}")
+    return ConsoleEmailSender()
+
+
+__all__ = ["EmailMessage", "EmailSender", "get_email_sender"]

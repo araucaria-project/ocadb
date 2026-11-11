@@ -190,3 +190,125 @@ async def test_get_user_by_username_as_moderator(client, moderator_user, mod_hea
 async def test_get_user_by_username_as_non_mod_returns_403(client, regular_user, auth_headers, moderator_user):
     resp = await client.get("/api/v1/auth/user/moduser/", headers=auth_headers)
     assert resp.status_code == 403
+
+
+# --- disabled users ---
+
+async def _disable(user):
+    user.disabled = True
+    await user.replace()
+
+
+async def test_login_disabled_user_returns_401(client, regular_user):
+    await _disable(regular_user)
+    resp = await client.post(
+        "/api/v1/auth/token/",
+        data={"username": "testuser", "password": "testpass123", "grant_type": "password"},
+    )
+    assert resp.status_code == 401
+
+
+async def test_me_disabled_user_returns_401(client, regular_user, auth_headers):
+    await _disable(regular_user)
+    resp = await client.get("/api/v1/auth/me/", headers=auth_headers)
+    assert resp.status_code == 401
+
+
+async def test_refresh_disabled_user_returns_401(client, regular_user):
+    login = await client.post(
+        "/api/v1/auth/token/",
+        data={"username": "testuser", "password": "testpass123", "grant_type": "password"},
+    )
+    await _disable(regular_user)
+    resp = await client.post("/api/v1/auth/refresh/", json={"refresh_token": login.json()["refresh_token"]})
+    assert resp.status_code == 401
+
+
+# --- remember this device ---
+
+async def _refresh_lifetime(raw):
+    import hashlib
+    from ocadb.models.refresh_token import RefreshTokenDocument
+    h = hashlib.sha256(raw.encode()).hexdigest()
+    doc = await RefreshTokenDocument.find_one(RefreshTokenDocument.token_hash == h)
+    return doc.lifetime_days
+
+
+async def test_login_default_refresh_lifetime(client, regular_user):
+    resp = await client.post(
+        "/api/v1/auth/token/",
+        data={"username": "testuser", "password": "testpass123", "grant_type": "password"},
+    )
+    assert await _refresh_lifetime(resp.json()["refresh_token"]) == 7
+
+
+async def test_login_remember_device_refresh_lifetime(client, regular_user):
+    resp = await client.post(
+        "/api/v1/auth/token/",
+        data={"username": "testuser", "password": "testpass123", "grant_type": "password", "remember": "true"},
+    )
+    assert await _refresh_lifetime(resp.json()["refresh_token"]) == 90
+
+
+# --- POST /api/v1/auth/logout/ ---
+
+async def test_logout_revokes_refresh_token(client, regular_user):
+    login = await client.post(
+        "/api/v1/auth/token/",
+        data={"username": "testuser", "password": "testpass123", "grant_type": "password"},
+    )
+    refresh_token = login.json()["refresh_token"]
+    resp = await client.post("/api/v1/auth/logout/", json={"refresh_token": refresh_token})
+    assert resp.status_code == 204
+    resp = await client.post("/api/v1/auth/refresh/", json={"refresh_token": refresh_token})
+    assert resp.status_code == 401
+
+
+async def test_logout_unknown_token_returns_204(client, beanie):
+    resp = await client.post("/api/v1/auth/logout/", json={"refresh_token": "invalid-token"})
+    assert resp.status_code == 204
+
+
+# --- moderator endpoints ---
+
+async def test_update_user_as_non_mod_returns_403(client, regular_user, auth_headers):
+    resp = await client.put("/api/v1/auth/user/testuser/", json={"full_name": "X"}, headers=auth_headers)
+    assert resp.status_code == 403
+
+
+async def test_update_user_as_moderator(client, moderator_user, mod_headers, regular_user):
+    resp = await client.put("/api/v1/auth/user/testuser/", json={"full_name": "Renamed"}, headers=mod_headers)
+    assert resp.status_code == 200
+    assert resp.json()["full_name"] == "Renamed"
+    assert "hashed_password" not in resp.json()
+
+
+# --- identifier login, /me has_password, user list ---
+
+async def test_password_login_with_email(client, regular_user):
+    resp = await client.post(
+        "/api/v1/auth/token/",
+        data={"username": "Test@Example.com", "password": "testpass123", "grant_type": "password"},
+    )
+    assert resp.status_code == 200
+    me = await client.get("/api/v1/auth/me/", headers={"Authorization": f"Bearer {resp.json()['access_token']}"})
+    assert me.json()["username"] == "testuser"
+
+
+async def test_me_reports_has_password(client, regular_user, auth_headers):
+    resp = await client.get("/api/v1/auth/me/", headers=auth_headers)
+    assert resp.json()["has_password"] is True
+
+
+async def test_list_users_as_moderator(client, regular_user, moderator_user, mod_headers):
+    resp = await client.get("/api/v1/auth/users/", headers=mod_headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert [u["username"] for u in body] == ["moduser", "testuser"]
+    assert all("hashed_password" not in u for u in body)
+    assert body[1]["has_password"] is True
+
+
+async def test_list_users_as_non_moderator_returns_403(client, regular_user, auth_headers):
+    resp = await client.get("/api/v1/auth/users/", headers=auth_headers)
+    assert resp.status_code == 403

@@ -163,6 +163,7 @@ export class OcadbService {
   // Not persisted to localStorage — refetched from /auth/me on every fresh session
   // (login or restore) so a demoted/promoted user's status is never trusted stale.
   isModerator = signal(false);
+  hasPassword = signal(false);
   sessionExpiredUser = signal<string | null>(null);
   lastRequestInfo = signal('System initialized');
   isAuthenticated = computed(() => !!this.token());
@@ -184,7 +185,7 @@ export class OcadbService {
       this.refreshToken.set(savedRefresh);
       this.currentUser.set(savedUser);
       this.lastRequestInfo.set('Session restored from local storage');
-      this.fetchModeratorStatus();
+      this.fetchMe();
     }
     const savedConf = localStorage.getItem('ocadb_viewer_conf');
     if (savedConf) {
@@ -196,22 +197,15 @@ export class OcadbService {
     this.error.set(null);
   }
 
-  async login(username: string, password: string): Promise<boolean> {
-    this.loading.set(true);
-    this.error.set(null);
-    this.lastRequestInfo.set(`Authenticating as ${username}...`);
-
-    if (!navigator.onLine) {
-      this.error.set('No Internet connection. Please check your network settings.');
-      this.loading.set(false);
-      return false;
-    }
-
+  /** Password login with an Araucaria ID or email. */
+  async login(identifier: string, password: string, remember = false): Promise<boolean> {
+    if (!this.startRequest(`Authenticating as ${identifier}...`)) return false;
     try {
       const params = new URLSearchParams();
       params.append('grant_type', 'password');
-      params.append('username', username);
+      params.append('username', identifier);
       params.append('password', password);
+      if (remember) params.append('remember', 'true');
 
       const response = await fetch(`${this.baseUrl}/auth/token/`, {
         method: 'POST',
@@ -220,26 +214,11 @@ export class OcadbService {
       });
 
       if (!response.ok) {
-        if (response.status === 401) throw new Error('Incorrect username or password.');
-        if (response.status === 403) throw new Error('Access denied. Account may be inactive.');
+        if (response.status === 401) throw new Error('Incorrect Araucaria ID, email or password.');
         if (response.status >= 500) throw new Error(`API server error (${response.status}). The backend may be starting up or misconfigured.`);
         throw new Error(await this.extractErrorMessage(response, `Login failed (${response.status})`));
       }
-
-      const data = await response.json();
-      if (!data.access_token) throw new Error('Invalid server response: no access token.');
-
-      this.token.set(data.access_token);
-      this.refreshToken.set(data.refresh_token ?? null);
-      this.currentUser.set(username);
-      this.sessionExpiredUser.set(null);
-      localStorage.setItem('ocadb_token', data.access_token);
-      if (data.refresh_token) localStorage.setItem('ocadb_refresh_token', data.refresh_token);
-      localStorage.setItem('ocadb_user', username);
-      this.lastRequestInfo.set('Login successful.');
-      this.loading.set(false);
-      this.fetchViewerConf();
-      await this.fetchModeratorStatus();
+      await this.startSession(await response.json(), identifier);
       return true;
     } catch (e: any) {
       this.handleFetchError(e, 'Login');
@@ -247,22 +226,127 @@ export class OcadbService {
     }
   }
 
-  private async fetchModeratorStatus(): Promise<void> {
+  /** Ask the API to email a login code. Succeeds whether or not the account exists. */
+  async requestLoginCode(identifier: string, returnTo: string): Promise<boolean> {
+    if (!this.startRequest('Requesting a login code...')) return false;
+    try {
+      const response = await fetch(`${this.baseUrl}/auth/code/request/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier, return_to: returnTo })
+      });
+      if (!response.ok) throw new Error(await this.extractErrorMessage(response, `Could not request a code (${response.status})`));
+      this.lastRequestInfo.set('Login code requested.');
+      this.loading.set(false);
+      return true;
+    } catch (e: any) {
+      this.handleFetchError(e, 'Login code');
+      return false;
+    }
+  }
+
+  async verifyLoginCode(identifier: string, code: string, remember = false): Promise<boolean> {
+    if (!this.startRequest('Checking the login code...')) return false;
+    try {
+      const response = await fetch(`${this.baseUrl}/auth/code/verify/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier, code, remember })
+      });
+      if (!response.ok) {
+        if (response.status === 401) throw new Error('This code is wrong or has expired.');
+        if (response.status === 429) throw new Error('Too many attempts. Please try again later.');
+        throw new Error(await this.extractErrorMessage(response, `Login failed (${response.status})`));
+      }
+      await this.startSession(await response.json(), identifier);
+      return true;
+    } catch (e: any) {
+      this.handleFetchError(e, 'Login code');
+      return false;
+    }
+  }
+
+  /** Set or change the password. Other sessions are logged out; this one stays. Returns an error message or null. */
+  async changePassword(currentPassword: string | null, newPassword: string): Promise<string | null> {
+    try {
+      const response = await this.authenticatedFetch(`${this.baseUrl}/auth/password/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          current_password: currentPassword,
+          new_password: newPassword,
+          keep_refresh_token: localStorage.getItem('ocadb_refresh_token') ?? this.refreshToken()
+        })
+      });
+      if (response.status === 422) return 'The new password must be 8 to 128 characters long.';
+      if (!response.ok) return await this.extractErrorMessage(response, `Could not save the password (${response.status})`);
+      this.hasPassword.set(true);
+      return null;
+    } catch {
+      return `Cannot reach the API server at ${this.baseUrl}.`;
+    }
+  }
+
+  private startRequest(info: string): boolean {
+    this.loading.set(true);
+    this.error.set(null);
+    this.lastRequestInfo.set(info);
+    if (!navigator.onLine) {
+      this.error.set('No Internet connection. Please check your network settings.');
+      this.loading.set(false);
+      return false;
+    }
+    return true;
+  }
+
+  private async startSession(data: any, identifier: string): Promise<void> {
+    if (!data.access_token) throw new Error('Invalid server response: no access token.');
+    this.token.set(data.access_token);
+    this.refreshToken.set(data.refresh_token ?? null);
+    this.currentUser.set(identifier);
+    this.sessionExpiredUser.set(null);
+    localStorage.setItem('ocadb_token', data.access_token);
+    if (data.refresh_token) localStorage.setItem('ocadb_refresh_token', data.refresh_token);
+    localStorage.setItem('ocadb_user', identifier);
+    this.lastRequestInfo.set('Login successful.');
+    this.loading.set(false);
+    this.fetchViewerConf();
+    // Replaces the typed identifier (possibly an email) with the Araucaria ID.
+    await this.fetchMe();
+  }
+
+  private async fetchMe(): Promise<void> {
     try {
       const response = await this.authenticatedFetch(`${this.baseUrl}/auth/me/`);
       if (!response.ok) { this.isModerator.set(false); return; }
       const data = await response.json();
       this.isModerator.set(!!data.moderator);
+      this.hasPassword.set(!!data.has_password);
+      if (data.username) {
+        this.currentUser.set(data.username);
+        localStorage.setItem('ocadb_user', data.username);
+      }
     } catch {
       this.isModerator.set(false);
     }
   }
 
   logout() {
+    // Revoke server-side too, otherwise a remembered device's token stays valid for 90 days.
+    const rt = localStorage.getItem('ocadb_refresh_token') ?? this.refreshToken();
+    if (rt) {
+      fetch(`${this.baseUrl}/auth/logout/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: rt }),
+        keepalive: true
+      }).catch(() => {});
+    }
     this.token.set(null);
     this.refreshToken.set(null);
     this.currentUser.set(null);
     this.isModerator.set(false);
+    this.hasPassword.set(false);
     localStorage.removeItem('ocadb_token');
     localStorage.removeItem('ocadb_refresh_token');
     localStorage.removeItem('ocadb_user');
@@ -290,7 +374,19 @@ export class OcadbService {
     return this._refreshPromise;
   }
 
+  // Another tab may have rotated the refresh token already; the old one is then
+  // revoked, so take over that tab's tokens instead of failing.
+  private adoptTokensFromOtherTab(): boolean {
+    const storedToken = localStorage.getItem('ocadb_token');
+    const storedRefresh = localStorage.getItem('ocadb_refresh_token');
+    if (!storedToken || storedToken === this.token()) return false;
+    this.token.set(storedToken);
+    this.refreshToken.set(storedRefresh);
+    return true;
+  }
+
   private async _doRefresh(): Promise<boolean> {
+    if (this.adoptTokensFromOtherTab()) return true;
     const rt = this.refreshToken();
     if (!rt) return false;
     try {
@@ -299,7 +395,7 @@ export class OcadbService {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refresh_token: rt })
       });
-      if (!res.ok) return false;
+      if (!res.ok) return this.adoptTokensFromOtherTab();
       const data = await res.json();
       this.token.set(data.access_token);
       this.refreshToken.set(data.refresh_token ?? null);

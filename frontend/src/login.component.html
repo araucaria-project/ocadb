@@ -1,0 +1,240 @@
+<div class="h-full w-full flex items-center justify-center bg-cover bg-center" [style.background-image]="background">
+  <div class="absolute inset-0 bg-space-950/80 backdrop-blur-sm"></div>
+
+  <div class="relative z-10 w-full max-w-md p-8 bg-space-900 border border-space-700 rounded-2xl shadow-2xl animate-fade-in flex flex-col">
+    <div class="text-center mb-8">
+      <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
+        OCADB Access
+      </h1>
+      <p class="text-slate-400 mt-2 text-sm">OCM Observatory Database</p>
+    </div>
+
+    <ng-template #error>
+      @if (ocadbService.error()) {
+        <div class="p-3 bg-red-900/20 border border-red-800 rounded-lg text-red-300 text-xs flex items-start justify-between gap-2">
+          <span>{{ ocadbService.error() }}</span>
+          <button type="button" (click)="ocadbService.clearError()" class="text-red-400 hover:text-white transition-colors shrink-0">
+            <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+          </button>
+        </div>
+      }
+    </ng-template>
+
+    <ng-template #rememberDevice>
+      <label class="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none">
+        <input type="checkbox" name="remember" [(ngModel)]="remember" class="w-4 h-4 accent-accent-500 cursor-pointer">
+        Remember this device
+        <span class="text-xs text-slate-500">(stay signed in for 90 days)</span>
+      </label>
+    </ng-template>
+
+    <ng-template #signingInAs>
+      <div>
+        <span class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Signing in as</span>
+        <div class="flex items-center justify-between gap-2 px-4 py-3 bg-space-950 border border-space-700 rounded-lg text-sm">
+          <span class="text-slate-200 font-medium truncate">{{ identifier() }}</span>
+          <button type="button" (click)="changeIdentifier()" class="text-xs shrink-0 text-accent-400 opacity-70 hover:opacity-100 cursor-pointer transition-opacity">Change</button>
+        </div>
+      </div>
+    </ng-template>
+
+    @switch (step()) {
+      @case ('identifier') {
+        <form (submit)="submitIdentifier($event)" class="space-y-4 flex-1">
+          <div>
+            <label for="login-identifier" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Araucaria ID or email</label>
+            <input
+              id="login-identifier"
+              type="text"
+              name="identifier"
+              autocomplete="username"
+              autocapitalize="none"
+              spellcheck="false"
+              appAutofocus
+              [ngModel]="identifier()"
+              (ngModelChange)="identifier.set($event)"
+              placeholder="e.g. jkowalski"
+              required
+              class="w-full bg-space-950 border border-space-700 rounded-lg px-4 py-3 text-sm focus:border-accent-500 focus:outline-none transition-colors text-slate-200 placeholder-slate-600"
+            >
+            <p class="mt-2 text-xs text-slate-500 leading-relaxed">
+              Araucarians already have an account. Your Araucaria ID is your CAMK login (for example
+              <span class="font-mono text-slate-400">jkowalski</span>), or type your email.
+            </p>
+          </div>
+
+          <ng-container *ngTemplateOutlet="error" />
+
+          <button type="submit" [disabled]="ocadbService.loading()" class="w-full py-3 bg-accent-600 hover:bg-accent-500 text-white font-bold rounded-lg shadow-lg shadow-accent-600/20 transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2">
+            @if (ocadbService.loading()) {
+              <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+              Please wait...
+            } @else {
+              Continue
+            }
+          </button>
+
+          <p class="text-xs text-slate-500 text-center">
+            No account yet?
+            @if (adminEmail) {
+              Write to <a href="mailto:{{ adminEmail }}?subject=OCADB%20account" class="text-accent-400 opacity-70 hover:opacity-100 cursor-pointer transition-opacity">{{ adminEmail }}</a>.
+            } @else {
+              Ask the OCADB administrator.
+            }
+          </p>
+        </form>
+      }
+
+      @case ('password') {
+        <form (submit)="submitPassword($event)" class="space-y-4 flex-1">
+          <ng-container *ngTemplateOutlet="signingInAs" />
+          <!-- For password managers: the identifier was entered on the previous screen. -->
+          <input type="text" name="username" autocomplete="username" [value]="identifier()" class="hidden" tabindex="-1" aria-hidden="true">
+
+          <div>
+            <label for="login-password" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Password</label>
+            <input
+              id="login-password"
+              type="password"
+              name="password"
+              autocomplete="current-password"
+              appAutofocus
+              [(ngModel)]="password"
+              placeholder="••••••••"
+              required
+              class="w-full bg-space-950 border border-space-700 rounded-lg px-4 py-3 text-sm focus:border-accent-500 focus:outline-none transition-colors text-slate-200 placeholder-slate-600"
+            >
+          </div>
+
+          <ng-container *ngTemplateOutlet="rememberDevice" />
+          <ng-container *ngTemplateOutlet="error" />
+
+          <button type="submit" [disabled]="ocadbService.loading()" class="w-full py-3 bg-accent-600 hover:bg-accent-500 text-white font-bold rounded-lg shadow-lg shadow-accent-600/20 transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2">
+            @if (ocadbService.loading()) {
+              <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+              Signing in...
+            } @else {
+              Sign In
+            }
+          </button>
+
+          <div class="flex items-center gap-3 text-xs text-slate-600">
+            <div class="flex-1 border-t border-space-700"></div>or<div class="flex-1 border-t border-space-700"></div>
+          </div>
+
+          <button
+            type="button"
+            (click)="requestCode()"
+            [disabled]="ocadbService.loading() || resendIn() > 0"
+            class="w-full py-2.5 border border-space-700 hover:border-slate-500 text-slate-300 hover:text-white text-sm rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Email me a code instead
+            @if (resendIn() > 0) { <span class="text-slate-500">({{ resendIn() }}s)</span> }
+          </button>
+        </form>
+      }
+
+      @case ('code') {
+        <form (submit)="submitCode($event)" class="space-y-4 flex-1">
+          <ng-container *ngTemplateOutlet="signingInAs" />
+
+          <p class="text-sm text-slate-400 leading-relaxed">
+            If an account matches <span class="text-slate-200">{{ identifier() }}</span> and has an email address,
+            we've sent it a 6-digit code. It is valid for 10 minutes. You can also open the link in that email.
+          </p>
+
+          <div>
+            <label for="login-code" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Code</label>
+            <input
+              id="login-code"
+              type="text"
+              name="code"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              appAutofocus
+              maxlength="8"
+              [(ngModel)]="code"
+              placeholder="123456"
+              required
+              class="w-full bg-space-950 border border-space-700 rounded-lg px-4 py-3 text-lg font-mono tracking-[0.3em] focus:border-accent-500 focus:outline-none transition-colors text-slate-200 placeholder-slate-600"
+            >
+          </div>
+
+          <ng-container *ngTemplateOutlet="rememberDevice" />
+          <ng-container *ngTemplateOutlet="error" />
+
+          <button type="submit" [disabled]="ocadbService.loading()" class="w-full py-3 bg-accent-600 hover:bg-accent-500 text-white font-bold rounded-lg shadow-lg shadow-accent-600/20 transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2">
+            @if (ocadbService.loading()) {
+              <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+              Checking...
+            } @else {
+              Sign In
+            }
+          </button>
+
+          <div class="text-center text-xs">
+            <button type="button" (click)="requestCode()" [disabled]="ocadbService.loading() || resendIn() > 0" class="text-accent-400 opacity-70 hover:opacity-100 cursor-pointer transition-opacity disabled:text-slate-600 disabled:hover:opacity-70 disabled:cursor-not-allowed">
+              @if (resendIn() > 0) { Resend code in {{ resendIn() }}s } @else { Resend code }
+            </button>
+          </div>
+
+          <div class="flex items-center gap-3 text-xs text-slate-600">
+            <div class="flex-1 border-t border-space-700"></div>or use a password, if you have set one<div class="flex-1 border-t border-space-700"></div>
+          </div>
+
+          <button
+            type="button"
+            (click)="usePassword()"
+            class="w-full py-2.5 border border-space-700 hover:border-slate-500 text-slate-300 hover:text-white text-sm rounded-lg transition-colors"
+          >
+            Sign in with a password
+          </button>
+        </form>
+      }
+
+      @case ('link') {
+        <form (submit)="submitCode($event)" class="space-y-4 flex-1">
+          <p class="text-sm text-slate-300 text-center">
+            Log in to OCADB as <span class="text-white font-medium">{{ identifier() }}</span>?
+          </p>
+
+          <ng-container *ngTemplateOutlet="rememberDevice" />
+          <ng-container *ngTemplateOutlet="error" />
+
+          <button type="submit" [disabled]="ocadbService.loading()" class="w-full py-3 bg-accent-600 hover:bg-accent-500 text-white font-bold rounded-lg shadow-lg shadow-accent-600/20 transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2">
+            @if (ocadbService.loading()) {
+              <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+              Signing in...
+            } @else {
+              Continue
+            }
+          </button>
+
+          @if (ocadbService.error()) {
+            <div class="flex items-center justify-between text-xs">
+              <button type="button" (click)="requestCode()" [disabled]="ocadbService.loading() || resendIn() > 0" class="text-accent-400 opacity-70 hover:opacity-100 cursor-pointer transition-opacity disabled:text-slate-600 disabled:hover:opacity-70 disabled:cursor-not-allowed">Email me a new code</button>
+              <button type="button" (click)="usePassword()" class="text-accent-400 opacity-70 hover:opacity-100 cursor-pointer transition-opacity">Use a password instead</button>
+            </div>
+          }
+        </form>
+      }
+    }
+
+    <div class="mt-6 pt-4 border-t border-space-800 text-center">
+        <a href="https://akond.space/" target="_blank" class="inline-flex items-center justify-center gap-1.5 opacity-70 hover:opacity-100 transition-opacity decoration-none group">
+            <span class="text-[10px] text-slate-500 mb-0.5">by</span>
+            <svg viewBox="0 0 67.194 12.425" xmlns="http://www.w3.org/2000/svg" class="h-4 w-auto">
+                <g transform="translate(-52.256057,-144.10628)">
+                    <g transform="matrix(0.82296259,0,0,0.82296259,16.586371,28.163141)">
+                    <line x1="46.658077" y1="152.3084" x2="49.303909" y2="144.3709" stroke="#60a5fa" stroke-width="1.48609" stroke-linecap="round" />
+                    <line x1="50.626827" y1="152.3084" x2="53.272659" y2="144.3709" stroke="#60a5fa" stroke-width="1.48609" stroke-linecap="round" />
+                    <line x1="54.595577" y1="152.3084" x2="57.241409" y2="144.3709" stroke="#60a5fa" stroke-width="1.48609" stroke-linecap="round" />
+                    </g>
+                    <text x="64.649742" y="153.89587" font-family="Arial, sans-serif" font-size="9.525px" fill="#f8fafc" style="stroke-width:0.264583">AkondAstro</text>
+                    <polygon points="500,70 502,76 508,76 503,80 505,86 500,82 495,86 497,80 492,76 498,76 " fill="#60a5fa" transform="matrix(0.26458333,0,0,0.26458333,-16.841949,127.17296)" />
+                </g>
+            </svg>
+        </a>
+    </div>
+  </div>
+</div>
