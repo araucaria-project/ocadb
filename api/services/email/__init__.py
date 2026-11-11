@@ -1,4 +1,4 @@
-"""Outgoing email. Pick the backend with the ``EMAIL_BACKEND`` setting: "console" or "smtp"."""
+"""Outgoing email. Pick the backend with the ``EMAIL_BACKEND`` setting: "console", "smtp" or "resend"."""
 from functools import lru_cache
 
 from api import config
@@ -20,6 +20,11 @@ def get_email_sender() -> EmailSender:
             start_tls=settings.SMTP_STARTTLS,
             sender=settings.EMAIL_FROM,
         )
+    if settings.EMAIL_BACKEND == "resend":
+        from api.services.email.resend import ResendEmailSender
+        if not settings.RESEND_API_KEY:
+            raise ValueError("EMAIL_BACKEND is 'resend' but RESEND_API_KEY is not set")
+        return ResendEmailSender(api_key=settings.RESEND_API_KEY, sender=settings.EMAIL_FROM)
     if settings.EMAIL_BACKEND != "console":
         raise ValueError(f"Unknown EMAIL_BACKEND {settings.EMAIL_BACKEND!r}")
     return ConsoleEmailSender()

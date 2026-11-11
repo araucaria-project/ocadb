@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: str = "7"
     REMEMBER_DEVICE_REFRESH_TOKEN_EXPIRE_DAYS: str = "90"
 
-    # outgoing email: "console" logs messages instead of sending them
+    # outgoing email: "console" logs messages instead of sending them; "smtp" or "resend" send
     EMAIL_BACKEND: str = "console"
     EMAIL_FROM: str = "OCADB <no-reply@ocadb.space>"
     SMTP_HOST: str = ""
@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_STARTTLS: bool = True
+    RESEND_API_KEY: str = ""
     # where links in emails point to
     FRONTEND_URL: str = "http://localhost:8085"
 
