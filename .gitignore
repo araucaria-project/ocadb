@@ -38,6 +38,7 @@ package-lock.json
 *.sw?
 docs
 docs/*
+CLAUDE.md
 
 .env
 *.env
