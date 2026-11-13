@@ -1415,6 +1415,16 @@ _FIELD_BASED_TYPES: Dict[str, Tuple[str, frozenset]] = {
 }
 
 
+# The dialog's "Observation files" types, matched against an observation's own files by
+# file_class ('other': any class but zdf/raw, e.g. master); every other type in file_types
+# applies to its source files.
+_OBSERVATION_FILE_TYPES = frozenset({'zdf', 'raw', 'other'})
+
+
+def _observation_file_type(file_class: Optional[str]) -> str:
+    return file_class if file_class in ('zdf', 'raw') else 'other'
+
+
 def _classify_file(file_class: Optional[str], image_type: Optional[str]) -> str:
     itype = image_type.strip().lower() if image_type else None
     for type_name, (fclass, itypes) in _FIELD_BASED_TYPES.items():
@@ -1474,11 +1484,12 @@ async def _resolve_export_filenames(
     source_filenames), and filtering by file type — shared by the downloader-script and
     filepaths-export endpoints, which differ only in what they do with the result.
 
-    Every discovered file (whether directly linked to the observation or pulled in via
-    source_filenames) is classified the same way via _classify_file() and filtered
-    uniformly — a calibration-role file can be directly linked too (e.g. a dedicated
-    calibration-night observation), so there's no meaningful "direct vs calibration"
-    split for filtering purposes, only for whether source_filenames is expanded at all.
+    file_types mixes the dialog's two sections, each filtering its own files:
+    - 'zdf'/'raw'/'other' (Observation files) select the observation's own files by
+      file_class alone, so a calibration observation's raw flat counts as 'raw';
+    - the calibration types select source files (reached via source_filenames) by
+      _classify_file().
+    A section with nothing selected keeps all of its files.
     """
     try:
         obs_ids = [PydanticObjectId(oid) for oid in obs_ids_raw]
@@ -1493,11 +1504,16 @@ async def _resolve_export_filenames(
     entries = await _collect_observation_entries(observations, include_calibration)
 
     if file_types is not None:
-        allowed = set(file_types)
-        entries = {
-            name: v for name, v in entries.items()
-            if _classify_file(v[0], v[1]) in allowed
-        }
+        obs_types = set(file_types) & _OBSERVATION_FILE_TYPES
+        source_types = set(file_types) - _OBSERVATION_FILE_TYPES
+        direct = {f.filename for obs in observations for f in obs.files}
+
+        def wanted(name: str, file_class: Optional[str], image_type: Optional[str]) -> bool:
+            if name in direct:
+                return not obs_types or _observation_file_type(file_class) in obs_types
+            return not source_types or _classify_file(file_class, image_type) in source_types
+
+        entries = {name: v for name, v in entries.items() if wanted(name, *v)}
 
     filenames = list(entries.keys())
 

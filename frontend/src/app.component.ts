@@ -109,7 +109,10 @@ export class AppComponent implements OnInit {
   downloadCustomUsername = signal('');
   downloadIncludeCalibration = signal(false);
   /** "Science" — the observation's own direct Files, filtered by file_class. */
-  readonly DOWNLOAD_FILE_TYPES = ['zdf', 'raw'] as const;
+  readonly DOWNLOAD_FILE_TYPES = ['zdf', 'raw', 'other'] as const;
+  /** Checked when a dialog opens; 'other' (e.g. a master frame that is the observation's
+   * own file) only on request. */
+  readonly DEFAULT_DOWNLOAD_FILE_TYPES = ['zdf', 'raw'] as const;
   /** "Calibration" — Source Files, filtered by filename since calibration frames are
    * frequently stored with file_class='raw' regardless of their actual role. Each group
    * below (raw calibration / master calibration) gets its own tri-state parent checkbox. */
@@ -117,14 +120,14 @@ export class AppComponent implements OnInit {
   readonly MASTER_SUB_TYPES = ['master_flat', 'master_dark', 'master_zero'] as const;
   readonly UNKNOWN_CALIB_TYPE = 'unknown';
   readonly DOWNLOAD_CALIB_TYPES = new Set<string>([...this.RAW_CALIB_SUB_TYPES, ...this.MASTER_SUB_TYPES, this.UNKNOWN_CALIB_TYPE]);
-  downloadFileTypes = signal<Set<string>>(new Set(this.DOWNLOAD_FILE_TYPES));
+  downloadFileTypes = signal<Set<string>>(new Set(this.DEFAULT_DOWNLOAD_FILE_TYPES));
 
   /** Request Files dialog — same file-type constants/tri-state group logic as the
    * Download dialog above, just its own independent selection state. */
   showRequestFilesDialog = signal(false);
   requestFilesLoading = signal(false);
   requestFilesIncludeCalibration = signal(false);
-  requestFilesTypes = signal<Set<string>>(new Set(this.DOWNLOAD_FILE_TYPES));
+  requestFilesTypes = signal<Set<string>>(new Set(this.DEFAULT_DOWNLOAD_FILE_TYPES));
 
   /** 'all'/'none'/'some' — drives a calibration group's parent checkbox
    * checked/unchecked/indeterminate look. `target` lets both the Download and Request
@@ -1804,7 +1807,7 @@ export class AppComponent implements OnInit {
     this.downloadForCurrentUser.set(true);
     this.downloadCustomUsername.set('');
     this.downloadIncludeCalibration.set(false);
-    this.downloadFileTypes.set(new Set(['zdf', 'raw']));
+    this.downloadFileTypes.set(new Set(this.DEFAULT_DOWNLOAD_FILE_TYPES));
     this.tabularExportFormat.set('ecsv');
     this.showDownloadDialog.set(true);
   }
@@ -1872,14 +1875,14 @@ export class AppComponent implements OnInit {
   openRequestFilesDialog() {
     this.requestFilesSingleObsId.set(null);
     this.requestFilesIncludeCalibration.set(false);
-    this.requestFilesTypes.set(new Set(['zdf', 'raw']));
+    this.requestFilesTypes.set(new Set(this.DEFAULT_DOWNLOAD_FILE_TYPES));
     this.showRequestFilesDialog.set(true);
   }
 
   openRequestFilesDialogForObservation(obsId: string) {
     this.requestFilesSingleObsId.set(obsId);
     this.requestFilesIncludeCalibration.set(false);
-    this.requestFilesTypes.set(new Set(['zdf', 'raw']));
+    this.requestFilesTypes.set(new Set(this.DEFAULT_DOWNLOAD_FILE_TYPES));
     this.showRequestFilesDialog.set(true);
   }
 

@@ -2436,7 +2436,7 @@
                         </svg>
                       }
                     </div>
-                    <span class="font-mono text-xs text-slate-300">{{ type }}{{ type === 'zdf' ? ' (zero/dark/flat calibrated)' : '' }}</span>
+                    <span class="font-mono text-xs text-slate-300">{{ type }}{{ type === 'zdf' ? ' (zero/dark/flat calibrated)' : type === 'other' ? ' (e.g. master frames)' : '' }}</span>
                   </label>
                 }
               </div>
@@ -2663,7 +2663,7 @@
                       </svg>
                     }
                   </div>
-                  <span class="font-mono text-xs text-slate-300">{{ type }}{{ type === 'zdf' ? ' (zero/dark/flat calibrated)' : '' }}</span>
+                  <span class="font-mono text-xs text-slate-300">{{ type }}{{ type === 'zdf' ? ' (zero/dark/flat calibrated)' : type === 'other' ? ' (e.g. master frames)' : '' }}</span>
                 </label>
               }
             </div>

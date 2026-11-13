@@ -635,7 +635,7 @@ async def test_request_files_matches_object_imagetyp_science_frames(client, auth
     obs_id = resp.json()["_id"]
     for filename, file_class, imagetyp in [("req_object_raw.fits", "raw", "object"),
                                            ("req_object_zdf.fits", "zdf", "OBJECT"),
-                                           ("req_object_flat.fits", "raw", "flat")]:
+                                           ("req_object_master.fits", "master", "flat")]:
         payload = _file_payload(filename, "req_object", file_class)
         payload["fits_header"] = make_fits_header(IMAGETYP=imagetyp).model_dump(by_alias=True)
         assert (await client.post("/api/v2/files/", json=payload, headers=auth_headers)).status_code == 201
@@ -645,6 +645,64 @@ async def test_request_files_matches_object_imagetyp_science_frames(client, auth
                              headers=auth_headers)
     assert resp.status_code == 200
     assert resp.json()["file_count"] == 2
+
+
+async def test_request_files_other_selects_observations_own_master(client, auth_headers, regular_user):
+    """'other' picks the observation's own files that are neither zdf nor raw (masters)."""
+    resp = await client.post("/api/v2/observations/", json=make_obs_payload(obs_name="req_master_obs"), headers=auth_headers)
+    obs_id = resp.json()["_id"]
+    for filename, file_class in [("req_master_obs_raw.fits", "raw"), ("req_master_obs.fits", "master")]:
+        payload = _file_payload(filename, "req_master_obs", file_class)
+        payload["fits_header"] = make_fits_header(IMAGETYP="flat").model_dump(by_alias=True)
+        assert (await client.post("/api/v2/files/", json=payload, headers=auth_headers)).status_code == 201
+
+    assert await _request_file_count(client, auth_headers, obs_id, False, ["other"]) == 1
+    assert await _request_file_count(client, auth_headers, obs_id, False, ["zdf", "raw", "other"]) == 2
+
+
+async def _request_file_count(client, auth_headers, obs_id, include_calibration, file_types):
+    resp = await client.post("/api/v2/observations/request-files",
+                             json={"obs_ids": [obs_id], "include_calibration": include_calibration,
+                                   "file_types": file_types},
+                             headers=auth_headers)
+    return resp.json().get("file_count") if resp.status_code == 200 else resp.status_code
+
+
+async def test_request_files_raw_selects_calibration_observations_own_files(client, auth_headers, regular_user):
+    """'raw' selects an observation's own raw files whatever their IMAGETYP, so a flat
+    observation's raw flat needs no calibration options."""
+    resp = await client.post("/api/v2/observations/", json=make_obs_payload(obs_name="req_flat_obs"), headers=auth_headers)
+    obs_id = resp.json()["_id"]
+    payload = _file_payload("req_flat_obs.fits", "req_flat_obs", "raw")
+    payload["fits_header"] = make_fits_header(IMAGETYP="flat").model_dump(by_alias=True)
+    assert (await client.post("/api/v2/files/", json=payload, headers=auth_headers)).status_code == 201
+
+    assert await _request_file_count(client, auth_headers, obs_id, False, ["raw"]) == 1
+    assert await _request_file_count(client, auth_headers, obs_id, False, ["zdf"]) == 404
+
+
+async def test_request_files_sections_filter_their_own_files(client, auth_headers, regular_user):
+    """Observation-file types filter the observation's files; calibration types filter
+    only its source files; a section with nothing selected keeps all of its files."""
+    from ocadb.models.file import FITSFile
+
+    for filename, file_class, imagetyp in [("src_flat.fits", "raw", "flat"),
+                                           ("src_master_flat.fits", "master", "flat")]:
+        payload = _file_payload(filename, "src_calib", file_class)
+        payload.pop("fits_header")
+        await FITSFile.model_validate({**payload, "image_type": imagetyp}).insert()
+    resp = await client.post("/api/v2/observations/", json=make_obs_payload(obs_name="req_sections"), headers=auth_headers)
+    obs_id = resp.json()["_id"]
+    for filename, file_class in [("req_sections_raw.fits", "raw"), ("req_sections_zdf.fits", "zdf")]:
+        payload = _file_payload(filename, "req_sections", file_class,
+                                source_filenames=["src_flat.fits", "src_master_flat.fits"])
+        payload["fits_header"] = make_fits_header(IMAGETYP="object").model_dump(by_alias=True)
+        assert (await client.post("/api/v2/files/", json=payload, headers=auth_headers)).status_code == 201
+
+    assert await _request_file_count(client, auth_headers, obs_id, True, ["zdf", "master_flat"]) == 2
+    assert await _request_file_count(client, auth_headers, obs_id, True, ["zdf", "raw"]) == 4
+    assert await _request_file_count(client, auth_headers, obs_id, True, ["flat"]) == 3
+    assert await _request_file_count(client, auth_headers, obs_id, False, ["zdf", "flat"]) == 1
 
 
 async def test_multi_search_empty_result_returns_404(client, auth_headers, regular_user):
